@@ -25,17 +25,16 @@ def model(t, p):
     flare = np.zeros_like(t)
     # compute the flare model for each flare
     for i in range(Nflare):
-        outm = (((_fr[0]+#                                ; 0th order
-                  _fr[1]*((t-p[0+i*3])/p[1+i*3])+#        ; 1st order
-                  _fr[2]*((t-p[0+i*3])/p[1+i*3])^2.+#     ; 2nd order
-                  _fr[3]*((t-p[0+i*3])/p[1+i*3])^3.+#     ; 3rd order
-                  _fr[4]*((t-p[0+i*3])/p[1+i*3])^4. )*#   ; 4th order
-                 (t le p[0+i*3] and (t-p[0+i*3])/p[1+i*3] gt -1.) + # ; rise  mask
-                 ( _fd[0]*exp( ((t-p[0+i*3])/p[1+i*3])*_fd[1] ) + #     ; first exp
-                   _fd[2]*exp( ((t-p[0+i*3])/p[1+i*3])*_fd[3] ) ) * #   ; second exp
-                 (t gt p[0+i*3])) *#                                 ; decay  mask
-                P[2+i*3])  #                                            ; amplitude
-        
+        outm = np.piecewise(t, [(t<= p[0+i*3]) & (t-p[0+i*3])/p[1+i*3] > -1.,
+                                (t > p[0+i*3])],
+                            [lambda x: (_fr[0]+                             # 0th order
+                                        _fr[1]*((t-p[0+i*3])/p[1+i*3])+     # 1st order
+                                        _fr[2]*((t-p[0+i*3])/p[1+i*3])^2.+  # 2nd order
+                                        _fr[3]*((t-p[0+i*3])/p[1+i*3])^3.+  # 3rd order
+                                        _fr[4]*((t-p[0+i*3])/p[1+i*3])^4. ),# 4th order
+                             lambda x: (_fd[0]*np.exp( ((t-p[0+i*3])/p[1+i*3])*_fd[1] ) +
+                                        _fd[2]*np.exp( ((t-p[0+i*3])/p[1+i*3])*_fd[3] ))]
+                            ) * p[2+i*3] # amplitude
         flare = flare + outm
         
     return flare
