@@ -1,6 +1,12 @@
+'''
+Hold the analytic flare model
+
+Could also put other simple flare models in here, e.g. polynomial from Balona (2015)
+'''
+
 import numpy as np
 
-def model(t, p):
+def aflare(t, p):
     """
     This is the Analytic Flare Model from the flare-morphology paper
     Please reference Davenport (2014) http://arxiv.org/abs/1411.3723
