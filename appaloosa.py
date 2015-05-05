@@ -41,3 +41,7 @@ cur.close()
 
 
 # now on to the smoothing, flare finding, flare fitting, and results!
+smo = polysmooth(data[0,:], data[1,:], data[2,:])
+
+ediff = (data[1,:] - smo) / data[2,:] # simple error weighted outlier finding
+

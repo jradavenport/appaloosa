@@ -7,6 +7,6 @@ Hold the detrending method(s) to use.
 '''
 import numpy as np
 
-def polysmooth(time, flux):
+def polysmooth(time, flux, error):
     smo = flux
     return smo
