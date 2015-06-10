@@ -7,8 +7,8 @@ import numpy as np
 import MySQLdb
 import sys
 from aflare import aflare
-from detrend import polysmooth
-
+# from detrend import polysmooth,
+import detrend
 
 
 def _getLC(objectid):
@@ -20,8 +20,10 @@ def _getLC(objectid):
     db = MySQLdb.connect(passwd=auth[2], db="Kepler",
                          user=auth[1], host=auth[0])
 
-    query = 'SELECT QUARTER, TIME, SAP_FLUX, SAP_FLUX_ERR, SAP_QUALITY, LCFLAG, QUARTER ' \
-            'FROM Kepler.source WHERE KEPLERID='+objectid+';'
+    query = 'SELECT QUARTER, TIME, SAP_FLUX, SAP_FLUX_ERR, SAP_QUALITY, LCFLAG ' + \
+            'FROM Kepler.source '+\
+            'WHERE KEPLERID='+str(objectid)+\
+            'ORDER BY TIME;'
 
     # make a cursor to the db
     cur = db.cursor()
@@ -42,13 +44,17 @@ def _getLC(objectid):
 
 # read the objectID from the CONDOR job...
 # objectid = sys.argv[1]
-objectid = '9726699'  # test LC
+
+objectid = '9726699'  # GJ 1243
 
 # get the data from the MYSQL db
 data = _getLC(objectid)
+# data columsn are:
+
+flux_q = detrend.QtrFlat(data[1,:], data[2,:], data[0,:])
 
 # now on to the smoothing, flare finding, flare fitting, and results!
-smo = polysmooth(data[0,:], data[1,:], data[2,:])
+# smo = polysmooth(data[1,:], data[2,:], data[3,:])
 
 ediff = (data[1,:] - smo) / data[2,:] # simple error weighted outlier finding
 
