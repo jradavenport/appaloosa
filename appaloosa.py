@@ -8,6 +8,7 @@ import MySQLdb
 import sys
 from aflare import aflare
 import detrend
+import matplotlib.pyplot as plt
 # from detrend import polysmooth,
 
 
@@ -22,8 +23,8 @@ def _getLC(objectid):
 
     query = 'SELECT QUARTER, TIME, SAP_FLUX, SAP_FLUX_ERR, SAP_QUALITY, LCFLAG ' + \
             'FROM Kepler.source '+\
-            'WHERE KEPLERID='+str(objectid)+\
-            'ORDER BY TIME;'
+            ' WHERE KEPLERID='+str(objectid)+\
+            ' ORDER BY TIME;'
 
     # make a cursor to the db
     cur = db.cursor()
@@ -45,16 +46,15 @@ def _getLC(objectid):
 # read the objectID from the CONDOR job...
 # objectid = sys.argv[1]
 
-# objectid = '9726699'  # GJ 1243
-
-objectid = '8226697' # a random star
+objectid = '9726699'  # GJ 1243
+# objectid = '8226697' # a random star
 
 # get the data from the MYSQL db
 data = _getLC(objectid)
 # data columns are:
 # QUARTER, TIME, SAP_FLUX, SAP_FLUX_ERR, SAP_QUALITY, LCFLAG
 
-if (len(data[0,:]) > 100):
+if (len(data[:,0]) > 100):
     flux_q = detrend.QtrFlat(data[1,:], data[2,:], data[0,:])
 
     # now on to the smoothing, flare finding, flare fitting, and results!
