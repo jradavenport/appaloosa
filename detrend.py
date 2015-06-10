@@ -8,7 +8,9 @@ Hold the detrending method(s) to use.
 import numpy as np
 from pandas import rolling_median
 
-def polysmooth(time, flux, error):
+def polysmooth(time, flux, error, qtr):
+    uQtr = np.unique(qtr)
+
     smo = flux
     return smo
 
