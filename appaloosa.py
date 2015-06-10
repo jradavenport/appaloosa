@@ -42,23 +42,24 @@ def _getLC(objectid):
     return data
 
 
+def runLC():
+    # read the objectID from the CONDOR job...
+    # objectid = sys.argv[1]
 
-# read the objectID from the CONDOR job...
-# objectid = sys.argv[1]
+    objectid = '9726699'  # GJ 1243
+    # objectid = '8226697' # a random star
 
-objectid = '9726699'  # GJ 1243
-# objectid = '8226697' # a random star
+    # get the data from the MYSQL db
+    data = _getLC(objectid)
+    # data columns are:
+    # QUARTER, TIME, SAP_FLUX, SAP_FLUX_ERR, SAP_QUALITY, LCFLAG
 
-# get the data from the MYSQL db
-data = _getLC(objectid)
-# data columns are:
-# QUARTER, TIME, SAP_FLUX, SAP_FLUX_ERR, SAP_QUALITY, LCFLAG
+    if (len(data[:,0]) > 100):
+        flux_q = detrend.QtrFlat(data[1,:], data[2,:], data[0,:])
 
-if (len(data[:,0]) > 100):
-    flux_q = detrend.QtrFlat(data[1,:], data[2,:], data[0,:])
-
-    # now on to the smoothing, flare finding, flare fitting, and results!
-    smo = detrend.polysmooth(data[1,:], flux_q, data[3,:], data[0,:])
-
-ediff = (data[1,:] - smo) / data[2,:] # simple error weighted outlier finding
+#
+#     # now on to the smoothing, flare finding, flare fitting, and results!
+#     smo = detrend.rolling_poly(data[1,:], flux_q, data[3,:], data[0,:])
+#
+# ediff = (data[1,:] - smo) / data[2,:] # simple error weighted outlier finding
 
