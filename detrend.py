@@ -8,20 +8,21 @@ Hold the detrending method(s) to use.
 import numpy as np
 from pandas import rolling_median
 
-def rolling_poly(time, flux, error, order=6, window=1.0):
+
+def rolling_poly(time, flux, error, order=3, window=0.5):
     smo = flux
 
     w1 = np.where((time >= time[0] + window / 2.0) &
-                  (time <= time[-1] + window / 2.0 ))
+                  (time <= time[-1] + window / 2.0 ))[0]
 
-    for i in range(0,len(w1[0])):
-        x = (time[w1] >= time[w1][i] - window / 2.0) * \
-            (time[w1] <= time[w1][i] + window / 2.0)
+    for i in range(0,len(w1)):
+        x = np.where((time[w1] >= time[w1][i] - window / 2.0) &
+                     (time[w1] <= time[w1][i] + window / 2.0))
 
         fit = np.polyfit(time[w1][x], flux[w1][x], order,
-                         w = (1. / error[w1][x]) )
+                          w = (1. / error[w1][x]) )
 
-        smo[w1][i] = np.polyval(fit, time[w1][i])
+        smo[w1[i]] = np.polyval(fit, time[w1][i])
 
     return smo
 
