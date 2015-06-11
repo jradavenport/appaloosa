@@ -10,6 +10,8 @@ from pandas import rolling_median
 
 
 def rolling_poly(time, flux, error, order=3, window=0.5):
+    # this is SUPER slow... maybe useful in some places (LLC only?)
+
     smo = np.zeros_like(flux)
 
     w1 = np.where((time >= time[0] + window / 2.0) &
@@ -60,4 +62,11 @@ def QtrFlat(time, flux, qtr, order=3):
 
     return flux_flat
 
+
+def FindGaps(time, min=0.125):
+    # assumes data is already sorted!
+    dt = time[1:] - time[:-1]
+    gap = np.where((dt >= min))[0]
+
+    return gap
 
