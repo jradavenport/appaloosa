@@ -31,15 +31,15 @@ def aflare(t, p):
     flare = np.zeros_like(t)
     # compute the flare model for each flare
     for i in range(Nflare):
-        outm = np.piecewise(t, [(t<= p[0+i*3]) & (t-p[0+i*3])/p[1+i*3] > -1.,
+        outm = np.piecewise(t, [(t<= p[0+i*3]) * (t-p[0+i*3])/p[1+i*3] > -1.,
                                 (t > p[0+i*3])],
                             [lambda x: (_fr[0]+                             # 0th order
-                                        _fr[1]*((t-p[0+i*3])/p[1+i*3])+     # 1st order
-                                        _fr[2]*((t-p[0+i*3])/p[1+i*3])^2.+  # 2nd order
-                                        _fr[3]*((t-p[0+i*3])/p[1+i*3])^3.+  # 3rd order
-                                        _fr[4]*((t-p[0+i*3])/p[1+i*3])^4. ),# 4th order
-                             lambda x: (_fd[0]*np.exp( ((t-p[0+i*3])/p[1+i*3])*_fd[1] ) +
-                                        _fd[2]*np.exp( ((t-p[0+i*3])/p[1+i*3])*_fd[3] ))]
+                                        _fr[1]*((x-p[0+i*3])/p[1+i*3])+     # 1st order
+                                        _fr[2]*((x-p[0+i*3])/p[1+i*3])**2.+  # 2nd order
+                                        _fr[3]*((x-p[0+i*3])/p[1+i*3])**3.+  # 3rd order
+                                        _fr[4]*((x-p[0+i*3])/p[1+i*3])**4. ),# 4th order
+                             lambda x: (_fd[0]*np.exp( ((x-p[0+i*3])/p[1+i*3])*_fd[1] ) +
+                                        _fd[2]*np.exp( ((x-p[0+i*3])/p[1+i*3])*_fd[3] ))]
                             ) * p[2+i*3] # amplitude
         flare = flare + outm
         
