@@ -10,7 +10,7 @@ from pandas import rolling_median
 
 
 def rolling_poly(time, flux, error, order=3, window=0.5):
-    smo = flux
+    smo = np.zeros_like(flux)
 
     w1 = np.where((time >= time[0] + window / 2.0) &
                   (time <= time[-1] + window / 2.0 ))[0]
