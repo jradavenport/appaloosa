@@ -79,7 +79,7 @@ def _sinfunc(t, per, amp, t0, yoff):
 
 
 def FitSin(time, flux, maxnum = 3):
-    gap = FindGaps(time, flux) # finds right edge of time windows
+    gap = FindGaps(time) # finds right edge of time windows
 
     minper = 0.1 # days
     maxper = 30. # days
