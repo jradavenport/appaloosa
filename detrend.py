@@ -78,7 +78,7 @@ def _sinfunc(t, per, amp, t0, yoff):
     return np.sin((t - t0) * 2.0 * np.pi / per) * amp  + yoff
 
 
-def FitSin(time, flux, maxnum = 3):
+def FitSin(time, flux, maxnum = 5):
     gap = FindGaps(time) # finds right edge of time windows
 
     minper = 0.1 # days
@@ -104,8 +104,7 @@ def FitSin(time, flux, maxnum = 3):
         freq = 2.0 * np.pi / periods[np.where((periods < dt))]
 
         for k in range(0, maxnum):
-            pgram = signal.lombscargle(ti, flux_out[rng[0]:rng[1]] - medflux,
-                                       freq)
+            pgram = signal.lombscargle(ti, flux_out[rng[0]:rng[1]] - medflux, freq)
 
             pwr = np.sqrt(4. * (pgram / time.shape[0]))
 
@@ -120,5 +119,5 @@ def FitSin(time, flux, maxnum = 3):
             flux_out[rng[0]:rng[1]] = flux_out[rng[0]:rng[1]] - _sinfunc(ti, *pfit[0])
             sin_out[rng[0]:rng[1]] = sin_out[rng[0]:rng[1]] + _sinfunc(ti, *pfit[0])
 
-    return sin_out
+    return sin_out + medflux
 
