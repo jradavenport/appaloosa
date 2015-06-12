@@ -74,10 +74,10 @@ def FindGaps(time, maxgap=0.125, minspan=3.0):
     # remove gaps that are too close together
 
     # add start/end of LC to loop over easily
-    gap_out = np.append(0, np.append(gap, len(time)-1))
+    gap_out = np.append(0, np.append(gap, len(time) - 1))
 
-    right = np.append(gap, len(time)-1) # right end of data
-    left = np.append(0, gap+1) # left start of data
+    right = np.append(gap + 1, len(time) - 1) # right end of data
+    left = np.append(0, gap + 1) # left start of data
 
     return gap_out, left, right
 
