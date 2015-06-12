@@ -100,7 +100,7 @@ def FitSin(time, flux, maxnum = 5, nper=2000):
     # now loop over every chunk of data and fit N periods
     for i in range(0, len(dl)):
         # total baseline of time window
-        dt = time[dr[i]] - time[dl[i]]
+        dt = max(time[dl[i]:dr[i]]) - min(time[dl[i]:dr[i]])
 
         medflux = np.median(flux[dl[i]:dr[i]])
         ti = time[dl[i]:dr[i]]
