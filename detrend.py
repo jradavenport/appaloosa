@@ -86,7 +86,8 @@ def FitSin(time, flux, maxnum = 3):
     nper = 2000
     periods = np.linspace(minper, maxper, nper)
 
-    flux_out = flux
+    flux_out = np.array(flux, copy=True)
+    sin_out = np.zeros_like(flux) # return the sin function!
 
     for i in range(0, len(gap)-1):
         ioff = 0
@@ -117,7 +118,7 @@ def FitSin(time, flux, maxnum = 3):
                              flux_out[rng[0]:rng[1]]-medflux, p0=p0)
 
             flux_out[rng[0]:rng[1]] = flux_out[rng[0]:rng[1]] - _sinfunc(ti, *pfit[0])
+            sin_out[rng[0]:rng[1]] = sin_out[rng[0]:rng[1]] + _sinfunc(ti, *pfit[0])
 
-
-    return flux_out
+    return sin_out
 
