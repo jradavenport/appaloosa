@@ -9,7 +9,7 @@ import numpy as np
 from pandas import rolling_median, rolling_mean
 from scipy.optimize import curve_fit
 from gatspy.periodic import LombScargleFast
-# from scipy import signal
+from scipy import signal
 
 
 
@@ -116,7 +116,7 @@ def FitSin(time, flux, error, maxnum = 5, nper=2000):
 
             # try Jake Vanderplas faster version!
             pgram = LombScargleFast().fit(time, flux - medflux, error)
-            pwr, per = pgram.periodogram_auto()
+            per, pwr = pgram.periodogram_auto()
             pk = per[np.where((per < dt))][np.argmax(pwr)]
 
 
