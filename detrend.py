@@ -6,7 +6,9 @@ Hold the detrending method(s) to use.
 
 '''
 import numpy as np
-from pandas import rolling_median
+from pandas import rolling_median, rolling_mean
+from scipy import signal
+from scipy.optimize import curve_fit
 
 
 def rolling_poly(time, flux, error, order=3, window=0.5):
@@ -66,7 +68,56 @@ def QtrFlat(time, flux, qtr, order=3):
 def FindGaps(time, min=0.125):
     # assumes data is already sorted!
     dt = time[1:] - time[:-1]
-    gap = np.where((dt >= min))[0]
-
+    gap1 = np.where((dt >= min))[0]
+    # add start/end of LC to loop over easily
+    gap = np.append(0, np.append(gap1, len(time)-1))
     return gap
+
+
+def _sinfunc(t, per, amp, t0, yoff):
+    return np.sin((t - t0) * 2.0 * np.pi / per) * amp  + yoff
+
+
+def FitSin(time, flux, maxnum = 3):
+    gap = FindGaps(time, flux) # finds right edge of time windows
+
+    minper = 0.1 # days
+    maxper = 30. # days
+    nper = 2000
+    periods = np.linspace(minper, maxper, nper)
+
+    flux_out = flux
+
+    for i in range(0, len(gap)-1):
+        ioff = 0
+        if i > 0:
+            ioff = 1
+        rng = [gap[i]+ioff, gap[i+1]]
+
+        # total baseline of time window
+        dt = time[rng[1]] - time[rng[0]]
+
+        medflux = np.median(flux[rng[0]:rng[1]])
+        ti = time[rng[0]:rng[1]]
+
+        freq = 2.0 * np.pi / periods[np.where((periods < dt))]
+
+        for k in range(0, maxnum):
+            pgram = signal.lombscargle(ti, flux_out[rng[0]:rng[1]] - medflux,
+                                       freq)
+
+            pwr = np.sqrt(4. * (pgram / time.shape[0]))
+
+            # find the period with the peak power
+            pk = periods[np.where((periods < dt))][np.argmax(pwr)]
+
+            # fit sin curve to window and subtract
+            p0 = [pk, 3.0 * np.nanstd(flux_out[rng[0]:rng[1]]-medflux), 0.0, 0.0]
+            pfit = curve_fit(_sinfunc, ti,
+                             flux_out[rng[0]:rng[1]]-medflux, p0=p0)
+
+            flux_out[rng[0]:rng[1]] = flux_out[rng[0]:rng[1]] - _sinfunc(ti, *pfit[0])
+
+
+    return flux_out
 
