@@ -111,11 +111,14 @@ def FitSin(time, flux, error, maxnum = 5, nper=2000):
         for k in range(0, maxnum):
             # pgram = signal.lombscargle(ti, flux_out[dl[i]:dr[i]] - medflux, freq)
             # pwr = np.sqrt(4. * (pgram / time.shape[0]))
-            pgram = LombScargleFast().fit(time, flux, error)
-            pwr = pgram.periodogram(1./freq)
-
             # find the period with the peak power
-            pk = periods[np.where((periods < dt))][np.argmax(pwr)]
+            # pk = periods[np.where((periods < dt))][np.argmax(pwr)]
+
+            # try Jake Vanderplas faster version!
+            pgram = LombScargleFast().fit(time, flux - medflux, error)
+            pwr, per = pgram.periodogram_auto()
+            pk = per[np.where((per < dt))][np.argmax(pwr)]
+
 
             # fit sin curve to window and subtract
             p0 = [pk, 3.0 * np.nanstd(flux_out[dl[i]:dr[i]]-medflux), 0.0, 0.0]
