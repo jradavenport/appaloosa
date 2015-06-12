@@ -97,7 +97,8 @@ def FitSin(time, flux, maxnum = 5, nper=2000):
     flux_out = np.array(flux, copy=True)
     sin_out = np.zeros_like(flux) # return the sin function!
 
-    for i in range(0, len(dl)-1):
+    # now loop over every chunk of data and fit N periods
+    for i in range(0, len(dl)):
         # total baseline of time window
         dt = time[dr[i]] - time[dl[i]]
 
