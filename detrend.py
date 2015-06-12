@@ -78,12 +78,12 @@ def _sinfunc(t, per, amp, t0, yoff):
     return np.sin((t - t0) * 2.0 * np.pi / per) * amp  + yoff
 
 
-def FitSin(time, flux, maxnum = 5):
+def FitSin(time, flux, maxnum = 5, nper=2000):
     gap = FindGaps(time) # finds right edge of time windows
 
     minper = 0.1 # days
     maxper = 30. # days
-    nper = 2000
+
     periods = np.linspace(minper, maxper, nper)
 
     flux_out = np.array(flux, copy=True)
@@ -119,5 +119,8 @@ def FitSin(time, flux, maxnum = 5):
             flux_out[rng[0]:rng[1]] = flux_out[rng[0]:rng[1]] - _sinfunc(ti, *pfit[0])
             sin_out[rng[0]:rng[1]] = sin_out[rng[0]:rng[1]] + _sinfunc(ti, *pfit[0])
 
-    return sin_out + medflux
+        # add the median flux for this window BACK in
+        sin_out[rng[0]:rng[1]] = sin_out[rng[0]:rng[1]]+ medflux
+
+    return sin_out
 
