@@ -115,7 +115,9 @@ def FitSin(time, flux, error, maxnum = 5, nper=2000):
             # pk = periods[np.where((periods < dt))][np.argmax(pwr)]
 
             # try Jake Vanderplas faster version!
-            pgram = LombScargleFast().fit(ti, flux_out[dl[i]:dr[i]] - medflux, error)
+            pgram = LombScargleFast().fit(time[dl[i]:dr[i]],
+                                          flux_out[dl[i]:dr[i]] - medflux,
+                                          error[dl[i]:dr[i]])
             per, pwr = pgram.periodogram_auto()
             pk = per[np.where((per < dt))][np.argmax(pwr)]
 
