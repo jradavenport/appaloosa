@@ -11,6 +11,7 @@ from scipy import signal
 from scipy.optimize import curve_fit
 
 
+
 def rolling_poly(time, flux, error, order=3, window=0.5):
     # this is SUPER slow... maybe useful in some places (LLC only?)
 
@@ -65,13 +66,20 @@ def QtrFlat(time, flux, qtr, order=3):
     return flux_flat
 
 
-def FindGaps(time, min=0.125):
+def FindGaps(time, maxgap=0.125, minspan=3.0):
     # assumes data is already sorted!
     dt = time[1:] - time[:-1]
-    gap1 = np.where((dt >= min))[0]
+    gap = np.where((dt >= maxgap))[0]
+
+    # remove gaps that are too close together
+
     # add start/end of LC to loop over easily
-    gap = np.append(0, np.append(gap1, len(time)-1))
-    return gap
+    gap_out = np.append(0, np.append(gap, len(time)-1))
+
+    right = np.append(gap, len(time)-1) # right end of data
+    left = np.append(0, gap+1) # left start of data
+
+    return gap_out, left, right
 
 
 def _sinfunc(t, per, amp, t0, yoff):
@@ -79,7 +87,7 @@ def _sinfunc(t, per, amp, t0, yoff):
 
 
 def FitSin(time, flux, maxnum = 5, nper=2000):
-    gap = FindGaps(time) # finds right edge of time windows
+    _, dl, dr = FindGaps(time) # finds right edge of time windows
 
     minper = 0.1 # days
     maxper = 30. # days
@@ -89,22 +97,17 @@ def FitSin(time, flux, maxnum = 5, nper=2000):
     flux_out = np.array(flux, copy=True)
     sin_out = np.zeros_like(flux) # return the sin function!
 
-    for i in range(0, len(gap)-1):
-        ioff = 0
-        if i > 0:
-            ioff = 1
-        rng = [gap[i]+ioff, gap[i+1]]
-
+    for i in range(0, len(gl)-1):
         # total baseline of time window
-        dt = time[rng[1]] - time[rng[0]]
+        dt = time[dr[i]] - time[dl[i]]
 
-        medflux = np.median(flux[rng[0]:rng[1]])
-        ti = time[rng[0]:rng[1]]
+        medflux = np.median(flux[dl[i]:dr[i]])
+        ti = time[dl[i]:dr[i]]
 
         freq = 2.0 * np.pi / periods[np.where((periods < dt))]
 
         for k in range(0, maxnum):
-            pgram = signal.lombscargle(ti, flux_out[rng[0]:rng[1]] - medflux, freq)
+            pgram = signal.lombscargle(ti, flux_out[dl[i]:dr[i]] - medflux, freq)
 
             pwr = np.sqrt(4. * (pgram / time.shape[0]))
 
@@ -112,15 +115,15 @@ def FitSin(time, flux, maxnum = 5, nper=2000):
             pk = periods[np.where((periods < dt))][np.argmax(pwr)]
 
             # fit sin curve to window and subtract
-            p0 = [pk, 3.0 * np.nanstd(flux_out[rng[0]:rng[1]]-medflux), 0.0, 0.0]
+            p0 = [pk, 3.0 * np.nanstd(flux_out[dl[i]:dr[i]]-medflux), 0.0, 0.0]
             pfit = curve_fit(_sinfunc, ti,
-                             flux_out[rng[0]:rng[1]]-medflux, p0=p0)
+                             flux_out[dl[i]:dr[i]]-medflux, p0=p0)
 
-            flux_out[rng[0]:rng[1]] = flux_out[rng[0]:rng[1]] - _sinfunc(ti, *pfit[0])
-            sin_out[rng[0]:rng[1]] = sin_out[rng[0]:rng[1]] + _sinfunc(ti, *pfit[0])
+            flux_out[dl[i]:dr[i]] = flux_out[dl[i]:dr[i]] - _sinfunc(ti, *pfit[0])
+            sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + _sinfunc(ti, *pfit[0])
 
         # add the median flux for this window BACK in
-        sin_out[rng[0]:rng[1]] = sin_out[rng[0]:rng[1]]+ medflux
+        sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + medflux
 
     return sin_out
 
