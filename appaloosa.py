@@ -31,9 +31,9 @@ def _getLC(objectid, type=''):
 
         # only get SLC or LLC data if requested
         if type=='slc':
-            query = query + ' AND LCFLAG==0 '
+            query = query + ' AND LCFLAG=0 '
         if type=='llc':
-            query = query + ' AND LCFLAG==1 '
+            query = query + ' AND LCFLAG=1 '
 
 
         query = query + ' ORDER BY TIME;'
@@ -75,9 +75,12 @@ def runLC():
     # data columns are:
     # QUARTER, TIME, SAP_FLUX, SAP_FLUX_ERR, SAP_QUALITY, LCFLAG
 
-    if (len(data[:,0]) > 100):
-        flux_q = detrend.QtrFlat(data[1,:], data[2,:], data[0,:])
+    time = data[1,:]
+    flux_raw = data[2,:]
+    qtr = data[0,:]
+    flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
+    flux_sin = detrend.FitSin(time, flux_qtr)
 #
 #     # now on to the smoothing, flare finding, flare fitting, and results!
 #     smo = detrend.rolling_poly(data[1,:], flux_q, data[3,:], data[0,:])
