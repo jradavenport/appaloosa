@@ -149,8 +149,8 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
                     print('Curve_Fit no good')
 
 
-            flux_out[dl[i]:dr[i]] = flux_out[dl[i]:dr[i]] - _sinfunc(ti, *pfit[0])
-            sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + _sinfunc(ti, *pfit[0])
+            flux_out[dl[i]:dr[i]] = flux_out[dl[i]:dr[i]] - _sinfunc(ti, *pfit)
+            sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + _sinfunc(ti, *pfit)
 
         # add the median flux for this window BACK in
         sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + medflux
