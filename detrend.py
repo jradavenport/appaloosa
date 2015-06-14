@@ -131,7 +131,9 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
 
             freq = f0 + df * np.arange(nper)
             per = 1./freq
-            pk = per[np.where((per < dt) & (per > minper))][np.argmax(pwr)]
+
+            pok = np.where((per < dt) & (per > minper))
+            pk = per[pok][np.argmax(pwr[pok])]
             pp = np.max(pwr)
 
             if debug is True:
