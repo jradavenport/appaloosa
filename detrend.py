@@ -87,7 +87,7 @@ def _sinfunc(t, per, amp, t0, yoff):
     return np.sin((t - t0) * 2.0 * np.pi / per) * amp  + yoff
 
 
-def FitSin(time, flux, error, maxnum = 5, nper=20000):
+def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
     minper = 0.1 # days
@@ -103,10 +103,13 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000):
         # total baseline of time window
         dt = max(time[dl[i]:dr[i]]) - min(time[dl[i]:dr[i]])
 
+        if debug is True:
+            print('window (i): '+str(i)+'.  time span (dt):'+str(dt))
+
         medflux = np.median(flux[dl[i]:dr[i]])
         ti = time[dl[i]:dr[i]]
 
-        freq = 2.0 * np.pi / periods[np.where((periods < dt))]
+        # freq = 2.0 * np.pi / periods[np.where((periods < dt))]
 
         for k in range(0, maxnum):
             # pgram = signal.lombscargle(ti, flux_out[dl[i]:dr[i]] - medflux, freq)
@@ -129,12 +132,22 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000):
             freq = f0 + df * np.arange(nper)
             per = 1./freq
             pk = per[np.where((per < dt) & (per > minper))][np.argmax(pwr)]
+            pp = np.max(pwr)
+
+            if debug is True:
+                print('trial (k): '+str(k)+'.  peak period (pk):'+str(pk)+
+                      '.  peak power (pp):'+str(pp))
 
 
             # fit sin curve to window and subtract
             p0 = [pk, 3.0 * np.nanstd(flux_out[dl[i]:dr[i]]-medflux), 0.0, 0.0]
-            pfit = curve_fit(_sinfunc, ti,
-                             flux_out[dl[i]:dr[i]]-medflux, p0=p0)
+            try:
+                pfit, pcov = curve_fit(_sinfunc, ti, flux_out[dl[i]:dr[i]]-medflux, p0=p0)
+            except RuntimeError:
+                pfit = p0 * np.array([1., 0., 1., 1.], dtype='float')
+                if debug is True:
+                    print('Curve_Fit no good')
+
 
             flux_out[dl[i]:dr[i]] = flux_out[dl[i]:dr[i]] - _sinfunc(ti, *pfit[0])
             sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + _sinfunc(ti, *pfit[0])
