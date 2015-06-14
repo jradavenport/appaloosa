@@ -87,7 +87,7 @@ def _sinfunc(t, per, amp, t0, yoff):
     return np.sin((t - t0) * 2.0 * np.pi / per) * amp  + yoff
 
 
-def FitSin(time, flux, error, maxnum = 5, nper=2000):
+def FitSin(time, flux, error, maxnum = 5, nper=20000):
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
     minper = 0.1 # days
@@ -115,11 +115,20 @@ def FitSin(time, flux, error, maxnum = 5, nper=2000):
             # pk = periods[np.where((periods < dt))][np.argmax(pwr)]
 
             # try Jake Vanderplas faster version!
-            pgram = LombScargleFast().fit(time[dl[i]:dr[i]],
-                                          flux_out[dl[i]:dr[i]] - medflux,
-                                          error[dl[i]:dr[i]])
-            per, pwr = pgram.periodogram_auto()
-            pk = per[np.where((per < dt))][np.argmax(pwr)]
+            pgram = LombScargleFast(fit_offset=False)
+            pgram.optimizer.set(period_range=(minper,maxper))
+            pgram = pgram.fit(time[dl[i]:dr[i]],
+                              flux_out[dl[i]:dr[i]] - medflux,
+                              error[dl[i]:dr[i]])
+            # per, pwr = pgram.periodogram_auto()
+
+            df = (1./minper - 1./maxper) / nper
+            f0 = 1./maxper
+            pwr = pgram.score_frequency_grid(f0, df, nper)
+
+            freq = f0 + df * np.arange(nper)
+            per = 1./freq
+            pk = per[np.where((per < dt) & (per > minper))][np.argmax(pwr)]
 
 
             # fit sin curve to window and subtract
