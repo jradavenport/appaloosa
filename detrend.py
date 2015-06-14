@@ -144,7 +144,7 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
             try:
                 pfit, pcov = curve_fit(_sinfunc, ti, flux_out[dl[i]:dr[i]]-medflux, p0=p0)
             except RuntimeError:
-                pfit = p0 * np.array([1., 0., 1., 1.], dtype='float')
+                pfit = [pk, 0., 0., 0.]
                 if debug is True:
                     print('Curve_Fit no good')
 
