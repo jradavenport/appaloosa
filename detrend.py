@@ -140,19 +140,18 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
                 print('trial (k): '+str(k)+'.  peak period (pk):'+str(pk)+
                       '.  peak power (pp):'+str(pp))
 
+            if (pp > 0.2):
+                # fit sin curve to window and subtract
+                p0 = [pk, 3.0 * np.nanstd(flux_out[dl[i]:dr[i]]-medflux), 0.0, 0.0]
+                try:
+                    pfit, pcov = curve_fit(_sinfunc, ti, flux_out[dl[i]:dr[i]]-medflux, p0=p0)
+                except RuntimeError:
+                    pfit = [pk, 0., 0., 0.]
+                    if debug is True:
+                        print('Curve_Fit no good')
 
-            # fit sin curve to window and subtract
-            p0 = [pk, 3.0 * np.nanstd(flux_out[dl[i]:dr[i]]-medflux), 0.0, 0.0]
-            try:
-                pfit, pcov = curve_fit(_sinfunc, ti, flux_out[dl[i]:dr[i]]-medflux, p0=p0)
-            except RuntimeError:
-                pfit = [pk, 0., 0., 0.]
-                if debug is True:
-                    print('Curve_Fit no good')
-
-
-            flux_out[dl[i]:dr[i]] = flux_out[dl[i]:dr[i]] - _sinfunc(ti, *pfit)
-            sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + _sinfunc(ti, *pfit)
+                flux_out[dl[i]:dr[i]] = flux_out[dl[i]:dr[i]] - _sinfunc(ti, *pfit)
+                sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + _sinfunc(ti, *pfit)
 
         # add the median flux for this window BACK in
         sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + medflux
