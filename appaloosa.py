@@ -26,7 +26,7 @@ def _getLC(objectid, type=''):
         db = MySQLdb.connect(passwd=auth[2], db="Kepler",
                              user=auth[1], host=auth[0])
 
-        query = 'SELECT QUARTER, TIME, SAP_FLUX, SAP_FLUX_ERR, SAP_QUALITY, LCFLAG ' + \
+        query = 'SELECT QUARTER, TIME, PDCSAP_FLUX, PDCSAP_FLUX_ERR, SAP_QUALITY, LCFLAG ' + \
                 'FROM Kepler.source WHERE KEPLERID=' + str(objectid)
 
         # only get SLC or LLC data if requested
@@ -52,7 +52,7 @@ def _getLC(objectid, type=''):
         cur.close()
 
         # make sure the database returned the actual light curve
-        if len(data[:,0] > 1000):
+        if len(data[:,0] > 99):
             isok = 10
         # only try 10 times... shouldn't ever need this limit
         if ntry > 9:
@@ -63,25 +63,38 @@ def _getLC(objectid, type=''):
     return data
 
 
-def runLC():
+# objectid = '9726699'  # GJ 1243
+def runLC(objectid='9726699'):
     # read the objectID from the CONDOR job...
     # objectid = sys.argv[1]
 
-    objectid = '9726699'  # GJ 1243
-    # objectid = '8226697' # a random star
+    # pick and process a totally random LC.
+    # important for reality checking!
+    if (objectid is 'random'):
+        obj, num = np.loadtxt('get_objects.out', skiprows=1, unpack=True, dtype='str')
+        rand_id = int(np.random.random() * len(obj))
+        objectid = obj[rand_id]
+
 
     # get the data from the MYSQL db
     data = _getLC(objectid)
     # data columns are:
-    # QUARTER, TIME, SAP_FLUX, SAP_FLUX_ERR, SAP_QUALITY, LCFLAG
-
+    # QUARTER, TIME, FLUX, FLUX_ERR, SAP_QUALITY, LCFLAG
+    qtr = data[0,:]
     time = data[1,:]
     flux_raw = data[2,:]
-    qtr = data[0,:]
+    error = data[3,:]
+
     flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
-    flux_sin = detrend.FitSin(time, flux_qtr)
-#
+    flux_sin = detrend.FitSin(time, flux_qtr, error)
+
+    plt.figure()
+    plt.plot(time, flux_raw)
+    plt.plot(time, flux_qtr)
+    plt.plot(time, flux_sin)
+    plt.show()
+
 #     # now on to the smoothing, flare finding, flare fitting, and results!
 #     smo = detrend.rolling_poly(data[1,:], flux_q, data[3,:], data[0,:])
 #

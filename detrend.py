@@ -14,7 +14,9 @@ from scipy import signal
 
 
 def rolling_poly(time, flux, error, order=3, window=0.5):
-    # this is SUPER slow... maybe useful in some places (LLC only?)
+    # This is SUPER slow... maybe useful in some places (LLC only?).
+    # Can't be sped up much w/ indexing, because needs to move fixed
+    # windows of time...
 
     smo = np.zeros_like(flux)
 
@@ -88,6 +90,16 @@ def _sinfunc(t, per, amp, t0, yoff):
 
 
 def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
+    '''
+
+    :param time:
+    :param flux:
+    :param error:
+    :param maxnum:
+    :param nper:
+    :param debug:
+    :return:
+    '''
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
     minper = 0.1 # days
