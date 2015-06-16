@@ -81,10 +81,10 @@ def runLC(objectid='9726699'):
     data = _getLC(objectid)
     # data columns are:
     # QUARTER, TIME, FLUX, FLUX_ERR, SAP_QUALITY, LCFLAG
-    qtr = data[0,:]
-    time = data[1,:]
-    flux_raw = data[2,:]
-    error = data[3,:]
+    qtr = data[:,0]
+    time = data[:,1]
+    flux_raw = data[:,2]
+    error = data[:,3]
 
     flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
