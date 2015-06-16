@@ -74,6 +74,7 @@ def runLC(objectid='9726699'):
         obj, num = np.loadtxt('get_objects.out', skiprows=1, unpack=True, dtype='str')
         rand_id = int(np.random.random() * len(obj))
         objectid = obj[rand_id]
+        print('Random ObjectID Selected: ' + objectid)
 
 
     # get the data from the MYSQL db
