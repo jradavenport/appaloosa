@@ -89,7 +89,9 @@ def _sinfunc(t, per, amp, t0, yoff):
     return np.sin((t - t0) * 2.0 * np.pi / per) * amp  + yoff
 
 
-def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
+def FitSin(time, flux, error, maxnum = 5, nper=20000,
+           minper=0.1, maxper=30.0, plim=0.1,
+           debug=False):
     '''
 
     :param time:
@@ -97,13 +99,16 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
     :param error:
     :param maxnum:
     :param nper:
+    :param minper:
+    :param maxper:
+    :param plim:
     :param debug:
     :return:
     '''
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
-    minper = 0.1 # days
-    maxper = 30. # days
+    # minper = 0.1 # days
+    # maxper = 30. # days
 
     periods = np.linspace(minper, maxper, nper)
 
@@ -152,7 +157,7 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
                 print('trial (k): '+str(k)+'.  peak period (pk):'+str(pk)+
                       '.  peak power (pp):'+str(pp))
 
-            if (pp > 0.2):
+            if (pp > plim):
                 # fit sin curve to window and subtract
                 p0 = [pk, 3.0 * np.nanstd(flux_out[dl[i]:dr[i]]-medflux), 0.0, 0.0]
                 try:
@@ -170,3 +175,55 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000, debug=False):
 
     return sin_out
 
+
+def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5):
+    '''
+
+    Parameters
+    ----------
+    time : numpy array
+    flux : numpy array
+    error : numpy array
+    numpass : int, optional
+        the number of passes to make over the data. (Default is 3)
+    kernel : float, optional
+        the boxcar size in hours. (Default is 2.0)
+    sigclip : int, optional
+        Number of times the standard deviation to clip points at
+        (Default is 5)
+
+    Returns
+    -------
+    The smoothed light curve
+    '''
+
+    exptime = np.median(time[1:]-time[:-1])
+    nptsmooth = int(kernel/24.0)
+
+    _, dl, dr = FindGaps(time) # finds right edge of time windows
+
+    flux_sm = np.array(flux, copy=True)
+    # time_sm = np.array(time, copy=True)
+    # error_sm = np.array(error, copy=True)
+
+    for i in range(0, len(dl)):
+        # the data within each gap range
+        time_i = time[dl[i]:dr[i]]
+        flux_i = flux[dl[i]:dr[i]]
+        error_i = error[dl[i]:dr[i]]
+
+        # now take N passes of rejection on it
+        for k in range(0, numpass):
+            # rolling median in this data span with the kernel size
+            flux_i_sm = rolling_median(flux_i, nptsmooth)
+
+            # iteratively reject points (above and below) w/ sigclip
+            ok = np.where((np.abs((flux_i - flux_i_sm)/error_i) < sigclip))
+
+            time_i = time_i[ok]
+            flux_i = flux_i[ok]
+            error_i = error_i[ok]
+
+        flux_sm[dl[i]:dr[i]] = np.interp(time[dl[i]:dr[i]], time_i, flux_i)
+
+    return flux_sm

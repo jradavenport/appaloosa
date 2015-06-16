@@ -91,9 +91,9 @@ def runLC(objectid='9726699'):
     flux_sin = detrend.FitSin(time, flux_qtr, error)
 
     plt.figure()
-    plt.plot(time, flux_raw)
-    plt.plot(time, flux_qtr)
-    plt.plot(time, flux_sin)
+    plt.plot(time, flux_raw, 'b')
+    plt.plot(time, flux_qtr, 'g')
+    plt.plot(time, flux_sin, 'r')
     plt.show()
 
 #     # now on to the smoothing, flare finding, flare fitting, and results!
