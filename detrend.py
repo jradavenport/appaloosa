@@ -215,14 +215,15 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5):
         # now take N passes of rejection on it
         for k in range(0, numpass):
             # rolling median in this data span with the kernel size
-            flux_i_sm = rolling_median(flux_i, nptsmooth)
+            flux_i_sm = rolling_median(flux_i, nptsmooth, center=True)
+            indx = np.isfinite(flux_i_sm)
 
             # iteratively reject points (above and below) w/ sigclip
-            ok = np.where((np.abs((flux_i - flux_i_sm)/error_i) < sigclip))
+            ok = np.where((np.abs((flux_i[indx] - flux_i_sm[indx])/error_i[indx]) < sigclip))
 
-            time_i = time_i[ok]
-            flux_i = flux_i[ok]
-            error_i = error_i[ok]
+            time_i = time_i[indx][ok]
+            flux_i = flux_i[indx][ok]
+            error_i = error_i[indx][ok]
 
         flux_sm[dl[i]:dr[i]] = np.interp(time[dl[i]:dr[i]], time_i, flux_i)
 
