@@ -176,7 +176,7 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000,
     return sin_out
 
 
-def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5):
+def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5, debug=False):
     '''
 
     Parameters
@@ -197,8 +197,6 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5):
     The smoothed light curve
     '''
 
-    exptime = np.median(time[1:]-time[:-1])
-    nptsmooth = int(kernel/24.0)
 
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
@@ -211,6 +209,12 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5):
         time_i = time[dl[i]:dr[i]]
         flux_i = flux[dl[i]:dr[i]]
         error_i = error[dl[i]:dr[i]]
+
+        exptime = np.median(time_i[1:]-time_i[:-1])
+        nptsmooth = int(kernel/24.0 / exptime)
+        if debug is True:
+            print('# of smoothing points: ',str(nptsmooth))
+
 
         # now take N passes of rejection on it
         for k in range(0, numpass):
