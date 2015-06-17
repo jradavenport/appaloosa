@@ -263,7 +263,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
         time_i = time[dl[i]:dr[i]]
         flux_i = flux[dl[i]:dr[i]]
         error_i = error[dl[i]:dr[i]]
-        indx_i = range(dl[i], dr[i]) # for tracking final indx used
+        indx_i = np.arange(dl[i], dr[i]) # for tracking final indx used
 
         exptime = np.median(time_i[1:]-time_i[:-1])
         nptsmooth = int(kernel/24.0 / exptime)
