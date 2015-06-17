@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 # from detrend import polysmooth,
 
 
-def _getLC(objectid, type=''):
+def getLC(objectid, type=''):
 
     # this holds the keys to the db... don't put on github!
     auth = np.loadtxt('auth.txt',dtype='string')
@@ -26,7 +26,8 @@ def _getLC(objectid, type=''):
         db = MySQLdb.connect(passwd=auth[2], db="Kepler",
                              user=auth[1], host=auth[0])
 
-        query = 'SELECT QUARTER, TIME, PDCSAP_FLUX, PDCSAP_FLUX_ERR, SAP_QUALITY, LCFLAG ' + \
+        query = 'SELECT QUARTER, TIME, PDCSAP_FLUX, PDCSAP_FLUX_ERR, ' +\
+                'SAP_QUALITY, LCFLAG, SAP_FLUX, SAP_FLUX_ERR ' +\
                 'FROM Kepler.source WHERE KEPLERID=' + str(objectid)
 
         # only get SLC or LLC data if requested
@@ -34,7 +35,6 @@ def _getLC(objectid, type=''):
             query = query + ' AND LCFLAG=0 '
         if type=='llc':
             query = query + ' AND LCFLAG=1 '
-
 
         query = query + ' ORDER BY TIME;'
 
@@ -63,8 +63,29 @@ def _getLC(objectid, type=''):
     return data
 
 
+def onecadence(data):
+    # get the unique quarters
+    qtr = data[:,0]
+    cadence = data[:,5]
+    uQtr = np.unique(qtr)
+
+    indx = []
+
+    # for each quarter, is there more than one cadence?
+    for q in uQtr:
+        x = np.where( (np.abs(qtr-q) < 0.1) )
+
+        etimes = np.unique(cadence[x])
+        y = np.where( (cadence[x] == min(etimes)) )
+
+        indx = np.append(indx, x[0][y])
+
+    data_out = data[indx,:]
+    return data_out
+
+
 # objectid = '9726699'  # GJ 1243
-def runLC(objectid='9726699'):
+def runLC(objectid='9726699', ftype='sap'):
     # read the objectID from the CONDOR job...
     # objectid = sys.argv[1]
 
@@ -76,9 +97,8 @@ def runLC(objectid='9726699'):
         objectid = obj[rand_id]
         print('Random ObjectID Selected: ' + objectid)
 
-
     # get the data from the MYSQL db
-    data = _getLC(objectid)
+    data = getLC(objectid)
     # data columns are:
     # QUARTER, TIME, FLUX, FLUX_ERR, SAP_QUALITY, LCFLAG
     qtr = data[:,0]
@@ -100,4 +120,3 @@ def runLC(objectid='9726699'):
 #     smo = detrend.rolling_poly(data[1,:], flux_q, data[3,:], data[0,:])
 #
 # ediff = (data[1,:] - smo) / data[2,:] # simple error weighted outlier finding
-

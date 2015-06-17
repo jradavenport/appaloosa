@@ -12,7 +12,6 @@ from gatspy.periodic import LombScargleFast
 from scipy import signal
 
 
-
 def rolling_poly(time, flux, error, order=3, window=0.5):
     # This is SUPER slow... maybe useful in some places (LLC only?).
     # Can't be sped up much w/ indexing, because needs to move fixed
@@ -219,7 +218,6 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0,
         if (nptsmooth < 4):
             nptsmooth = 4
 
-
         # now take N passes of rejection on it
         for k in range(0, numpass):
             # rolling median in this data span with the kernel size
@@ -238,7 +236,6 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0,
             if debug is True:
                 print('k = '+str(k))
                 print('number of accepted points: '+str(len(ok[0])))
-
 
             time_i = time_i[indx][ok]
             flux_i = flux_i[indx][ok]
