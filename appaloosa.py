@@ -63,7 +63,22 @@ def getLC(objectid, type=''):
     return data
 
 
-def onecadence(data):
+def OneCadence(data):
+    '''
+    Within each quarter of data from the database, pick the data with the
+    fastest cadence. We want to study 1-min if available. Don't want
+    multiple cadence observations in the same quarter, bad for detrending.
+
+    Parameters
+    ----------
+    data : numpy array
+        the result from MySQL database query, using the getLC() function
+
+    Returns
+    -------
+    Data array
+
+    '''
     # get the unique quarters
     qtr = data[:,0]
     cadence = data[:,5]
@@ -86,8 +101,34 @@ def onecadence(data):
     return data_out
 
 
+def DetectCand(time, flux, error, model, cut=3, nptsmin=2):
+    '''
+    detect flare candidates
+    '''
+
+    chi = (flux - model) / error
+
+    # find points above sigma threshold
+    cand1 = np.where((chi >= cut))
+
+    # find consecutive points above threshold
+    cand2 = np.where((cand1[0][1:]-cand1[0][:-1] < 2))
+
+    # _, dl, dr = detrend.FindGaps(time) # finds right edge of time windows
+    # for i in range(0, len(dl)):
+
+    # for now just return indx of candidates
+    return cand1
+
+
+
+
 # objectid = '9726699'  # GJ 1243
-def runLC(objectid='9726699', ftype='sap'):
+def RunLC(objectid='9726699', ftype='sap'):
+    '''
+    Main wrapper to obtain and process a light curve
+    '''
+
     # read the objectID from the CONDOR job...
     # objectid = sys.argv[1]
 
@@ -101,7 +142,7 @@ def runLC(objectid='9726699', ftype='sap'):
 
     # get the data from the MYSQL db
     data_raw = getLC(objectid)
-    data = onecadence(data_raw)
+    data = OneCadence(data_raw)
 
     # data columns are:
     # QUARTER, TIME, FLUX, FLUX_ERR, SAP_QUALITY, LCFLAG
@@ -110,21 +151,29 @@ def runLC(objectid='9726699', ftype='sap'):
     flux_raw = data[:,2]
     error = data[:,3]
 
-    flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
+    # flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
     flux_gap = detrend.GapFlat(time, flux_raw)
 
-    flux_sin = detrend.FitSin(time, flux_qtr, error)
+    flux_smo = detrend.MultiBoxcar(time, flux_gap, error)
 
-    flux_smo = detrend.multi_boxcar(time, flux_qtr, error)
+    flux_sin = detrend.FitSin(time, flux_smo, error)
+
+    flux_smo2 = detrend.MultiBoxcar(time, flux_gap - flux_sin, error)
+
+    flux_model = flux_sin + flux_smo2
+
+    cand = DetectCand(time, flux_gap, error, flux_model)
 
     plt.figure()
-    plt.plot(time, flux_raw, 'c')
-    plt.plot(time, flux_qtr, 'b')
+    # plt.plot(time, flux_raw, 'c')
+    # plt.plot(time, flux_qtr, 'b')
+    # plt.plot(time, flux_sin, 'g')
+    # plt.plot(time, flux_smo, 'r')
     plt.plot(time, flux_gap, 'k')
-    plt.plot(time, flux_sin, 'g')
-    plt.plot(time, flux_smo, 'r')
+    plt.scatter(time[cand], flux_gap[cand])
     plt.show()
+
 
 #     # now on to the smoothing, flare finding, flare fitting, and results!
 #     smo = detrend.rolling_poly(data[1,:], flux_q, data[3,:], data[0,:])

@@ -13,6 +13,22 @@ from scipy import signal
 
 
 def rolling_poly(time, flux, error, order=3, window=0.5):
+    '''
+    Fit polynomials in a sliding window
+    Name convention meant to match the pandas rolling_ stats
+
+    Parameters
+    ----------
+    time : 1-d numpy array
+    flux : 1-d numpy array
+    error : 1-d numpy array
+    order : int, optional
+    window : float, optional
+
+    Returns
+    -------
+    '''
+
     # This is SUPER slow... maybe useful in some places (LLC only?).
     # Can't be sped up much w/ indexing, because needs to move fixed
     # windows of time...
@@ -35,6 +51,14 @@ def rolling_poly(time, flux, error, order=3, window=0.5):
 
 
 def GapFlat(time, flux, order=3):
+    '''
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    '''
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
     tot_med = np.median(flux) # the total from all quarters
@@ -92,6 +116,14 @@ def QtrFlat(time, flux, qtr, order=3):
 
 
 def FindGaps(time, maxgap=0.125, minspan=3.0):
+    '''
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    '''
     # assumes data is already sorted!
     dt = time[1:] - time[:-1]
     gap = np.where((dt >= maxgap))[0]
@@ -111,21 +143,25 @@ def _sinfunc(t, per, amp, t0, yoff):
     return np.sin((t - t0) * 2.0 * np.pi / per) * amp  + yoff
 
 
-def FitSin(time, flux, error, maxnum = 5, nper=20000,
+def FitSin(time, flux, error, maxnum=5, nper=20000,
            minper=0.1, maxper=30.0, plim=0.1,
            debug=False):
     '''
 
-    :param time:
-    :param flux:
-    :param error:
-    :param maxnum:
-    :param nper:
-    :param minper:
-    :param maxper:
-    :param plim:
-    :param debug:
-    :return:
+    Parameters
+    ----------
+    time:
+    flux:
+    error:
+    maxnum:
+    nper:
+    minper:
+    maxper:
+    plim:
+    debug:
+
+    Returns
+    -------
     '''
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
@@ -148,21 +184,13 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000,
         medflux = np.median(flux[dl[i]:dr[i]])
         ti = time[dl[i]:dr[i]]
 
-        # freq = 2.0 * np.pi / periods[np.where((periods < dt))]
-
         for k in range(0, maxnum):
-            # pgram = signal.lombscargle(ti, flux_out[dl[i]:dr[i]] - medflux, freq)
-            # pwr = np.sqrt(4. * (pgram / time.shape[0]))
-            # find the period with the peak power
-            # pk = periods[np.where((periods < dt))][np.argmax(pwr)]
-
-            # try Jake Vanderplas faster version!
+            # Use Jake Vanderplas faster version!
             pgram = LombScargleFast(fit_offset=False)
             pgram.optimizer.set(period_range=(minper,maxper))
             pgram = pgram.fit(time[dl[i]:dr[i]],
                               flux_out[dl[i]:dr[i]] - medflux,
                               error[dl[i]:dr[i]])
-            # per, pwr = pgram.periodogram_auto()
 
             df = (1./minper - 1./maxper) / nper
             f0 = 1./maxper
@@ -198,8 +226,9 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000,
     return sin_out
 
 
-def multi_boxcar(time, flux, error, numpass=3, kernel=2.0,
-                 sigclip=5, pcentclip=5, debug=False):
+def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
+                sigclip=5, pcentclip=5, returnindx=False,
+                debug=False):
     '''
 
     Parameters
@@ -226,11 +255,15 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0,
     # time_sm = np.array(time, copy=True)
     # error_sm = np.array(error, copy=True)
 
+    # for returnindx = True
+    indx_out = []
+
     for i in range(0, len(dl)):
         # the data within each gap range
         time_i = time[dl[i]:dr[i]]
         flux_i = flux[dl[i]:dr[i]]
         error_i = error[dl[i]:dr[i]]
+        indx_i = range(dl[i], dr[i]) # for tracking final indx used
 
         exptime = np.median(time_i[1:]-time_i[:-1])
         nptsmooth = int(kernel/24.0 / exptime)
@@ -250,9 +283,9 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0,
             diff_k = (flux_i[indx] - flux_i_sm[indx])
             lims = np.percentile(diff_k, (pcentclip, 100-pcentclip))
 
-            # iteratively reject points (above and below) w/ sigclip
-            # ok = np.where((np.abs((flux_i[indx] - flux_i_sm[indx])/error_i[indx]) < sigclip))
-
+            # iteratively reject points
+            # keep points within sigclip (for phot errors), or
+            # within percentile clip (for scatter)
             ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
                                (lims[0] < diff_k) * (diff_k < lims[1]))
 
@@ -263,7 +296,13 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0,
             time_i = time_i[indx][ok]
             flux_i = flux_i[indx][ok]
             error_i = error_i[indx][ok]
+            indx_i = indx_i[indx][ok]
 
         flux_sm[dl[i]:dr[i]] = np.interp(time[dl[i]:dr[i]], time_i, flux_i)
 
-    return flux_sm
+        indx_out = np.append(indx_out, indx_i)
+
+    if returnindx is False:
+        return flux_sm
+    else:
+        return np.array(indx_out, dtype='int')
