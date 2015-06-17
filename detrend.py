@@ -34,6 +34,29 @@ def rolling_poly(time, flux, error, order=3, window=0.5):
     return smo
 
 
+def GapFlat(time, flux, order=3):
+    _, dl, dr = FindGaps(time) # finds right edge of time windows
+
+    tot_med = np.median(flux) # the total from all quarters
+
+    flux_flat = np.array(flux, copy=True)
+
+    for i in range(0, len(dl)):
+        krnl = float(dl[i]-dr[i]) / 100.0
+        if (krnl < 10.0):
+            krnl = 10.0
+        flux_sm = rolling_median(flux[dl[i]:dr[i]], krnl)
+
+        indx = np.isfinite(flux_sm)
+
+        fit = np.polyfit(time[dl[i]:dr[i]][indx], flux_sm[indx], order)
+
+        flux_flat[dl[i]:dr[i]] = flux[dl[i]:dr[i]] - \
+                                 np.polyval(fit, time[dl[i]:dr[i]]) + \
+                                 tot_med
+    return flux_flat
+
+
 def QtrFlat(time, flux, qtr, order=3):
     '''
     step thru each unique qtr

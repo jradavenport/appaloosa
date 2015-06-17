@@ -114,10 +114,13 @@ def runLC(objectid='9726699', ftype='sap'):
 
     flux_sin = detrend.FitSin(time, flux_qtr, error)
 
+    flux_smo = detrend.multi_boxcar(time, flux_qtr, error)
+
     plt.figure()
-    plt.plot(time, flux_raw, 'b')
-    plt.plot(time, flux_qtr, 'g')
-    plt.plot(time, flux_sin, 'r')
+    plt.plot(time, flux_raw, 'k')
+    plt.plot(time, flux_qtr, 'b')
+    plt.plot(time, flux_sin, 'g')
+    plt.plot(time, flux_smo, 'r')
     plt.show()
 
 #     # now on to the smoothing, flare finding, flare fitting, and results!
