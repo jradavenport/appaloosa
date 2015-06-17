@@ -112,13 +112,16 @@ def runLC(objectid='9726699', ftype='sap'):
 
     flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
+    flux_gap = detrend.GapFlat(time, flux_raw)
+
     flux_sin = detrend.FitSin(time, flux_qtr, error)
 
     flux_smo = detrend.multi_boxcar(time, flux_qtr, error)
 
     plt.figure()
-    plt.plot(time, flux_raw, 'k')
+    plt.plot(time, flux_raw, 'c')
     plt.plot(time, flux_qtr, 'b')
+    plt.plot(time, flux_gap, 'k')
     plt.plot(time, flux_sin, 'g')
     plt.plot(time, flux_smo, 'r')
     plt.show()
