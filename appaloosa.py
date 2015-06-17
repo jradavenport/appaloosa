@@ -124,7 +124,7 @@ def DetectCand(time, flux, error, model, cut=3, nptsmin=2):
 
 
 # objectid = '9726699'  # GJ 1243
-def RunLC(objectid='9726699', ftype='sap'):
+def RunLC(objectid='9726699', ftype='pdc'):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -145,11 +145,17 @@ def RunLC(objectid='9726699', ftype='sap'):
     data = OneCadence(data_raw)
 
     # data columns are:
-    # QUARTER, TIME, FLUX, FLUX_ERR, SAP_QUALITY, LCFLAG
-    qtr = data[:,0]
+    # QUARTER, TIME, PDCFLUX, PDCFLUX_ERR, SAP_QUALITY, LCFLAG, SAPFLUX, SAPFLUX_ERR
+
+    # qtr = data[:,0]
     time = data[:,1]
-    flux_raw = data[:,2]
-    error = data[:,3]
+
+    if ftype == 'sap':
+        flux_raw = data[:,6]
+        error = data[:,7]
+    else:
+        flux_raw = data[:,2]
+        error = data[:,3]
 
     # flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
@@ -163,6 +169,7 @@ def RunLC(objectid='9726699', ftype='sap'):
 
     flux_model = flux_sin + flux_smo2
 
+    cand0 = DetectCand(time, flux_gap, error, flux_smo)
     cand = DetectCand(time, flux_gap, error, flux_model)
 
     plt.figure()
@@ -171,7 +178,8 @@ def RunLC(objectid='9726699', ftype='sap'):
     # plt.plot(time, flux_sin, 'g')
     # plt.plot(time, flux_smo, 'r')
     plt.plot(time, flux_gap, 'k')
-    plt.scatter(time[cand], flux_gap[cand])
+    plt.scatter(time[cand0], flux_gap[cand0], color='cyan', marker='o')
+    plt.scatter(time[cand], flux_gap[cand], color='red', marker='+')
     plt.show()
 
 
