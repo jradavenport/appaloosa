@@ -176,7 +176,8 @@ def FitSin(time, flux, error, maxnum = 5, nper=20000,
     return sin_out
 
 
-def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5, debug=False):
+def multi_boxcar(time, flux, error, numpass=3, kernel=2.0,
+                 sigclip=5, pcentclip=5, debug=False):
     '''
 
     Parameters
@@ -197,7 +198,6 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5, debug=Fals
     The smoothed light curve
     '''
 
-
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
     flux_sm = np.array(flux, copy=True)
@@ -213,7 +213,11 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5, debug=Fals
         exptime = np.median(time_i[1:]-time_i[:-1])
         nptsmooth = int(kernel/24.0 / exptime)
         if debug is True:
-            print('# of smoothing points: ',str(nptsmooth))
+            print('i = '+str(i))
+            print('# of smoothing points: '+str(nptsmooth))
+
+        if (nptsmooth < 4):
+            nptsmooth = 4
 
 
         # now take N passes of rejection on it
@@ -222,8 +226,19 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0, sigclip=5, debug=Fals
             flux_i_sm = rolling_median(flux_i, nptsmooth, center=True)
             indx = np.isfinite(flux_i_sm)
 
+            diff_k = (flux_i[indx] - flux_i_sm[indx])
+            lims = np.percentile(diff_k, (pcentclip, 1-pcentclip))
+
             # iteratively reject points (above and below) w/ sigclip
-            ok = np.where((np.abs((flux_i[indx] - flux_i_sm[indx])/error_i[indx]) < sigclip))
+            # ok = np.where((np.abs((flux_i[indx] - flux_i_sm[indx])/error_i[indx]) < sigclip))
+
+            ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
+                               (lims[0] < diff_k) * (diff_k < lims[1]))
+
+            if debug is True:
+                print('k = '+str(k))
+                print('number of accepted points: '+str(len(ok[0])))
+
 
             time_i = time_i[indx][ok]
             flux_i = flux_i[indx][ok]
