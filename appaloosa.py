@@ -98,7 +98,9 @@ def runLC(objectid='9726699', ftype='sap'):
         print('Random ObjectID Selected: ' + objectid)
 
     # get the data from the MYSQL db
-    data = getLC(objectid)
+    data_raw = getLC(objectid)
+    data = onecadence(data_raw)
+
     # data columns are:
     # QUARTER, TIME, FLUX, FLUX_ERR, SAP_QUALITY, LCFLAG
     qtr = data[:,0]
