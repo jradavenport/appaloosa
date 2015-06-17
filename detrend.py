@@ -227,7 +227,7 @@ def multi_boxcar(time, flux, error, numpass=3, kernel=2.0,
             indx = np.isfinite(flux_i_sm)
 
             diff_k = (flux_i[indx] - flux_i_sm[indx])
-            lims = np.percentile(diff_k, (pcentclip, 1-pcentclip))
+            lims = np.percentile(diff_k, (pcentclip, 100-pcentclip))
 
             # iteratively reject points (above and below) w/ sigclip
             # ok = np.where((np.abs((flux_i[indx] - flux_i_sm[indx])/error_i[indx]) < sigclip))
