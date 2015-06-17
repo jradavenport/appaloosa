@@ -78,7 +78,7 @@ def onecadence(data):
         etimes = np.unique(cadence[x])
         y = np.where( (cadence[x] == min(etimes)) )
 
-        indx = np.append(indx, x[0][y])
+        indx = indx.append(x[0][y])
 
     data_out = data[indx,:]
     return data_out
