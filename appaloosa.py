@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 # from detrend import polysmooth,
 
 
-def getLC(objectid, type=''):
+def GetLC(objectid, type=''):
 
     # this holds the keys to the db... don't put on github!
     auth = np.loadtxt('auth.txt',dtype='string')
@@ -117,7 +117,7 @@ def DetectCand(time, flux, error, model, error_cut=3, gapwindow = 0.7, nptsmin=2
 
     _, dl, dr = detrend.FindGaps(time) # find edges of time windows
     for i in range(0, len(dl)):
-        x1 = np.where((np.abs(time[cand1]-time[dr[i]]) < gapwindow))
+        x1 = np.where((np.abs(time[cand1]-time[dr[i]]-1) < gapwindow))
         x2 = np.where((np.abs(time[cand1]-time[dl[i]]) < gapwindow))
         cand1 = np.delete(cand1, x1)
         cand1 = np.delete(cand1, x2)
@@ -146,7 +146,7 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
         print('Random ObjectID Selected: ' + objectid)
 
     # get the data from the MYSQL db
-    data_raw = getLC(objectid)
+    data_raw = GetLC(objectid)
     data = OneCadence(data_raw)
 
     # data columns are:
