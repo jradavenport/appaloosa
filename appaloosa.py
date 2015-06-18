@@ -101,7 +101,7 @@ def OneCadence(data):
     return data_out
 
 
-def DetectCand(time, flux, error, model, cut=3, nptsmin=2):
+def DetectCand(time, flux, error, model, error_cut=3, gapwindow = 0.7, nptsmin=2):
     '''
     detect flare candidates
     '''
@@ -109,13 +109,18 @@ def DetectCand(time, flux, error, model, cut=3, nptsmin=2):
     chi = (flux - model) / error
 
     # find points above sigma threshold
-    cand1 = np.where((chi >= cut))
+    cand1 = np.where((chi >= error_cut))
 
     # find consecutive points above threshold
-    cand2 = np.where((cand1[0][1:]-cand1[0][:-1] < 2))
+    # cand2 = np.where((cand1[0][1:]-cand1[0][:-1] < 2))
 
-    # _, dl, dr = detrend.FindGaps(time) # finds right edge of time windows
-    # for i in range(0, len(dl)):
+
+    _, dl, dr = detrend.FindGaps(time) # find edges of time windows
+    for i in range(0, len(dl)):
+        x1 = np.where((np.abs(time[cand1]-time[dr[i]]) < gapwindow))
+        x2 = np.where((np.abs(time[cand1]-time[dl[i]]) < gapwindow))
+        cand1 = np.delete(cand1, x1)
+        cand1 = np.delete(cand1, x2)
 
     # for now just return indx of candidates
     return cand1
@@ -124,7 +129,7 @@ def DetectCand(time, flux, error, model, cut=3, nptsmin=2):
 
 
 # objectid = '9726699'  # GJ 1243
-def RunLC(objectid='9726699', ftype='sap'):
+def RunLC(objectid='9726699', ftype='sap', display=True):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -147,7 +152,7 @@ def RunLC(objectid='9726699', ftype='sap'):
     # data columns are:
     # QUARTER, TIME, PDCFLUX, PDCFLUX_ERR, SAP_QUALITY, LCFLAG, SAPFLUX, SAPFLUX_ERR
 
-    # qtr = data[:,0]
+    qtr = data[:,0]
     time = data[:,1]
 
     if ftype == 'sap':
@@ -157,30 +162,31 @@ def RunLC(objectid='9726699', ftype='sap'):
         flux_raw = data[:,2]
         error = data[:,3]
 
-    # flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
-    flux_gap = detrend.GapFlat(time, flux_raw)
+    _,lg,rg = detrend.FindGaps(time)
+    uQtr = np.unique(qtr)
 
-    flux_smo = detrend.MultiBoxcar(time, flux_gap, error)
+    flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
-    flux_sin = detrend.FitSin(time, flux_smo, error)
+    flux_gap = detrend.GapFlat(time, flux_qtr)
 
-    flux_smo2 = detrend.MultiBoxcar(time, flux_gap - flux_sin, error)
+    flux_sin = detrend.FitSin(time, flux_gap, error)
 
-    flux_model = flux_sin + flux_smo2
+    flux_smo = detrend.MultiBoxcar(time, flux_gap - flux_sin, error)
 
-    cand0 = DetectCand(time, flux_gap, error, flux_smo)
+    flux_model = flux_sin + flux_smo
+
     cand = DetectCand(time, flux_gap, error, flux_model)
 
-    plt.figure()
-    # plt.plot(time, flux_raw, 'c')
-    # plt.plot(time, flux_qtr, 'b')
-    # plt.plot(time, flux_sin, 'g')
-    # plt.plot(time, flux_smo, 'r')
-    plt.plot(time, flux_gap, 'k')
-    plt.scatter(time[cand0], flux_gap[cand0], color='blue', marker='o')
-    plt.scatter(time[cand], flux_gap[cand], color='red', marker='+',s=40)
-    plt.show()
+    if display is True:
+        plt.figure()
+        plt.plot(time, flux_gap, 'k')
+
+        for g in lg:
+            plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
+
+        plt.scatter(time[cand], flux_gap[cand], color='red', marker='o',s=40)
+        plt.show()
 
 
 #     # now on to the smoothing, flare finding, flare fitting, and results!

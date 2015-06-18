@@ -249,7 +249,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     The smoothed light curve
     '''
 
-    _, dl, dr = FindGaps(time) # finds right edge of time windows
+    _, dl, dr = FindGaps(time) # find edges of time windows
 
     flux_sm = np.array(flux, copy=True)
     # time_sm = np.array(time, copy=True)
