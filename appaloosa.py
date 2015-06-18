@@ -124,7 +124,7 @@ def DetectCand(time, flux, error, model, cut=3, nptsmin=2):
 
 
 # objectid = '9726699'  # GJ 1243
-def RunLC(objectid='9726699', ftype='pdc'):
+def RunLC(objectid='9726699', ftype='sap'):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -178,8 +178,8 @@ def RunLC(objectid='9726699', ftype='pdc'):
     # plt.plot(time, flux_sin, 'g')
     # plt.plot(time, flux_smo, 'r')
     plt.plot(time, flux_gap, 'k')
-    plt.scatter(time[cand0], flux_gap[cand0], color='cyan', marker='o')
-    plt.scatter(time[cand], flux_gap[cand], color='red', marker='+')
+    plt.scatter(time[cand0], flux_gap[cand0], color='blue', marker='o')
+    plt.scatter(time[cand], flux_gap[cand], color='red', marker='+',s=40)
     plt.show()
 
 
