@@ -117,7 +117,7 @@ def DetectCand(time, flux, error, model, error_cut=3, gapwindow = 0.7, nptsmin=2
 
     _, dl, dr = detrend.FindGaps(time) # find edges of time windows
     for i in range(0, len(dl)):
-        x1 = np.where((np.abs(time[cand1]-time[dr[i]]-1) < gapwindow))
+        x1 = np.where((np.abs(time[cand1]-time[dr[i]-1]) < gapwindow))
         x2 = np.where((np.abs(time[cand1]-time[dl[i]]) < gapwindow))
         cand1 = np.delete(cand1, x1)
         cand1 = np.delete(cand1, x2)
