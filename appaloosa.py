@@ -188,8 +188,3 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
         plt.scatter(time[cand], flux_gap[cand], color='red', marker='o',s=40)
         plt.show()
 
-
-#     # now on to the smoothing, flare finding, flare fitting, and results!
-#     smo = detrend.rolling_poly(data[1,:], flux_q, data[3,:], data[0,:])
-#
-# ediff = (data[1,:] - smo) / data[2,:] # simple error weighted outlier finding
