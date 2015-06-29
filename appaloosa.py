@@ -126,6 +126,24 @@ def DetectCand(time, flux, error, model, error_cut=3, gapwindow = 0.1, nptsmin=2
     return cand1
 
 
+def FlagCuts(flags):
+
+    '''
+    return the indexes that pass flag cuts
+
+    Ethan says cut on 16, 128, 2048. Can add more later.
+    '''
+
+    flags_int = np.array(flags, dtype='int')
+    bad_flgs = [16, 128, 2048]
+
+    bad = np.zeros_like(flags)
+
+    for k in bad_flgs:
+        bad = bad + np.bitwise_and(flags_int, k)
+
+    good = np.where((bad < 1))[0]
+    return good
 
 
 # objectid = '9726699'  # GJ 1243
@@ -161,7 +179,6 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
     else:
         flux_raw = data[:,2]
         error = data[:,3]
-
 
     _,lg,rg = detrend.FindGaps(time)
     uQtr = np.unique(qtr)
