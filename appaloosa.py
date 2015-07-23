@@ -126,7 +126,7 @@ def DetectCand(time, flux, error, model, error_cut=3, gapwindow = 0.1, nptsmin=2
     return cand1
 
 
-def FlagCuts(flags):
+def FlagCuts(flags, bad_flags = (16, 128, 2048)):
 
     '''
     return the indexes that pass flag cuts
@@ -134,14 +134,20 @@ def FlagCuts(flags):
     Ethan says cut on 16, 128, 2048. Can add more later.
     '''
 
+    # convert flag array to type int, just in case
     flags_int = np.array(flags, dtype='int')
-    bad_flgs = [16, 128, 2048]
-
+    # empty array to hold places where bad flags exist
     bad = np.zeros_like(flags)
 
-    for k in bad_flgs:
+    # these are the specific flags to reject on
+    # NOTE: == 2**[4, 7, 11]
+    # bad_flgs = [16, 128, 2048]
+
+    # step thru each of the bitwise flags, find where exist
+    for k in bad_flags:
         bad = bad + np.bitwise_and(flags_int, k)
 
+    # find places in array where NO bad flags are set
     good = np.where((bad < 1))[0]
     return good
 
