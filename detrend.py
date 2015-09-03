@@ -55,6 +55,7 @@ def GapFlat(time, flux, order=3):
 
     Returns
     -------
+    Data with polymonials removed
     '''
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
@@ -82,7 +83,10 @@ def QtrFlat(time, flux, qtr, order=3):
     '''
     step thru each unique qtr
     fit 2nd order poly to smoothed version of qtr
-    return flat lc
+
+    Returns
+    -------
+    Data with polymonials removed
 
     ignore long/short cadence, deal with on front end
     '''
@@ -120,6 +124,8 @@ def FindGaps(time, maxgap=0.125, minspan=3.0):
 
     Returns
     -------
+    outer edges of gap, left edges, right edges
+    (all are indicies)
     '''
     # assumes data is already sorted!
     dt = time[1:] - time[:-1]
@@ -142,8 +148,9 @@ def _sinfunc(t, per, amp, t0, yoff):
 
 def FitSin(time, flux, error, maxnum=5, nper=20000,
            minper=0.1, maxper=30.0, plim=0.1,
-           debug=False):
+           returnmodel=True, debug=False):
     '''
+    Use Lomb Scargle to find periods, fit sins, remove, repeat.
 
     Parameters
     ----------
@@ -204,6 +211,7 @@ def FitSin(time, flux, error, maxnum=5, nper=20000,
                 print('trial (k): '+str(k)+'.  peak period (pk):'+str(pk)+
                       '.  peak power (pp):'+str(pp))
 
+            # if a period w/ enough power is detected
             if (pp > plim):
                 # fit sin curve to window and subtract
                 p0 = [pk, 3.0 * np.nanstd(flux_out[dl[i]:dr[i]]-medflux), 0.0, 0.0]
@@ -220,7 +228,10 @@ def FitSin(time, flux, error, maxnum=5, nper=20000,
         # add the median flux for this window BACK in
         sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + medflux
 
-    return sin_out
+    if returnmodel is True:
+        return sin_out
+    else:
+        return flux_out
 
 
 def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
@@ -243,7 +254,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
 
     Returns
     -------
-    The smoothed light curve
+    The smoothed light curve model
     '''
 
     _, dl, dr = FindGaps(time) # find edges of time windows

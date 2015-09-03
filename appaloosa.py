@@ -182,19 +182,23 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
     if ftype == 'sap':
         flux_raw = data[:,6]
         error = data[:,7]
-    else:
+    else: # for PDC data
         flux_raw = data[:,2]
         error = data[:,3]
 
     _,lg,rg = detrend.FindGaps(time)
     uQtr = np.unique(qtr)
 
+    # flatten quarters with polymonial
     flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
+    # then flatten between gaps
     flux_gap = detrend.GapFlat(time, flux_qtr)
 
+    # fit sin curves
     flux_sin = detrend.FitSin(time, flux_gap, error)
 
+    # run iterative boxcar over data
     flux_smo = detrend.MultiBoxcar(time, flux_gap - flux_sin, error)
 
     flux_model = flux_sin + flux_smo
