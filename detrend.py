@@ -1,8 +1,5 @@
 '''
-Hold the detrending method(s) to use.
-
-1) Write a sliding local polynomial smoother
-2) translate softserve (?)
+Use this file to keep various detrending methods
 
 '''
 import numpy as np

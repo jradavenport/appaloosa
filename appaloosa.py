@@ -101,7 +101,7 @@ def OneCadence(data):
     return data_out
 
 
-def DetectCand(time, flux, error, model, error_cut=3, gapwindow = 0.1, nptsmin=2):
+def DetectCandidate(time, flux, error, model, error_cut=3, gapwindow = 0.1, nptsmin=2):
     '''
     detect flare candidates
     '''
@@ -199,7 +199,7 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
 
     flux_model = flux_sin + flux_smo
 
-    cand = DetectCand(time, flux_gap, error, flux_model)
+    cand = DetectCandidate(time, flux_gap, error, flux_model)
 
     if display is True:
         plt.figure()
