@@ -6,6 +6,7 @@ import numpy as np
 from pandas import rolling_median, rolling_mean
 from scipy.optimize import curve_fit
 from gatspy.periodic import LombScargleFast
+import pywt
 from scipy import signal
 
 
@@ -314,3 +315,27 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
         return flux_sm
     else:
         return np.array(indx_out, dtype='int')
+
+def WaveletSmooth(flux, threshold=5, wavelet='db6'):
+    '''
+    Generate a wavelet trasform of the data, clip on some noise level,
+    then do inverse wavelet to generate model.
+
+    Requires uniformly sampled data!
+    If your data has gaps, watch out....
+    '''
+    # Do basic wavelet decontruct/reconstruct
+    WC = pywt.wavedec(flux, wavelet)
+    # model2 = pywt.waverec(WC, wavelet)
+
+    # now do thresholding
+    # got some tips here:
+    # https://blancosilva.wordpress.com/teaching/mathematical-imaging/denoising-wavelet-thresholding/
+    # and:
+    # https://pywavelets.readthedocs.org/en/latest/ref/idwt-inverse-discrete-wavelet-transform.html
+
+    NWC = map(lambda x: pywt.thresholding.hard(x,threshold), WC)
+
+    model = pywt.waverec(NWC, wavelet)
+
+    return model
