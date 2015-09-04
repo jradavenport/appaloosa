@@ -324,7 +324,7 @@ def WaveletSmooth(flux, threshold=5, wavelet='db6'):
     Requires uniformly sampled data!
     If your data has gaps, watch out....
     '''
-    # Do basic wavelet decontruct/reconstruct
+    # Do basic wavelet decontruct
     WC = pywt.wavedec(flux, wavelet)
     # model2 = pywt.waverec(WC, wavelet)
 
