@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 # from detrend import polysmooth,
 
 
-def GetLC(objectid, type='', readfile=False, savefile=False):
+def GetLC(objectid, type='', readfile=False, savefile=False, onecadence=False):
 
     exten = '.lc.gz'
 
@@ -68,6 +68,10 @@ def GetLC(objectid, type='', readfile=False, savefile=False):
             isok = 2
         ntry = ntry + 1
         time.sleep(10) # give the database a breather
+
+    if onecadence is True:
+        data_raw = data.copy()
+        data = OneCadence(data_raw)
 
     if savefile is True:
         # output a file in working directory
