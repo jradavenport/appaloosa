@@ -335,7 +335,7 @@ def WaveletSmooth(time, flux, threshold=1, wavelet='db6'):
 
         # Do basic wavelet decontruct
         WC = pywt.wavedec(flux_i, wavelet)
-        # model2 = pywt.waverec(WC, wavelet)
+
 
         # now do thresholding
         # got some tips here:
