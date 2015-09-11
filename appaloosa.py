@@ -222,7 +222,7 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
 
     cand = DetectCandidate(time, flux_gap, error, flux_model)
 
-    test_model = detrend.WaveletSmooth(flux_gap)
+    test_model = detrend.WaveletSmooth(time, flux_gap)
     test_cand = DetectCandidate(time, flux_gap, error, test_model)
 
     print(len(cand))
