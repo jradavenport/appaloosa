@@ -345,9 +345,9 @@ def WaveletSmooth(time, flux, threshold=1, wavelet='db6'):
 
         NWC = map(lambda x: pywt.thresholding.hard(x,threshold * np.sqrt(2.*np.log(len(flux_i))) * np.std(flux_i)), WC)
 
+        model_i = pywt.waverec(NWC, wavelet)
         print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
 
-        model_i = pywt.waverec(NWC, wavelet)
         model[dl[i]:dr[i]] = model_i
 
     return model
