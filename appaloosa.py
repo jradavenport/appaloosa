@@ -6,6 +6,7 @@ script to carry out flare finding in Kepler LC's
 import numpy as np
 import MySQLdb
 import sys
+import os.path
 import time
 from aflare import aflare
 import detrend
@@ -13,13 +14,21 @@ import matplotlib.pyplot as plt
 # from detrend import polysmooth,
 
 
-def GetLC(objectid, type=''):
+def GetLC(objectid, type='', readfile=False, savefile=False):
 
-    # this holds the keys to the db... don't put on github!
-    auth = np.loadtxt('auth.txt', dtype='string')
+    exten = '.lc.gz'
 
     isok = 0 # a flag to check if database returned sensible answer
     ntry = 0
+
+    if readfile is True:
+        # attempt to find file in working dir
+        if os.path.isfile(str(objectid) + exten):
+            data = np.loadtxt(str(objectid) + exten)
+            isok = 101
+
+    # this holds the keys to the db... don't put on github!
+    auth = np.loadtxt('auth.txt', dtype='string')
 
     while isok<1:
         # connect to the db
@@ -59,6 +68,10 @@ def GetLC(objectid, type=''):
             isok = 2
         ntry = ntry + 1
         time.sleep(10) # give the database a breather
+
+    if savefile is True:
+        # output a file in working directory
+        np.savetxt(str(objectid) + exten, data)
 
     return data
 
