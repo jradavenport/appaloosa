@@ -316,6 +316,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     else:
         return np.array(indx_out, dtype='int')
 
+
 def WaveletSmooth(flux, threshold=5, wavelet='db6'):
     '''
     Generate a wavelet trasform of the data, clip on some noise level,

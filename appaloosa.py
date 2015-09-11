@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 def GetLC(objectid, type=''):
 
     # this holds the keys to the db... don't put on github!
-    auth = np.loadtxt('auth.txt',dtype='string')
+    auth = np.loadtxt('auth.txt', dtype='string')
 
     isok = 0 # a flag to check if database returned sensible answer
     ntry = 0
@@ -208,6 +208,9 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
     test_model = detrend.WaveletSmooth(flux_gap)
     test_cand = DetectCandidate(time, flux_gap, error, test_model)
 
+    print(len(cand))
+    print(len(test_cand))
+
     if display is True:
         plt.figure()
         plt.plot(time, flux_gap, 'k')
@@ -216,6 +219,14 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
             plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
 
         plt.scatter(time[cand], flux_gap[cand], color='red', marker='o',s=40)
+
+        # plt.scatter(time[test_cand], flux_gap[test_cand], color='orange', marker='p',s=60, alpha=0.8)
+        plt.show()
+
+    if display is True:
+        plt.figure()
+        plt.plot(time, flux_gap, 'k')
+        plt.plot(time, test_model, 'green')
 
         plt.scatter(time[test_cand], flux_gap[test_cand], color='orange', marker='p',s=60, alpha=0.8)
         plt.show()
