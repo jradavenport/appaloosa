@@ -317,26 +317,35 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
         return np.array(indx_out, dtype='int')
 
 
-def WaveletSmooth(flux, threshold=5, wavelet='db6'):
+def WaveletSmooth(time, flux, threshold=5, wavelet='db6'):
     '''
-    Generate a wavelet trasform of the data, clip on some noise level,
+    Generate a wavelet transform of the data, clip on some noise level,
     then do inverse wavelet to generate model.
 
     Requires uniformly sampled data!
     If your data has gaps, watch out....
     '''
-    # Do basic wavelet decontruct
-    WC = pywt.wavedec(flux, wavelet)
-    # model2 = pywt.waverec(WC, wavelet)
+    _, dl, dr = FindGaps(time)
 
-    # now do thresholding
-    # got some tips here:
-    # https://blancosilva.wordpress.com/teaching/mathematical-imaging/denoising-wavelet-thresholding/
-    # and:
-    # https://pywavelets.readthedocs.org/en/latest/ref/idwt-inverse-discrete-wavelet-transform.html
+    model = np.zeros_like(flux)
+    # now loop over every chunk of data and fit wavelet
+    for i in range(0, len(dl)):
 
-    NWC = map(lambda x: pywt.thresholding.hard(x,threshold), WC)
+        flux_i = flux[dl[i]:dr[i]]
 
-    model = pywt.waverec(NWC, wavelet)
+        # Do basic wavelet decontruct
+        WC = pywt.wavedec(flux_i, wavelet)
+        # model2 = pywt.waverec(WC, wavelet)
+
+        # now do thresholding
+        # got some tips here:
+        # https://blancosilva.wordpress.com/teaching/mathematical-imaging/denoising-wavelet-thresholding/
+        # and:
+        # https://pywavelets.readthedocs.org/en/latest/ref/idwt-inverse-discrete-wavelet-transform.html
+
+        NWC = map(lambda x: pywt.thresholding.hard(x,threshold * np.sqrt(2.*np.log(len(flux_i))) * np.std(flux_i)), WC)
+
+        model_i = pywt.waverec(NWC, wavelet)
+        model[dl[i]:dr[i]] = model_i
 
     return model
