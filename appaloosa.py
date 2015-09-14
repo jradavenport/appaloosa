@@ -206,6 +206,24 @@ def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
         return bad
 
 
+def FlareStats(time, flux, error, istart, istop):
+    # fit flare with aflare model
+
+    # measure flare ED
+
+    # measure flare amplitude
+    return
+
+
+def MeasureS2N(time, flux, error, istart, istop):
+    # flare_chisq = total( flareflux - model)**2.  / total(error)**2
+
+    # cont_chisq =
+
+    # s2n = (flareflux) / (flareflux + modelflux)
+    return s2n
+
+
 # objectid = '9726699'  # GJ 1243
 def RunLC(objectid='9726699', ftype='sap', lctype='', display=True, readfile=False):
     '''
@@ -272,9 +290,11 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=True, readfile=Fal
         plt.scatter(time[istart], flux_gap[istart], color='red', marker='o',s=40)
         plt.scatter(time[istop], flux_gap[istop], color='orange', marker='p',s=60)
 
-        # plt.scatter(time[test_cand], flux_gap[test_cand], color='orange', marker='p',s=60, alpha=0.8)
         plt.show()
 
+    # loop over each flare, compute stats
+    for i in range(0,len(istart)):
+        S2N_i = MeasureS2N(time, flux_gap, error, istart[i], istop[i])
 
 
     '''
