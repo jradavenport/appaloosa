@@ -122,21 +122,42 @@ def OneCadence(data):
 
 
 def DetectCandidate(time, flux, error, flags, model,
-                    error_cut=3, gapwindow = 0.1, minsep=3,
+                    error_cut=2, gapwindow=0.1, minsep=3,
                     returnall=False):
     '''
-    detect flare candidates
+    detect flare candidates using sigma threshold, toss out bad flags
+
+    Parameters
+    ----------
+    time :
+    flux :
+    error :
+    flags :
+    model :
+    error_cut : int, optional
+        the sigma threshold to select outliers (default is 2)
+    gapwindow : float, optional
+        The duration of time around data gaps to ignore flare candidates
+        (default is 0.1 days)
+    minsep : int, optional
+        The number of datapoints required between individual flare events
+        (default is 3)
+
+    Returns
+    -------
+    (flare start index, flare stop index)
+
+    if returnall=True, returns
+    (flare start index, flare stop index, candidate indicies)
+
     '''
 
-    bad = FlagCuts(flags,returngood=False)
+    bad = FlagCuts(flags, returngood=False)
 
     chi = (flux - model) / error
 
     # find points above sigma threshold, and passing flag cuts
     cand1 = np.where((chi >= error_cut) & (bad < 1))[0]
-
-    # find consecutive points above threshold
-    # cand2 = np.where((cand1[0][1:]-cand1[0][:-1] < 2))
 
     _, dl, dr = detrend.FindGaps(time) # find edges of time windows
     for i in range(0, len(dl)):
@@ -145,11 +166,11 @@ def DetectCandidate(time, flux, error, flags, model,
         cand1 = np.delete(cand1, x1)
         cand1 = np.delete(cand1, x2)
 
-    # find start and stop index, combine neighboring points in to same events
+    # find start and stop index, combine neighboring candidates in to same events
     cstart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
     cstop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
 
-    # for now just return indx of candidates
+    # for now just return index of candidates
     if returnall is True:
         return cstart, cstop, cand1
     else:
