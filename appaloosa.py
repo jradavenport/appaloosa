@@ -4,14 +4,17 @@ script to carry out flare finding in Kepler LC's
 """
 
 import numpy as np
-import MySQLdb
 import sys
 import os.path
 import time
 from aflare import aflare
 import detrend
 import matplotlib.pyplot as plt
-# from detrend import polysmooth,
+try:
+    import MySQLdb
+    haz_mysql = True
+except ImportError:
+    haz_mysql = False
 
 
 def GetLC(objectid, type='', readfile=False, savefile=False, onecadence=False):
@@ -118,19 +121,22 @@ def OneCadence(data):
     return data_out
 
 
-def DetectCandidate(time, flux, error, model, error_cut=3, gapwindow = 0.1, nptsmin=2):
+def DetectCandidate(time, flux, error, flags, model,
+                    error_cut=3, gapwindow = 0.1, minsep=3,
+                    returnall=False):
     '''
     detect flare candidates
     '''
 
+    bad = FlagCuts(flags,returngood=False)
+
     chi = (flux - model) / error
 
-    # find points above sigma threshold
-    cand1 = np.where((chi >= error_cut))
+    # find points above sigma threshold, and passing flag cuts
+    cand1 = np.where((chi >= error_cut) & (bad < 1))[0]
 
     # find consecutive points above threshold
     # cand2 = np.where((cand1[0][1:]-cand1[0][:-1] < 2))
-
 
     _, dl, dr = detrend.FindGaps(time) # find edges of time windows
     for i in range(0, len(dl)):
@@ -139,16 +145,23 @@ def DetectCandidate(time, flux, error, model, error_cut=3, gapwindow = 0.1, npts
         cand1 = np.delete(cand1, x1)
         cand1 = np.delete(cand1, x2)
 
+    # find start and stop index, combine neighboring points in to same events
+    cstart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
+    cstop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
+
     # for now just return indx of candidates
-    return cand1
+    if returnall is True:
+        return cstart, cstop, cand1
+    else:
+        return cstart, cstop
 
 
-def FlagCuts(flags, bad_flags = (16, 128, 2048)):
+def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
 
     '''
     return the indexes that pass flag cuts
 
-    Ethan says cut on 16, 128, 2048. Can add more later.
+    Ethan says cut out [16, 128, 2048], can add more later.
     '''
 
     # convert flag array to type int, just in case
@@ -165,12 +178,15 @@ def FlagCuts(flags, bad_flags = (16, 128, 2048)):
         bad = bad + np.bitwise_and(flags_int, k)
 
     # find places in array where NO bad flags are set
-    good = np.where((bad < 1))[0]
-    return good
+    if returngood is True:
+        good = np.where((bad < 1))[0]
+        return good
+    else:
+        return bad
 
 
 # objectid = '9726699'  # GJ 1243
-def RunLC(objectid='9726699', ftype='sap', display=True):
+def RunLC(objectid='9726699', ftype='sap', lctype='', display=True, readfile=False):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -187,7 +203,7 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
         print('Random ObjectID Selected: ' + objectid)
 
     # get the data from the MYSQL db
-    data_raw = GetLC(objectid)
+    data_raw = GetLC(objectid, readfile=readfile, type=lctype)
     data = OneCadence(data_raw)
 
     # data columns are:
@@ -195,6 +211,7 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
 
     qtr = data[:,0]
     time = data[:,1]
+    lcflag = data[:,5]
 
     if ftype == 'sap':
         flux_raw = data[:,6]
@@ -219,9 +236,28 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
     flux_smo = detrend.MultiBoxcar(time, flux_gap - flux_sin, error)
 
     flux_model = flux_sin + flux_smo
+    # flux_model = flux_sin + detrend.MultiBoxcar(time, flux_smo, error) # double detrend?
 
-    cand = DetectCandidate(time, flux_gap, error, flux_model)
+    istart,istop = DetectCandidate(time, flux_gap, error, lcflag, flux_model)
+    print(str(len(istart))+' flare candidates found')
 
+    if display is True:
+        plt.figure()
+        plt.plot(time, flux_gap, 'k')
+        plt.plot(time, flux_model, 'green')
+        for g in lg:
+            plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
+
+        plt.scatter(time[istart], flux_gap[istart], color='red', marker='o',s=40)
+        plt.scatter(time[istop], flux_gap[istop], color='orange', marker='p',s=60)
+
+        # plt.scatter(time[test_cand], flux_gap[test_cand], color='orange', marker='p',s=60, alpha=0.8)
+        plt.show()
+
+
+
+    '''
+    #-- IF YOU WANT TO PLAY WITH THE WAVELET STUFF MORE, WORK HERE
     test_model = detrend.WaveletSmooth(time, flux_gap)
     test_cand = DetectCandidate(time, flux_gap, error, test_model)
 
@@ -231,19 +267,9 @@ def RunLC(objectid='9726699', ftype='sap', display=True):
     if display is True:
         plt.figure()
         plt.plot(time, flux_gap, 'k')
-        plt.plot(time, flux_model, 'green')
-        for g in lg:
-            plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
-
-        plt.scatter(time[cand], flux_gap[cand], color='red', marker='o',s=40)
-
-        # plt.scatter(time[test_cand], flux_gap[test_cand], color='orange', marker='p',s=60, alpha=0.8)
-        plt.show()
-
-    if display is True:
-        plt.figure()
-        plt.plot(time, flux_gap, 'k')
         plt.plot(time, test_model, 'green')
 
         plt.scatter(time[test_cand], flux_gap[test_cand], color='orange', marker='p',s=60, alpha=0.8)
         plt.show()
+    '''
+

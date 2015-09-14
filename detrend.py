@@ -327,6 +327,7 @@ def WaveletSmooth(time, flux, threshold=1, wavelet='db6'):
     '''
     _, dl, dr = FindGaps(time)
 
+
     model = np.zeros_like(flux)
     # now loop over every chunk of data and fit wavelet
     for i in range(0, len(dl)):
@@ -335,7 +336,6 @@ def WaveletSmooth(time, flux, threshold=1, wavelet='db6'):
 
         # Do basic wavelet decontruct
         WC = pywt.wavedec(flux_i, wavelet)
-
 
         # now do thresholding
         # got some tips here:
@@ -346,8 +346,20 @@ def WaveletSmooth(time, flux, threshold=1, wavelet='db6'):
         NWC = map(lambda x: pywt.thresholding.hard(x,threshold * np.sqrt(2.*np.log(len(flux_i))) * np.std(flux_i)), WC)
 
         model_i = pywt.waverec(NWC, wavelet)
-        print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
+        # print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
+        #
+        # print(model_i[0:10])
+        # print(model_i[-10:])
+        if len(model_i) > len(model[dl[i]:dr[i]]):
+            print("length error on gap ",i)
+            print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
+            model_i = model_i[1:]
 
         model[dl[i]:dr[i]] = model_i
 
+    # WC = pywt.wavedec(flux, wavelet)
+    # NWC = map(lambda x: pywt.thresholding.soft(x,threshold * np.sqrt(2.*np.log(len(flux))) * np.std(flux)), WC)
+    # model = pywt.waverec(NWC, wavelet)
+
+    print(len(model), len(time))
     return model
