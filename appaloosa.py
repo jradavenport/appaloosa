@@ -10,11 +10,16 @@ import time
 from aflare import aflare
 import detrend
 import matplotlib.pyplot as plt
+from scipy import stats
 try:
     import MySQLdb
     haz_mysql = True
 except ImportError:
     haz_mysql = False
+
+
+def _chisq(data, model, error):
+    return np.sum( ((data - model)/error)**2.0 ) / len(data)
 
 
 def GetLC(objectid, type='', readfile=False, savefile=False, onecadence=False):
@@ -209,17 +214,21 @@ def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
 def FlareStats(time, flux, error, istart, istop):
     # fit flare with aflare model
 
+    # flare_chisq = total( flareflux - modelflux)**2.  / total(error)**2
+
+    # cont_chisq =
+
+    # measure KS stat
+    ks_d, ks_p = stats.ks_2samp(flareflux, modelflux)
+
     # measure flare ED
 
     # measure flare amplitude
+
     return
 
 
 def MeasureS2N(time, flux, error, istart, istop):
-    # flare_chisq = total( flareflux - model)**2.  / total(error)**2
-
-    # cont_chisq =
-
     # s2n = (flareflux) / (flareflux + modelflux)
     return s2n
 
