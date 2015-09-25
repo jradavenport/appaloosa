@@ -11,6 +11,7 @@ from aflare import aflare
 import detrend
 import matplotlib.pyplot as plt
 from scipy import stats
+from scipy.optimize import curve_fit
 try:
     import MySQLdb
     haz_mysql = True
@@ -18,8 +19,8 @@ except ImportError:
     haz_mysql = False
 
 
-def _chisq(data, model, error):
-    return np.sum( ((data - model)/error)**2.0 ) / len(data)
+def _chisq(data, error, model):
+    return np.sum( ((data - model)/error)**2.0 )
 
 
 def GetLC(objectid, type='', readfile=False, savefile=False, onecadence=False):
@@ -181,6 +182,15 @@ def DetectCandidate(time, flux, error, flags, model,
     else:
         return cstart, cstop
 
+'''
+# start working on a rolling cumulative distribution function, where
+# flares are selected as positive outliers from rolling windows
+def RollingCDF(time, flux, minwindow=0.06, maxwindow=1, numwindows=10):
+    windows = 10.**np.logspace(np.log10(minwindow),
+                               np.log10(maxwindow), numwindows)
+
+    # now step thru the light curve...
+'''
 
 def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
 
@@ -211,25 +221,78 @@ def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
         return bad
 
 
-def FlareStats(time, flux, error, istart, istop):
-    # fit flare with aflare model
+def FlareStats(time, flux, error, model, istart=-1, istop=-1, c1=(-1,-1), c2=(-1,-1)):
+    '''
+    Compute properties of a flare event
+
+    Parameters
+    ----------
+    time : 1d numpy array
+    flux : 1d numpy array
+    error : 1d numpy array
+    model : 1d numpy array
+        These arrays must have the same number of elements
+    istart : int, optional
+        The index in the input arrays (time,flux,error,model) that the
+        flare starts at. If not used, defaults to the first data point.
+    istop : int, optional
+        The index in the input arrays (time,flux,error,model) that the
+        flare ends at. If not used, defaults to the last data point.
+
+    '''
+
+    # if indicies are not stated by user, use start/stop of data given
+    if (istart < 0):
+        istart = 0
+    if (istop < 0):
+        istop = len(flux)
+
+    flareflux = flux[istart:istop]
+    flaretime = time[istart:istop]
+    modelflux = model[istart:istop]
+    flareerror = error[istart:istop]
+
+    # measure flare amplitude
+    ampl = np.max(flareflux-modelflux)
+    tpeak = flaretime[np.argmax(flareflux-modelflux)]
+
+    p05 = np.where((flareflux-modelflux <= ampl*0.5))
+    fwhm = np.max(flaretime[p05]) - np.min(flaretime[p05])
+
+    # fit flare with single aflare model
+    pguess = (tpeak, fwhm, ampl)
+    popt1, pcov = curve_fit(aflare, flaretime, flareflux, p0=pguess)
 
     # flare_chisq = total( flareflux - modelflux)**2.  / total(error)**2
-
-    # cont_chisq =
+    flare_chisq = _chisq(flareflux, flareerror, modelflux)
 
     # measure KS stat
     ks_d, ks_p = stats.ks_2samp(flareflux, modelflux)
 
     # measure flare ED
+    # ed = equivdur()
 
-    # measure flare amplitude
+    # output a dict or array?
+    params = (tpeak, ampl, fwhm,
+              popt1[0], popt1[1], popt1[2],
+              flare_chisq, ks_d)
 
-    return
+    return params
 
 
-def MeasureS2N(time, flux, error, istart, istop):
-    # s2n = (flareflux) / (flareflux + modelflux)
+def MeasureS2N(flux, error, model, istart=-1, istop=-1):
+    '''
+    this MAY not be something i want....
+    '''
+    if (istart < 0):
+        istart = 0
+    if (istop < 0):
+        istop = len(flux)
+
+    flareflux = flux[istart:istop]
+    modelflux = model[istart:istop]
+
+    s2n = np.sum(np.sqrt((flareflux) / (flareflux + modelflux)))
     return s2n
 
 
