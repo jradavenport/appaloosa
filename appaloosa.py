@@ -4,7 +4,6 @@ script to carry out flare finding in Kepler LC's
 """
 
 import numpy as np
-import sys
 import os.path
 import time
 from aflare import aflare
@@ -438,3 +437,11 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=True, readfile=Fal
 
 
     # now save output to file(s)
+
+
+# let this file be called from the terminal directly. e.g.:
+# $python appaloosa.py 12345678
+if __name__ == "__main__":
+    import sys
+    RunLC(objectid=str(sys.argv[1]), display=False)
+
