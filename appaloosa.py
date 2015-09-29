@@ -20,7 +20,10 @@ except ImportError:
 
 
 def _chisq(data, error, model):
-    return np.sum( ((data - model)/error)**2.0 )
+    '''
+    Compute the normalized chi square statistic
+    '''
+    return np.sum( ((data - model) / error)**2.0 ) / data.size
 
 
 def GetLC(objectid, type='', readfile=False, savefile=False, onecadence=False):
@@ -192,6 +195,7 @@ def RollingCDF(time, flux, minwindow=0.06, maxwindow=1, numwindows=10):
     # now step thru the light curve...
 '''
 
+
 def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
 
     '''
@@ -221,9 +225,26 @@ def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
         return bad
 
 
-def FlareStats(time, flux, error, model, istart=-1, istop=-1, c1=(-1,-1), c2=(-1,-1)):
+def EquivDur(time, flux):
     '''
-    Compute properties of a flare event
+    Compute the Equivalent Duration of an event. This is simply the area
+    under the flare, in relative flux units.
+
+    Flux must be array in units of zero-centered RELATIVE FLUX
+
+    Time must be array in units of DAYS
+
+    Output has units of SECONDS
+    '''
+    p = np.trapz(flux, x=(time * 60.0 * 60.0 * 24.0))
+    return p
+
+
+def FlareStats(time, flux, error, model, istart=-1, istop=-1,
+               c1=(-1,-1), c2=(-1,-1), cpoly=2):
+    '''
+    Compute properties of a flare event. Assumes flux is in relative flux units,
+    i.e. rel_flux = (flux - median) / median
 
     Parameters
     ----------
@@ -231,7 +252,7 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1, c1=(-1,-1), c2=(-1
     flux : 1d numpy array
     error : 1d numpy array
     model : 1d numpy array
-        These arrays must have the same number of elements
+        These 4 arrays must have the same number of elements
     istart : int, optional
         The index in the input arrays (time,flux,error,model) that the
         flare starts at. If not used, defaults to the first data point.
@@ -241,16 +262,36 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1, c1=(-1,-1), c2=(-1
 
     '''
 
-    # if indicies are not stated by user, use start/stop of data given
+    # if FLARE indicies are not stated by user, use start/stop of data
     if (istart < 0):
         istart = 0
     if (istop < 0):
         istop = len(flux)
 
+    dur0 = time[istop] - time[istart]
+
+    # define continuum regions around the flare, same duration as
+    # the flare, but spaced by half a duration on either side
+    if (c1[0]==-1):
+        t0 = time[istart] - dur0
+        t1 = time[istart] - dur0/2.
+        c1 = np.where((time >= t0) & (time <= t1))
+    if (c2[0]==-1):
+        t0 = time[istop] + dur0/2.
+        t1 = time[istop] + dur0
+        c2 = np.where((time >= t0) & (time <= t1))
+
     flareflux = flux[istart:istop]
     flaretime = time[istart:istop]
     modelflux = model[istart:istop]
     flareerror = error[istart:istop]
+
+    contindx = np.concatenate((c1[0], c2[0]))
+    contflux = flux[contindx] # flux IN cont. regions
+    conttime = time[contindx]
+    contfit = np.polyfit(conttime, contflux, cpoly)
+    contline = np.polyval(contfit, flaretime) # poly fit to cont. regions
+
 
     # measure flare amplitude
     ampl = np.max(flareflux-modelflux)
@@ -266,16 +307,24 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1, c1=(-1,-1), c2=(-1
     # flare_chisq = total( flareflux - modelflux)**2.  / total(error)**2
     flare_chisq = _chisq(flareflux, flareerror, modelflux)
 
-    # measure KS stat
+    # measure KS stats of flare versus model
     ks_d, ks_p = stats.ks_2samp(flareflux, modelflux)
 
+    # measure KS stats of flare versus continuum regions
+    ks_dc, ks_pc = stats.ks_2samp(flareflux-contline, contflux-np.polyval(contfit, conttime))
+
+    # put flux in relative units, remove dependence on brightness of stars
+    # rel_flux = (flux_gap - flux_model) / np.median(flux_model)
+    # rel_error = error / np.median(flux_model)
+
     # measure flare ED
-    # ed = equivdur()
+    medflux = np.median(model)
+    ed = EquivDur(flaretime, (flareflux-contline)/medflux)
 
     # output a dict or array?
-    params = (tpeak, ampl, fwhm,
+    params = (tpeak, ampl, fwhm, dur0,
               popt1[0], popt1[1], popt1[2],
-              flare_chisq, ks_d)
+              flare_chisq, ks_d, ks_p, ed)
 
     return params
 
@@ -364,11 +413,6 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=True, readfile=Fal
 
         plt.show()
 
-    # loop over each flare, compute stats
-    for i in range(0,len(istart)):
-        S2N_i = MeasureS2N(time, flux_gap, error, istart[i], istop[i])
-
-
     '''
     #-- IF YOU WANT TO PLAY WITH THE WAVELET STUFF MORE, WORK HERE
     test_model = detrend.WaveletSmooth(time, flux_gap)
@@ -386,3 +430,11 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=True, readfile=Fal
         plt.show()
     '''
 
+
+    # loop over EACH FLARE, compute stats
+    for i in range(0,len(istart)):
+        stats_i = FlareStats(time, flux_gap, error, flux_model,
+                             istart=istart[i], istop=istop[i])
+
+
+    # now save output to file(s)
