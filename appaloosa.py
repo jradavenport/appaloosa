@@ -6,8 +6,10 @@ script to carry out flare finding in Kepler LC's
 import numpy as np
 import os.path
 import time
+import datetime
 from aflare import aflare
 import detrend
+from version import __version__
 import matplotlib.pyplot as plt
 from scipy import stats
 from scipy.optimize import curve_fit
@@ -240,7 +242,7 @@ def EquivDur(time, flux):
 
 
 def FlareStats(time, flux, error, model, istart=-1, istop=-1,
-               c1=(-1,-1), c2=(-1,-1), cpoly=2):
+               c1=(-1,-1), c2=(-1,-1), cpoly=2, ReturnHeader=False):
     '''
     Compute properties of a flare event. Assumes flux is in relative flux units,
     i.e. rel_flux = (flux - median) / median
@@ -267,7 +269,9 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     if (istop < 0):
         istop = len(flux)
 
-    dur0 = time[istop] - time[istart]
+    tstart = time[istart]
+    tstop = time[istop]
+    dur0 = tstop - tstart
 
     # define continuum regions around the flare, same duration as
     # the flare, but spaced by half a duration on either side
@@ -321,11 +325,18 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     ed = EquivDur(flaretime, (flareflux-contline)/medflux)
 
     # output a dict or array?
-    params = np.array((tpeak, ampl, fwhm, dur0,
+    params = np.array((tstart, tstop, tpeak, ampl, fwhm, dur0,
                        popt1[0], popt1[1], popt1[2],
-                       flare_chisq, ks_d, ks_p, ed), dtype='float')
+                       flare_chisq, ks_d, ks_p, ks_dc, ks_pc, ed), dtype='float')
+    # the parameter names for later reference
+    header = 't_start, t_stop, t_peak, amplitude, FWHM, duration, '+\
+             't_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1, '+\
+             'flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur'
 
-    return params
+    if ReturnHeader is True:
+        return header
+    else:
+        return params
 
 
 def MeasureS2N(flux, error, model, istart=-1, istop=-1):
@@ -429,15 +440,29 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=True, readfile=Fal
         plt.show()
     '''
 
+    # open the output file to store data on every flare recovered
+    fout = open(objectid + '.flare', 'w')
 
+    fout.write('Kepler-ObjectID = ' + objectid + '\n')
+    now = datetime.datetime.now()
+    fout.write('Date-Run = ' + str(now) + '\n')
+    fout.write('Appaloosa-Version = ' + __version__ + '\n')
+
+    header = FlareStats(time, flux_gap, error, flux_model,
+                        istart=istart[0], istop=istop[0],
+                        ReturnHeader=True)
+    fout.write('Columns: ')
+    fout.write(header + '\n')
     # loop over EACH FLARE, compute stats
     for i in range(0,len(istart)):
         stats_i = FlareStats(time, flux_gap, error, flux_model,
                              istart=istart[i], istop=istop[i])
 
+        for k in range(0,len(stats_i)):
+            fout.write(str(stats_i[k]) + ', ')
+        fout.write('\n')
 
-    # now save output to file(s)
-
+    fout.close()
 
 # let this file be called from the terminal directly. e.g.:
 # $python appaloosa.py 12345678
