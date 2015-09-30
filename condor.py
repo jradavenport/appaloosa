@@ -36,6 +36,9 @@ def PrepUW(prefix=''):
         except OSError:
             pass
 
+    # put the database authentication file in the working dir
+    os.system('cp ' + dir + 'auth.txt ' + workdir + '.')
+
     condor_file = workdir + prefix + '.cfg'
     shellscript = workdir + prefix + '.sh'
     pyversion = home + "/anaconda/bin/python"
