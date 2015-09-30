@@ -7,9 +7,10 @@ import numpy as np
 import os.path
 import time
 import datetime
-from aflare import aflare
+from aflare import aflare1
 import detrend
 from version import __version__
+import warnings
 import matplotlib.pyplot as plt
 from scipy import stats
 from scipy.optimize import curve_fit
@@ -269,6 +270,17 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     if (istop < 0):
         istop = len(flux)
 
+    # can't have flare start/stop at same point
+    if (istart == istop):
+        istop = istop + 1
+        istart = istart - 1
+
+    # need to have flare at least 3 datapoints long
+    if (istop-istart < 2):
+        istop = istop + 1
+
+    # print(istart, istop) # % ;
+
     tstart = time[istart]
     tstop = time[istop]
     dur0 = tstop - tstart
@@ -284,28 +296,49 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
         t1 = time[istop] + dur0
         c2 = np.where((time >= t0) & (time <= t1))
 
-    flareflux = flux[istart:istop]
-    flaretime = time[istart:istop]
-    modelflux = model[istart:istop]
-    flareerror = error[istart:istop]
+    flareflux = flux[istart:istop+1]
+    flaretime = time[istart:istop+1]
+    modelflux = model[istart:istop+1]
+    flareerror = error[istart:istop+1]
 
     contindx = np.concatenate((c1[0], c2[0]))
+    if (len(contindx) == 0):
+        # if NO continuum regions are found, then just use 1st/last point of flare
+        contindx = np.array([istart, istop])
+        cpoly = 1
     contflux = flux[contindx] # flux IN cont. regions
     conttime = time[contindx]
     contfit = np.polyfit(conttime, contflux, cpoly)
     contline = np.polyval(contfit, flaretime) # poly fit to cont. regions
 
+    medflux = np.median(model)
 
     # measure flare amplitude
-    ampl = np.max(flareflux-modelflux)
-    tpeak = flaretime[np.argmax(flareflux-modelflux)]
+    ampl = np.max(flareflux-contline) / medflux
+    tpeak = flaretime[np.argmax(flareflux-contline)]
 
-    p05 = np.where((flareflux-modelflux <= ampl*0.5))
-    fwhm = np.max(flaretime[p05]) - np.min(flaretime[p05])
+    p05 = np.where((flareflux-contline <= ampl*0.5))
+    if len(p05[0]) == 0:
+        fwhm = dur0 * 0.25
+        # print('> warning') # % ;
+    else:
+        fwhm = np.max(flaretime[p05]) - np.min(flaretime[p05])
 
     # fit flare with single aflare model
     pguess = (tpeak, fwhm, ampl)
-    popt1, pcov = curve_fit(aflare, flaretime, flareflux, p0=pguess)
+    # print(pguess) # % ;
+    # print(len(flaretime)) # % ;
+
+    try:
+        popt1, pcov = curve_fit(aflare1, flaretime, (flareflux-contline) / medflux, p0=pguess)
+    except ValueError:
+        # tried to fit bad data, so just fill in with NaN's
+        # shouldn't happen often
+        popt1 = np.array([np.nan, np.nan, np.nan])
+    except RuntimeError:
+        # could not converge on a fit with aflare
+        # fill with bad flag values
+        popt1 = np.array([-99., -99., -99.])
 
     # flare_chisq = total( flareflux - modelflux)**2.  / total(error)**2
     flare_chisq = _chisq(flareflux, flareerror, modelflux)
@@ -321,7 +354,6 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     # rel_error = error / np.median(flux_model)
 
     # measure flare ED
-    medflux = np.median(model)
     ed = EquivDur(flaretime, (flareflux-contline)/medflux)
 
     # output a dict or array?
@@ -348,15 +380,15 @@ def MeasureS2N(flux, error, model, istart=-1, istop=-1):
     if (istop < 0):
         istop = len(flux)
 
-    flareflux = flux[istart:istop]
-    modelflux = model[istart:istop]
+    flareflux = flux[istart:istop+1]
+    modelflux = model[istart:istop+1]
 
     s2n = np.sum(np.sqrt((flareflux) / (flareflux + modelflux)))
     return s2n
 
 
 # objectid = '9726699'  # GJ 1243
-def RunLC(objectid='9726699', ftype='sap', lctype='', display=True, readfile=False):
+def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=False):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -440,28 +472,34 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=True, readfile=Fal
         plt.show()
     '''
 
-    # open the output file to store data on every flare recovered
-    fout = open(objectid + '.flare', 'w')
+    # set this to silence bad fit warnings from polyfit
+    warnings.simplefilter('ignore', np.RankWarning)
 
-    fout.write('Kepler-ObjectID = ' + objectid + '\n')
+
+    outstring = ''
+    outstring = outstring + 'Kepler-ObjectID = ' + objectid + '\n'
     now = datetime.datetime.now()
-    fout.write('Date-Run = ' + str(now) + '\n')
-    fout.write('Appaloosa-Version = ' + __version__ + '\n')
+    outstring = outstring + 'Date-Run = ' + str(now) + '\n'
+    outstring = outstring + 'Appaloosa-Version = ' + __version__ + '\n'
 
     header = FlareStats(time, flux_gap, error, flux_model,
                         istart=istart[0], istop=istop[0],
                         ReturnHeader=True)
-    fout.write('Columns: ')
-    fout.write(header + '\n')
+    outstring = outstring + 'Columns: '
+    outstring = outstring + header + '\n'
     # loop over EACH FLARE, compute stats
     for i in range(0,len(istart)):
         stats_i = FlareStats(time, flux_gap, error, flux_model,
                              istart=istart[i], istop=istop[i])
 
-        for k in range(0,len(stats_i)):
-            fout.write(str(stats_i[k]) + ', ')
-        fout.write('\n')
+        outstring = outstring + str(stats_i[0])
+        for k in range(1,len(stats_i)):
+            outstring = outstring + ', ' + str(stats_i[k])
+        outstring = outstring + '\n'
 
+    # open the output file to store data on every flare recovered
+    fout = open(objectid + '.flare', 'w')
+    fout.write(outstring)
     fout.close()
 
 # let this file be called from the terminal directly. e.g.:
