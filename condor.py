@@ -66,7 +66,6 @@ def PrepUW(prefix=''):
     f2.write(' \n')
     f2.close()
 
-
     # 33333333333333333
     # create the very simple PYTHON-launching shell script
     f3 = open(shellscript,'w')
@@ -74,6 +73,9 @@ def PrepUW(prefix=''):
     f3.write(pyversion + " " + python_code + " $1 \n")
     f3.close()
 
+    # fix permissions
+    os.system("chmod 777 " + shellscript)
+    os.system("chmod 777 " + condor_file)
 
     print('')
     print('UW Condor prep is complete.')
