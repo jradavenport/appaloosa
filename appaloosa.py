@@ -497,8 +497,16 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
             outstring = outstring + ', ' + str(stats_i[k])
         outstring = outstring + '\n'
 
+    # put flare output in to a subdirectory. keep things clean!
+    outdir = 'aprun/'
+    if not os.path.isdir(outdir):
+        try:
+            os.makedirs(outdir)
+        except OSError:
+            pass
+
     # open the output file to store data on every flare recovered
-    fout = open(objectid + '.flare', 'w')
+    fout = open(outdir + objectid + '.flare', 'w')
     fout.write(outstring)
     fout.close()
 
