@@ -321,9 +321,9 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     ed = EquivDur(flaretime, (flareflux-contline)/medflux)
 
     # output a dict or array?
-    params = (tpeak, ampl, fwhm, dur0,
-              popt1[0], popt1[1], popt1[2],
-              flare_chisq, ks_d, ks_p, ed)
+    params = np.array((tpeak, ampl, fwhm, dur0,
+                       popt1[0], popt1[1], popt1[2],
+                       flare_chisq, ks_d, ks_p, ed), dtype='float')
 
     return params
 
