@@ -477,16 +477,17 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
 
 
     outstring = ''
-    outstring = outstring + 'Kepler-ObjectID = ' + objectid + '\n'
+    outstring = outstring + '# Kepler-ObjectID = ' + objectid + '\n'
     now = datetime.datetime.now()
-    outstring = outstring + 'Date-Run = ' + str(now) + '\n'
-    outstring = outstring + 'Appaloosa-Version = ' + __version__ + '\n'
+    outstring = outstring + '# Date-Run = ' + str(now) + '\n'
+    outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
+
+    outstring = outstring + '# Columns: '
 
     header = FlareStats(time, flux_gap, error, flux_model,
                         istart=istart[0], istop=istop[0],
                         ReturnHeader=True)
-    outstring = outstring + 'Columns: '
-    outstring = outstring + header + '\n'
+    outstring = outstring + '# ' + header + '\n'
     # loop over EACH FLARE, compute stats
     for i in range(0,len(istart)):
         stats_i = FlareStats(time, flux_gap, error, flux_model,
