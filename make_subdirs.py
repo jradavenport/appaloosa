@@ -5,6 +5,9 @@ Use this script to take a bunch of aprun/*.flare files,
 Shouldn't be needed with future runs of appaloosa.
 
 NOTE: run above aprun dir, not within it!
+You can run it like so:
+$ ipython
+In [1]: from appaloosa import make_subdirs
 '''
 
 import os
