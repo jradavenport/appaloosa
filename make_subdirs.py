@@ -16,7 +16,8 @@ import numpy as np
 
 # make list of existing aprun/*.flare files
 fname =  'flarefiles_to_sort.lis'
-os.system('ls aprun/*.flare > ' + fname)
+# os.system('ls aprun/*.flare > ' + fname)
+os.system("find -type f -name 'aprun/*.flare' > " + fname)
 
 files = np.loadtxt(fname, dtype='str',)
 
