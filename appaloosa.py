@@ -498,8 +498,10 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
             outstring = outstring + ', ' + str(stats_i[k])
         outstring = outstring + '\n'
 
-    # put flare output in to a subdirectory. keep things clean!
-    outdir = 'aprun/'
+    # put flare output in to a set of subdirectories.
+    # use first 3 digits to help keep directories to ~1k files
+    fldr = objectid[0:3]
+    outdir = 'aprun/' + fldr + '/'
     if not os.path.isdir(outdir):
         try:
             os.makedirs(outdir)
