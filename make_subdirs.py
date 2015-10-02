@@ -17,12 +17,12 @@ import numpy as np
 # make list of existing aprun/*.flare files
 fname =  'flarefiles_to_sort.lis'
 # os.system('ls aprun/*.flare > ' + fname)
-os.system("find -type f -name 'aprun/*.flare' > " + fname)
+os.system("find ./aprun/ -wholename '*.flare' > " + fname)
 
 files = np.loadtxt(fname, dtype='str',)
 
 # get objectid list, truncate to 3 digits
-objid3 = map(lambda x: x[6:9], files)
+objid3 = map(lambda x: x[8:11], files)
 
 # uniq the 3 digit list
 
