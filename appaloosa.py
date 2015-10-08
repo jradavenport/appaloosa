@@ -28,9 +28,34 @@ def _chisq(data, error, model):
     return np.sum( ((data - model) / error)**2.0 ) / data.size
 
 
-def GetLC(objectid, type='', readfile=False, savefile=False, onecadence=False):
+def GetLC(objectid, type='', readfile=False,
+          savefile=False, exten = '.lc.gz',
+          onecadence=False):
+    '''
+    Retrieve the lightcurve/data from the database.
 
-    exten = '.lc.gz'
+    Parameters
+    ----------
+    objectid
+    type : str, optional
+        If either 'slc' or 'llc' then just get 1 type of cadence. Default
+        is empty, so gets both
+    readfile : bool, optional
+        Default is False
+    savefie : bool, optional
+        Default is False
+    exten : str, optional
+        Extension for file saving. Default is '.lc.gz'
+    onecadence : bool, optional
+        For quarters with Long and Short cadence, remove the Long data.
+        Default is False. Can be done later to the data output
+
+    Returns
+    -------
+    numpy array with many columns:
+        QUARTER, TIME, PDCSAP_FLUX, PDCSAP_FLUX_ERR,
+        SAP_QUALITY, LCFLAG, SAP_FLUX, SAP_FLUX_ERR
+    '''
 
     isok = 0 # a flag to check if database returned sensible answer
     ntry = 0
