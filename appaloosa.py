@@ -66,10 +66,11 @@ def GetLC(objectid, type='', readfile=False,
             data = np.loadtxt(str(objectid) + exten)
             isok = 101
 
-    # this holds the keys to the db... don't put on github!
-    auth = np.loadtxt('auth.txt', dtype='string')
 
     while isok<1:
+        # this holds the keys to the db... don't put on github!
+        auth = np.loadtxt('auth.txt', dtype='string')
+
         # connect to the db
         db = MySQLdb.connect(passwd=auth[2], db="Kepler",
                              user=auth[1], host=auth[0])
@@ -212,15 +213,52 @@ def DetectCandidate(time, flux, error, flags, model,
     else:
         return cstart, cstop
 
-'''
-# start working on a rolling cumulative distribution function, where
-# flares are selected as positive outliers from rolling windows
-def RollingCDF(time, flux, minwindow=0.06, maxwindow=1, numwindows=10):
-    windows = 10.**np.logspace(np.log10(minwindow),
-                               np.log10(maxwindow), numwindows)
 
-    # now step thru the light curve...
-'''
+def FINDflare(time, flux, error, N1=3, N2=1, N3=3):
+    '''
+    The algorithm for local changes due to flares defined by
+    S. W. Chang et al. (2015), Eqn. 3a-d
+    http://arxiv.org/abs/1510.01005
+
+    Note: these equations originally in magnitude units, i.e. smaller
+    values are increases in brightness. The signs have been changed, but
+    coefficients have not been adjusted to change from log(flux) to flux.
+
+    Note: this algorithm originally run over sections without "changes" as
+    defined by Change Point Analysis. May have serious problems for data
+    with dramatic starspot activity. If possible, remove starspot first.
+    '''
+    _, dl, dr = detrend.FindGaps(time)
+
+    indx = []
+    for i in range(0, len(dl)):
+        flux_i = flux[dl[i]:dr[i]]
+        err_i = error[dl[i]:dr[i]]
+
+        med_i = np.median(flux_i)
+        sig_i = np.std(flux_i)
+
+        ca = flux_i - med_i
+        cb = np.abs(flux_i - med_i) / sig_i
+        cc = np.abs(flux_i - med_i - err_i) / sig_i
+
+        # pass cuts from Eqns 3a,b,c
+        ctmp = np.where((ca > 0) & (cb > N1) & (cc > N2))
+
+        cindx = np.zeros_like(flux_i)
+        cindx[ctmp] = 1
+
+        # Need to find cumulative number of points that pass "ctmp"
+        # Count in reverse!
+        ConM = np.zeros_like(flux_i)
+        for k in range(2, len(flux_i)):
+            ConM[-k] = cindx[-k] * (ConM[-(k-1)] + cindx[-k])
+
+        indx_i = np.where((ConM > N3))[0]
+
+        indx = np.append(indx, indx_i)
+
+    return np.array(indx, dtype='int')
 
 
 def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
@@ -430,7 +468,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
         print('Random ObjectID Selected: ' + objectid)
 
     # get the data from the MYSQL db
-    data_raw = GetLC(objectid, readfile=readfile, type=lctype)
+    data_raw = GetLC(objectid, readfile=readfile, type=lctype, onecadence=False)
     data = OneCadence(data_raw)
 
     # data columns are:
@@ -465,7 +503,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
     flux_model = flux_sin + flux_smo
     # flux_model = flux_sin + detrend.MultiBoxcar(time, flux_smo, error) # double detrend?
 
-    istart,istop = DetectCandidate(time, flux_gap, error, lcflag, flux_model)
+    istart, istop = DetectCandidate(time, flux_gap, error, lcflag, flux_model)
     print(str(len(istart))+' flare candidates found')
 
     if display is True:

@@ -3,7 +3,7 @@ Use this file to keep various detrending methods
 
 '''
 import numpy as np
-from pandas import rolling_median, rolling_mean
+from pandas import rolling_median, rolling_mean, rolling_std, rolling_skew
 from scipy.optimize import curve_fit
 from gatspy.periodic import LombScargleFast
 import pywt
@@ -159,7 +159,8 @@ def FitSin(time, flux, error, maxnum=5, nper=20000,
     flux:
     error:
     maxnum:
-    nper:
+    nper: int, optional
+        number of periods to search over with Lomb Scargle
     minper:
     maxper:
     plim:
@@ -317,7 +318,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
         return np.array(indx_out, dtype='int')
 
 
-def WaveletSmooth(time, flux, threshold=1, wavelet='db6'):
+def WaveletSmooth(time, flux, threshold=1, wavelet='db6', all=False):
     '''
     WORK IN PROGRESS - DO NOT USE
 
@@ -329,6 +330,9 @@ def WaveletSmooth(time, flux, threshold=1, wavelet='db6'):
     '''
     _, dl, dr = FindGaps(time)
 
+    if all is True:
+        dl = [0]
+        dr = [len(time)]
 
     model = np.zeros_like(flux)
     # now loop over every chunk of data and fit wavelet
@@ -352,7 +356,7 @@ def WaveletSmooth(time, flux, threshold=1, wavelet='db6'):
         #
         # print(model_i[0:10])
         # print(model_i[-10:])
-        if len(model_i) > len(model[dl[i]:dr[i]]):
+        if len(model_i) != len(model[dl[i]:dr[i]]):
             print("length error on gap ",i)
             print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
             model_i = model_i[1:]
@@ -365,3 +369,23 @@ def WaveletSmooth(time, flux, threshold=1, wavelet='db6'):
 
     print(len(model), len(time))
     return model
+
+
+def Wavelet_Peaks(time, flux):
+    '''
+    Peak detection via continuous wavelets in scipy... doesnt work very well
+    '''
+    _, dl, dr = FindGaps(time)
+    indx = []
+    for i in range(0, len(dl)):
+        flux_i = flux[dl[i]:dr[i]]
+        time_i = time[dl[i]:dr[i]]
+        exptime = np.median(time_i[1:]-time_i[:-1])
+        if (exptime*24.*60. < 5):
+            widths = np.arange(1,100)
+        else:
+            widths = np.arange(1,10)
+
+        indx_i = signal.find_peaks_cwt(flux_i, widths)
+        indx = np.append(indx, indx_i)
+    return np.array(indx, dtype='int')

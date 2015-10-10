@@ -8,6 +8,7 @@ Routines to do analysis on the appaloosa flare finding runs. Including
 
 import numpy as np
 import matplotlib.pyplot as plt
+import appaloosa
 
 
 def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
