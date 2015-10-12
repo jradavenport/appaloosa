@@ -240,10 +240,13 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
                 sigclip=5, pcentclip=5, returnindx=False,
                 debug=False):
     '''
+    Boxcar smoothing with multi-pass outlier rejection. Uses both errors
+    and local scatter for rejection
 
     Parameters
     ----------
     time : numpy array
+        assumes units are days
     flux : numpy array
     error : numpy array
     numpass : int, optional
@@ -252,6 +255,9 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
         the boxcar size in hours. (Default is 2.0)
     sigclip : int, optional
         Number of times the standard deviation to clip points at
+        (Default is 5)
+    pcentclip : int, optional
+        % to clip for outliers, i.e. 5= keep 5th-95th percentile
         (Default is 5)
 
     Returns
@@ -277,6 +283,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
 
         exptime = np.median(time_i[1:]-time_i[:-1])
         nptsmooth = int(kernel/24.0 / exptime)
+
         if debug is True:
             print('i = '+str(i))
             print('# of smoothing points: '+str(nptsmooth))
