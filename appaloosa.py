@@ -230,7 +230,9 @@ def FINDflare(time, flux, error, N1=3, N2=1, N3=3):
     '''
     _, dl, dr = detrend.FindGaps(time)
 
-    indx = []
+    # indx = []
+    istart = []
+    istop = []
     for i in range(0, len(dl)):
         flux_i = flux[dl[i]:dr[i]]
         err_i = error[dl[i]:dr[i]]
@@ -254,11 +256,22 @@ def FINDflare(time, flux, error, N1=3, N2=1, N3=3):
         for k in range(2, len(flux_i)):
             ConM[-k] = cindx[-k] * (ConM[-(k-1)] + cindx[-k])
 
-        indx_i = np.where((ConM > N3))[0]
+        # indx_i = np.where((ConM > N3))[0]
+        # indx = np.append(indx, indx_i)
 
-        indx = np.append(indx, indx_i)
+        # these only defined between dl[i] and dr[i]
+        # find flare start where values in ConM switch from 0 to >=N3
+        istart_i = np.where((ConM[1:] >= N3) &
+                            (ConM[0:-1] - ConM[1:] < 0))[0] + 1
 
-    return np.array(indx, dtype='int')
+        # use the value of ConM to determine how many points away stop is
+        istop_i = istart_i + (ConM[istart_i] - 1)
+
+        # convert index back to whole array size
+        istart = np.append(istart, istart_i + dl[i])
+        istop = np.append(istop, istop_i + dl[i])
+
+    return np.array(istart, dtype='int'), np.array(istop, dtype='int')
 
 
 def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
