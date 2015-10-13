@@ -9,6 +9,7 @@ import time
 import datetime
 from aflare import aflare1
 import detrend
+from gatspy.periodic import LombScargleFast
 from version import __version__
 import warnings
 import matplotlib.pyplot as plt
@@ -457,6 +458,36 @@ def MeasureS2N(flux, error, model, istart=-1, istop=-1):
 
     s2n = np.sum(np.sqrt((flareflux) / (flareflux + modelflux)))
     return s2n
+
+
+def FlarePer(time, energy, minper=0.1, maxper=30.0, nper=20000):
+    '''
+    Look for periodicity in the flare occurrence times. Could be due to:
+    a) mis-identified periodic things (e.g. heartbeat stars)
+    b) crazy binary star flaring things
+    c) flares on a rotating star
+    d) bugs in code
+    e) aliens
+
+    '''
+
+    # Use Jake Vanderplas faster version!
+    pgram = LombScargleFast(fit_offset=False)
+    pgram.optimizer.set(period_range=(minper,maxper))
+
+    pgram = pgram.fit(time, energy - np.median(energy))
+
+    df = (1./minper - 1./maxper) / nper
+    f0 = 1./maxper
+    pwr = pgram.score_frequency_grid(f0, df, nper)
+
+    freq = f0 + df * np.arange(nper)
+    per = 1./freq
+
+    pk = per[np.argmax(pwr)] # peak period
+    pp = np.max(pwr) # peak period power
+
+    return pk, pp
 
 
 def MultiFind(time, flux, error, flags):
