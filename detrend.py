@@ -117,7 +117,7 @@ def QtrFlat(time, flux, qtr, order=3):
     return flux_flat
 
 
-def FindGaps(time, maxgap=0.125, minspan=3.0):
+def FindGaps(time, maxgap=0.125, minspan=2.0):
     '''
 
     Parameters
@@ -132,13 +132,18 @@ def FindGaps(time, maxgap=0.125, minspan=3.0):
     dt = time[1:] - time[:-1]
     gap = np.where((dt >= maxgap))[0]
 
-    # remove gaps that are too close together
-
     # add start/end of LC to loop over easily
     gap_out = np.append(0, np.append(gap, len(time)))
 
     right = np.append(gap + 1, len(time)) # right end of data
     left = np.append(0, gap + 1) # left start of data
+
+    # remove gaps that are too close together
+
+    # ok = np.where((time[right]-time[left] >= minspan))[0]
+    # bad = np.where((time[right]-time[left] < minspan))[0]
+    # for k in range(1,len(bad)-1):
+        # for each bad span of data, figure out if it can be tacked on
 
     return gap_out, left, right
 

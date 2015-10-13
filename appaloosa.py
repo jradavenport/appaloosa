@@ -230,7 +230,6 @@ def FINDflare(time, flux, error, N1=3, N2=1, N3=3):
     '''
     _, dl, dr = detrend.FindGaps(time)
 
-    # indx = []
     istart = []
     istop = []
     for i in range(0, len(dl)):
@@ -255,9 +254,6 @@ def FINDflare(time, flux, error, N1=3, N2=1, N3=3):
         ConM = np.zeros_like(flux_i)
         for k in range(2, len(flux_i)):
             ConM[-k] = cindx[-k] * (ConM[-(k-1)] + cindx[-k])
-
-        # indx_i = np.where((ConM > N3))[0]
-        # indx = np.append(indx, indx_i)
 
         # these only defined between dl[i] and dr[i]
         # find flare start where values in ConM switch from 0 to >=N3
@@ -461,6 +457,29 @@ def MeasureS2N(flux, error, model, istart=-1, istop=-1):
 
     s2n = np.sum(np.sqrt((flareflux) / (flareflux + modelflux)))
     return s2n
+
+
+def MultiFind(time, flux, error, flags):
+    '''
+
+    '''
+    # the bad data points (search where bad < 1)
+    bad = FlagCuts(flags, returngood=False)
+
+    # first do a pass thru w/ small box to get obvious flares
+    box1 = detrend.MultiBoxcar(time, flux, error, kernel=0.25)
+    f1 = FINDflare(time, flux - box1, error)
+
+    # keep only the non-flare points
+
+    # second pass
+    box2 = detrend.MultiBoxcar(time, flux, error, kernel=2.0)
+    sin2 = detrend.FitSin(time, flux, error)
+    f2 = FINDflare(time, flux-box2-sin2, error)
+
+    # should i use a step with rolling skew and std?
+
+    return
 
 
 # objectid = '9726699'  # GJ 1243
