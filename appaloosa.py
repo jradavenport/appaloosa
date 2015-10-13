@@ -460,7 +460,7 @@ def MeasureS2N(flux, error, model, istart=-1, istop=-1):
     return s2n
 
 
-def FlarePer(time, energy, minper=0.1, maxper=30.0, nper=20000):
+def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
     '''
     Look for periodicity in the flare occurrence times. Could be due to:
     a) mis-identified periodic things (e.g. heartbeat stars)
@@ -470,6 +470,10 @@ def FlarePer(time, energy, minper=0.1, maxper=30.0, nper=20000):
     e) aliens
 
     '''
+
+    # use energy = 1 for flare times.
+    # This will create something like the window function
+    energy = np.ones_like(time)
 
     # Use Jake Vanderplas faster version!
     pgram = LombScargleFast(fit_offset=False)
