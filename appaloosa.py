@@ -7,10 +7,11 @@ import numpy as np
 import os.path
 import time
 import datetime
+from version import __version__
 from aflare import aflare1
 import detrend
+from rayleigh import RayleighPowerSpectrum
 from gatspy.periodic import LombScargleFast
-from version import __version__
 import warnings
 import matplotlib.pyplot as plt
 from scipy import stats
