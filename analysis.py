@@ -126,10 +126,12 @@ def k2_mtg_plots():
         duration, t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
         flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur
         '''
-        good = np.where((data[:,9] >= 10) & # chisq
-                        (data[:,14] >= 0.1)) # ED
 
-        n_flares[i] = len(good[0])
+        if data.ndim == 2:
+            good = np.where((data[:,9] >= 10) & # chisq
+                            (data[:,14] >= 0.1)) # ED
+
+            n_flares[i] = len(good[0])
 
         # match whole object ID to colors
         km = np.where((kicnum == kid[i]))
