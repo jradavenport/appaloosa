@@ -116,7 +116,8 @@ def k2_mtg_plots():
         # read in each file in turn
         fldr = kid[i][0:3]
         outdir = 'aprun/' + fldr + '/'
-        data = np.loadtxt(outdir + kid[i], delimiter=',', dtype='float',
+        apfile = outdir + kid[i] + '.flare'
+        data = np.loadtxt(apfile, delimiter=',', dtype='float',
                           comments='#',skiprows=4)
 
         # select "good" flares, count them
