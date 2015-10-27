@@ -110,15 +110,15 @@ def k2_mtg_plots():
     print('Starting loop through aprun files')
     for i in range(0, len(kid)):
 
-        if (i % 10) == 0:
-            print(i)
-
         # read in each file in turn
         fldr = kid[i][0:3]
         outdir = 'aprun/' + fldr + '/'
         apfile = outdir + kid[i] + '.flare'
         data = np.loadtxt(apfile, delimiter=',', dtype='float',
                           comments='#',skiprows=4)
+
+        #if (i % 10) == 0:
+        print(i, apfile, data.shape)
 
         # select "good" flares, count them
         '''
