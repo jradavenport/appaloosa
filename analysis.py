@@ -9,6 +9,7 @@ Routines to do analysis on the appaloosa flare finding runs. Including
 import numpy as np
 import matplotlib.pyplot as plt
 import appaloosa
+from os.path import expanduser
 
 
 def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
@@ -65,16 +66,96 @@ def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
 def k2_mtg_plots():
     '''
     Some quick-and-dirty results from the 1st run for the K2 science meeting
+
+    run from dir (at UW currently)
+    /astro/store/tmp/jrad/nsf_flares/-HEX-ID-/
+
     '''
 
+    # read in KIC file w/ colors
+    kic_file = '../kic-phot/kic.txt.gz'
+    kic_g, kic_r, kic_i  = np.genfromtxt(kic_file, delimiter='|', unpack=True,dtype=float,
+                                        usecols=(5,6,7), filling_values=-99, skip_header=1)
+    kicnum = np.genfromtxt(kic_file, delimiter='|', unpack=True,dtype=str,
+                           usecols=(15,), skip_header=1)
+
+    # (Galex colors too?)
+    # (list of rotation periods?)
+    p_file = '../periods/Table_periodic.txt'
+    pnum = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=str, usecols=(0,),skip_header=1)
+    prot = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=float, usecols=(4,),skip_header=1)
+
     # have list of object ID's to run (from the Condor run)
+    home = expanduser("~")
+    dir = home + '/Dropbox/research_projects/nsf_flare_code/'
+    obj_file = 'get_objects.out'
 
-    # read in each file in turn
+    kid = np.loadtxt(dir + obj_file, dtype='str',
+                     unpack=True, skiprows=1, usecols=(0,))
 
-    # select "good" flares, count them
 
-    # match object ID to colors
+    gi_color = np.zeros_like(kid) - 99.
+    ri_color = np.zeros_like(kid) - 99.
+    n_flares = np.zeros_like(kid)
 
-    # save to output list
+    periods = np.zeros_like(kid) - 99.
+
+    for i in range(0, len(kid)):
+        # read in each file in turn
+        fldr = kid[i][0:3]
+        outdir = 'aprun/' + fldr + '/'
+        data = np.loadtxt(outdir + kid[i], delimiter=',', dtype='float',
+                          comments='#',skiprows=4)
+
+        # select "good" flares, count them
+        '''
+        t_start, t_stop, t_peak, amplitude, FWHM,
+        duration, t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
+        flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur
+        '''
+        good = np.where((data[:,9] >= 10) & # chisq
+                        (data[:,14] >= 0.1)) # ED
+
+        n_flares[i] = len(good[0])
+
+        # match whole object ID to colors
+        km = np.where((kicnum == kid[i]))
+
+        if (len(km[0])>0):
+            gi_color[i] = kic_g[km[0]] - kic_i[km[0]]
+            ri_color[i] = kic_r[km[0]] - kic_i[km[0]]
+
+        pm = np.where((pnum == kid[i]))
+
+        if (len(pm[0])>0):
+            periods[i] = prot[pm[0]]
+
+    # save to output lists
+
+    outfile = 'plotdata_v1.csv'
+    outdata = np.asarray([n_flares, gi_color, ri_color, periods])
+    np.savetxt(outfile, outdata, delimiter=',')
+
+
+
+    # goal plots:
+    # 1. g-r color vs flare rate
+    plt.figure()
+    plt.scatter(gi_color, n_flares, alpha=0.5)
+    plt.xlim((-5,10))
+    plt.ylim((0.1,20))
+    plt.yscale('log')
+    plt.show()
+
+    # 2. galex-g color vs flare rate
+    # 3. g-r color vs period, point size/color with flare rate
 
     return
+
+
+'''
+  let this file be called from the terminal directly. e.g.:
+  $ python analysis.py
+'''
+if __name__ == "__main__":
+    k2_mtg_plots()
