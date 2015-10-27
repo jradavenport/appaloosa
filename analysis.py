@@ -82,12 +82,16 @@ def k2_mtg_plots():
                                         usecols=(5,6,7), filling_values=-99, skip_header=1)
     kicnum = np.genfromtxt(kic_file, delimiter='|', unpack=True,dtype=str,
                            usecols=(15,), skip_header=1)
+    print('KIC data ingested')
 
     # (Galex colors too?)
+    #
+
     # (list of rotation periods?)
     p_file = '../periods/Table_Periodic.txt'
     pnum = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=str, usecols=(0,),skip_header=1)
     prot = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=float, usecols=(4,),skip_header=1)
+    print('Period data ingested')
 
     # have list of object ID's to run (from the Condor run)
     home = expanduser("~")
@@ -101,9 +105,14 @@ def k2_mtg_plots():
     ri_color = np.zeros(len(kid)) - 99.
     n_flares = np.zeros(len(kid))
 
-    periods = np.zeros_like(kid) - 99.
+    periods = np.zeros(len(kid)) - 99.
 
+    print('Starting loop through aprun files')
     for i in range(0, len(kid)):
+
+        if (i % 10) == 0:
+            print(i)
+
         # read in each file in turn
         fldr = kid[i][0:3]
         outdir = 'aprun/' + fldr + '/'
