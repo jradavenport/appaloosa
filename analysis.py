@@ -60,3 +60,21 @@ def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
 
 
     return
+
+
+def k2_mtg_plots():
+    '''
+    Some quick-and-dirty results from the 1st run for the K2 science meeting
+    '''
+
+    # have list of object ID's to run (from the Condor run)
+
+    # read in each file in turn
+
+    # select "good" flares, count them
+
+    # match object ID to colors
+
+    # save to output list
+
+    return
