@@ -68,7 +68,11 @@ def k2_mtg_plots():
     Some quick-and-dirty results from the 1st run for the K2 science meeting
 
     run from dir (at UW currently)
-    /astro/store/tmp/jrad/nsf_flares/-HEX-ID-/
+      /astro/store/tmp/jrad/nsf_flares/-HEX-ID-/
+
+    can run as:
+      from appaloosa import analysis
+      analysis.k2_mtg_plots()
 
     '''
 
@@ -81,7 +85,7 @@ def k2_mtg_plots():
 
     # (Galex colors too?)
     # (list of rotation periods?)
-    p_file = '../periods/Table_periodic.txt'
+    p_file = '../periods/Table_Periodic.txt'
     pnum = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=str, usecols=(0,),skip_header=1)
     prot = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=float, usecols=(4,),skip_header=1)
 
