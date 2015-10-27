@@ -97,10 +97,9 @@ def k2_mtg_plots():
     kid = np.loadtxt(dir + obj_file, dtype='str',
                      unpack=True, skiprows=1, usecols=(0,))
 
-
-    gi_color = np.zeros_like(kid) - 99.
-    ri_color = np.zeros_like(kid) - 99.
-    n_flares = np.zeros_like(kid)
+    gi_color = np.zeros(len(kid)) - 99.
+    ri_color = np.zeros(len(kid)) - 99.
+    n_flares = np.zeros(len(kid))
 
     periods = np.zeros_like(kid) - 99.
 
