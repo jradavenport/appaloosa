@@ -544,7 +544,11 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
 
     qtr = data[:,0]
     time = data[:,1]
-    lcflag = data[:,5]
+    lcflag = data[:,4]
+
+    exptime = data[:,5]
+    exptime[np.where((exptime < 1))] = 54.2 / 60. / 60. / 24.
+    exptime[np.where((exptime > 0))] = 30 * 54.2 / 60. / 60. / 24.
 
     if ftype == 'sap':
         flux_raw = data[:,6]
@@ -613,6 +617,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
     outstring = outstring + '# Date-Run = ' + str(now) + '\n'
     outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
 
+    outstring = outstring + '# N_epoch in LC = ' + str(len(time)) + '\n'
+    outstring = outstring + '# Total exp time of LC = ' + str(np.sum(exptime)) + '\n'
     outstring = outstring + '# Columns: '
 
     header = FlareStats(time, flux_gap, error, flux_model,
