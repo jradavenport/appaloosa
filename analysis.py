@@ -63,7 +63,7 @@ def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
     return
 
 
-def k2_mtg_plots():
+def k2_mtg_plots(rerun=False, outfile='plotdata_v1.csv'):
     '''
     Some quick-and-dirty results from the 1st run for the K2 science meeting
 
@@ -101,59 +101,61 @@ def k2_mtg_plots():
     kid = np.loadtxt(dir + obj_file, dtype='str',
                      unpack=True, skiprows=1, usecols=(0,))
 
-    gi_color = np.zeros(len(kid)) - 99.
-    ri_color = np.zeros(len(kid)) - 99.
-    n_flares = np.zeros(len(kid))
+    if rerun is True:
+        gi_color = np.zeros(len(kid)) - 99.
+        ri_color = np.zeros(len(kid)) - 99.
+        n_flares = np.zeros(len(kid))
 
-    periods = np.zeros(len(kid)) - 99.
+        periods = np.zeros(len(kid)) - 99.
 
-    print('Starting loop through aprun files')
-    for i in range(0, len(kid)):
+        print('Starting loop through aprun files')
+        for i in range(0, len(kid)):
 
-        # read in each file in turn
-        fldr = kid[i][0:3]
-        outdir = 'aprun/' + fldr + '/'
-        apfile = outdir + kid[i] + '.flare'
+            # read in each file in turn
+            fldr = kid[i][0:3]
+            outdir = 'aprun/' + fldr + '/'
+            apfile = outdir + kid[i] + '.flare'
 
-        try:
-            data = np.loadtxt(apfile, delimiter=',', dtype='float',
-                              comments='#',skiprows=4)
+            try:
+                data = np.loadtxt(apfile, delimiter=',', dtype='float',
+                                  comments='#',skiprows=4)
 
-            #if (i % 10) == 0:
-            print(i, apfile, data.shape)
+                #if (i % 10) == 0:
+                print(i, apfile, data.shape)
 
-            # select "good" flares, count them
-            '''
-            t_start, t_stop, t_peak, amplitude, FWHM,
-            duration, t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
-            flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur
-            '''
+                # select "good" flares, count them
+                '''
+                t_start, t_stop, t_peak, amplitude, FWHM,
+                duration, t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
+                flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur
+                '''
 
-            if data.ndim == 2:
-                good = np.where((data[:,9] >= 10) & # chisq
-                                (data[:,14] >= 0.1)) # ED
+                if data.ndim == 2:
+                    good = np.where((data[:,9] >= 10) & # chisq
+                                    (data[:,14] >= 0.1)) # ED
 
-                n_flares[i] = len(good[0])
-        except IOError:
-            print(apfile + ' was not found!')
+                    n_flares[i] = len(good[0])
+            except IOError:
+                print(apfile + ' was not found!')
 
-        # match whole object ID to colors
-        km = np.where((kicnum == kid[i]))
+            # match whole object ID to colors
+            km = np.where((kicnum == kid[i]))
 
-        if (len(km[0])>0):
-            gi_color[i] = kic_g[km[0]] - kic_i[km[0]]
-            ri_color[i] = kic_r[km[0]] - kic_i[km[0]]
+            if (len(km[0])>0):
+                gi_color[i] = kic_g[km[0]] - kic_i[km[0]]
+                ri_color[i] = kic_r[km[0]] - kic_i[km[0]]
 
-        pm = np.where((pnum == kid[i]))
+            pm = np.where((pnum == kid[i]))
 
-        if (len(pm[0])>0):
-            periods[i] = prot[pm[0]]
+            if (len(pm[0])>0):
+                periods[i] = prot[pm[0]]
 
-    # save to output lists
+        # save to output lists
+        outdata = np.asarray([n_flares, gi_color, ri_color, periods])
+        np.savetxt(outfile, outdata.T, delimiter=',')
 
-    outfile = 'plotdata_v1.csv'
-    outdata = np.asarray([n_flares, gi_color, ri_color, periods])
-    np.savetxt(outfile, outdata, delimiter=',')
+    else:
+        n_flares, gi_color, ri_color, periods = np.loadtxt(outfile, delimiter=',', dtype='float')
 
 
 
@@ -161,9 +163,11 @@ def k2_mtg_plots():
     # 1. g-r color vs flare rate
     plt.figure()
     plt.scatter(gi_color, n_flares, alpha=0.5)
-    plt.xlim((-5,10))
-    plt.ylim((0.1,20))
+    plt.xlim((-2,5))
+    plt.ylim((1,1e4))
     plt.yscale('log')
+    plt.xlabel('g-i')
+    plt.ylabel('# flares')
     plt.show()
 
     # 2. galex-g color vs flare rate
