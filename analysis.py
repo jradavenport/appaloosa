@@ -175,6 +175,7 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
                 outdata = np.asarray([n_flares1, n_flares2, n_flares3, n_flares4,
                                       gi_color, ri_color, periods])
                 np.savetxt(outfile, outdata.T, delimiter=',')
+                print(i, len(kid))
 
         # save to output lists
         outdata = np.asarray([n_flares1, n_flares2, n_flares3, n_flares4,
@@ -183,24 +184,53 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
 
     else:
         print('Reading previous results')
-        n_flares, gi_color, ri_color, periods = np.loadtxt(outfile, delimiter=',',
-                                                           dtype='float', unpack=True)
+        n_flares1, n_flares2, n_flares3, n_flares4, gi_color, ri_color, periods = \
+            np.loadtxt(outfile, delimiter=',', dtype='float', unpack=True)
 
 
 
     # goal plots:
-    # 1. g-r color vs flare rate
-    plt.figure()
-    plt.scatter(gi_color, n_flares, alpha=0.2, lw=0)
-    plt.xlim((-2,5))
-    plt.ylim((1,1e4))
-    plt.yscale('log')
-    plt.xlabel('g-i')
-    plt.ylabel('# flares')
-    plt.show()
-
+    # 1. color vs flare rate
     # 2. galex-g color vs flare rate
     # 3. g-r color vs period, point size/color with flare rate
+
+    clr = np.log10(n_flares4)
+    clr[np.where((clr > 3))] = 3
+    clr[np.where((clr < 1))] = 1
+
+    plt.figure()
+    plt.scatter(gi_color, periods, alpha=.7, lw=0, c=clr, cmap=plt.cm.afmhot_r)
+    plt.xlabel('g-i (mag)')
+    plt.ylabel('Period (days)')
+    plt.yscale('log')
+    plt.xlim((0,3))
+    plt.ylim((0.1,100))
+    cb = plt.colorbar()
+    cb.set_label('log # flares')
+    plt.show()
+
+
+    clr = np.log10(n_flares4)
+    clr[np.where((clr > 2.2))] = 2.2
+    clr[np.where((clr < 1))] = 1
+
+    bin2d, xx, yy,_ = binned_statistic_2d(gi_color, np.log10(periods),
+                                          clr, statistic='median',
+                                          range=[[-1,4],[-1,2]], bins=75)
+
+    plt.figure()
+    plt.imshow(bin2d.T, interpolation='nearest',aspect='auto', origin='lower',
+               extent=(xx.min(),xx.max(),yy.min(),yy.max()),
+               cmap=plt.cm.afmhot_r)
+
+    plt.xlim((0,3))
+    plt.ylim((-1,2))
+    plt.xlabel('g-i (mag)')
+    plt.ylabel('log Period (days)')
+    cb = plt.colorbar()
+    cb.set_label('log # flares (median)')
+    plt.show()
+
 
     return
 
