@@ -77,32 +77,33 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
 
     '''
 
-    # read in KIC file w/ colors
-    kic_file = '../kic-phot/kic.txt.gz'
-    kic_g, kic_r, kic_i  = np.genfromtxt(kic_file, delimiter='|', unpack=True,dtype=float,
-                                        usecols=(5,6,7), filling_values=-99, skip_header=1)
-    kicnum = np.genfromtxt(kic_file, delimiter='|', unpack=True,dtype=str,
-                           usecols=(15,), skip_header=1)
-    print('KIC data ingested')
-
-    # (Galex colors too?)
-    #
-
-    # (list of rotation periods?)
-    p_file = '../periods/Table_Periodic.txt'
-    pnum = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=str, usecols=(0,),skip_header=1)
-    prot = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=float, usecols=(4,),skip_header=1)
-    print('Period data ingested')
-
-    # have list of object ID's to run (from the Condor run)
-    home = expanduser("~")
-    dir = home + '/Dropbox/research_projects/nsf_flare_code/'
-    obj_file = 'get_objects.out'
-
-    kid = np.loadtxt(dir + obj_file, dtype='str',
-                     unpack=True, skiprows=1, usecols=(0,))
-
     if rerun is True:
+
+        # read in KIC file w/ colors
+        kic_file = '../kic-phot/kic.txt.gz'
+        kic_g, kic_r, kic_i  = np.genfromtxt(kic_file, delimiter='|', unpack=True,dtype=float,
+                                            usecols=(5,6,7), filling_values=-99, skip_header=1)
+        kicnum = np.genfromtxt(kic_file, delimiter='|', unpack=True,dtype=str,
+                               usecols=(15,), skip_header=1)
+        print('KIC data ingested')
+
+        # (Galex colors too?)
+        #
+
+        # (list of rotation periods?)
+        p_file = '../periods/Table_Periodic.txt'
+        pnum = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=str, usecols=(0,),skip_header=1)
+        prot = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=float, usecols=(4,),skip_header=1)
+        print('Period data ingested')
+
+        # have list of object ID's to run (from the Condor run)
+        home = expanduser("~")
+        dir = home + '/Dropbox/research_projects/nsf_flare_code/'
+        obj_file = 'get_objects.out'
+
+        kid = np.loadtxt(dir + obj_file, dtype='str',
+                         unpack=True, skiprows=1, usecols=(0,))
+
         gi_color = np.zeros(len(kid)) - 99.
         ri_color = np.zeros(len(kid)) - 99.
         r_mag = np.zeros(len(kid)) - 99.
