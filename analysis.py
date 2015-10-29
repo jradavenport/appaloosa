@@ -9,6 +9,7 @@ Routines to do analysis on the appaloosa flare finding runs. Including
 import numpy as np
 import matplotlib.pyplot as plt
 import appaloosa
+from scipy.stats import binned_statistic_2d
 from os.path import expanduser
 
 
@@ -63,7 +64,7 @@ def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
     return
 
 
-def k2_mtg_plots(rerun=False, outfile='plotdata_v1.csv'):
+def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
     '''
     Some quick-and-dirty results from the 1st run for the K2 science meeting
 
@@ -72,7 +73,7 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v1.csv'):
 
     can run as:
       from appaloosa import analysis
-      analysis.k2_mtg_plots()
+      analysis.k2_mtsg_plots()
 
     '''
 
@@ -104,9 +105,14 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v1.csv'):
     if rerun is True:
         gi_color = np.zeros(len(kid)) - 99.
         ri_color = np.zeros(len(kid)) - 99.
-        n_flares = np.zeros(len(kid))
-
+        r_mag = np.zeros(len(kid)) - 99.
         periods = np.zeros(len(kid)) - 99.
+
+        # keep a few different counts
+        n_flares1 = np.zeros(len(kid))
+        n_flares2 = np.zeros(len(kid))
+        n_flares3 = np.zeros(len(kid))
+        n_flares4 = np.zeros(len(kid))
 
         print('Starting loop through aprun files')
         for i in range(0, len(kid)):
@@ -120,8 +126,8 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v1.csv'):
                 data = np.loadtxt(apfile, delimiter=',', dtype='float',
                                   comments='#',skiprows=4)
 
-                #if (i % 10) == 0:
-                print(i, apfile, data.shape)
+                # if (i % 10) == 0:
+                #     print(i, apfile, data.shape)
 
                 # select "good" flares, count them
                 '''
@@ -131,10 +137,25 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v1.csv'):
                 '''
 
                 if data.ndim == 2:
-                    good = np.where((data[:,9] >= 10) & # chisq
-                                    (data[:,14] >= 0.1)) # ED
+                    # a quality cut
+                    good1 = np.where((data[:,9] >= 10) &  # chisq
+                                     (data[:,14] >= 0.1)) # ED
+                    # a higher cut
+                    good2 = np.where((data[:,9] >= 15) &  # chisq
+                                     (data[:,14] >= 0.2)) # ED
+                    # an amplitude cut
+                    good3 = np.where((data[:,3] >= 0.005) & # amplitude
+                                     (data[:,13] <= 0.05))   # KS_p
+                    # everything cut
+                    good4 = np.where((data[:,3] >= 0.005) &
+                                     (data[:,13] <= 0.05) &
+                                     (data[:,9] >= 15))
 
-                    n_flares[i] = len(good[0])
+                    n_flares1[i] = len(good1[0])
+                    n_flares2[i] = len(good2[0])
+                    n_flares3[i] = len(good3[0])
+                    n_flares4[i] = len(good4[0])
+
             except IOError:
                 print(apfile + ' was not found!')
 
@@ -150,19 +171,27 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v1.csv'):
             if (len(pm[0])>0):
                 periods[i] = prot[pm[0]]
 
+            if (i % 1000) == 0:
+                outdata = np.asarray([n_flares1, n_flares2, n_flares3, n_flares4,
+                                      gi_color, ri_color, periods])
+                np.savetxt(outfile, outdata.T, delimiter=',')
+
         # save to output lists
-        outdata = np.asarray([n_flares, gi_color, ri_color, periods])
+        outdata = np.asarray([n_flares1, n_flares2, n_flares3, n_flares4,
+                              gi_color, ri_color, periods])
         np.savetxt(outfile, outdata.T, delimiter=',')
 
     else:
-        n_flares, gi_color, ri_color, periods = np.loadtxt(outfile, delimiter=',', dtype='float')
+        print('Reading previous results')
+        n_flares, gi_color, ri_color, periods = np.loadtxt(outfile, delimiter=',',
+                                                           dtype='float', unpack=True)
 
 
 
     # goal plots:
     # 1. g-r color vs flare rate
     plt.figure()
-    plt.scatter(gi_color, n_flares, alpha=0.5)
+    plt.scatter(gi_color, n_flares, alpha=0.2, lw=0)
     plt.xlim((-2,5))
     plt.ylim((1,1e4))
     plt.yscale('log')
