@@ -8,7 +8,7 @@ Routines to do analysis on the appaloosa flare finding runs. Including
 
 import numpy as np
 import matplotlib.pyplot as plt
-import appaloosa
+# import appaloosa
 from scipy.stats import binned_statistic_2d
 from os.path import expanduser
 
@@ -237,6 +237,12 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
 
 
 def compare_2_lit(outfile='plotdata_v2.csv'):
+    '''
+    Things to show:
+    1) my flare rates compared to literature values for same stars
+    2) literature values for same stars compared to eachother
+
+    '''
     # read in MY flare sample
     n_flares1, n_flares2, n_flares3, n_flares4, gi_color, ri_color, periods = \
         np.loadtxt(outfile, delimiter=',', dtype='float', unpack=True)
@@ -250,23 +256,51 @@ def compare_2_lit(outfile='plotdata_v2.csv'):
                      unpack=True, skiprows=1, usecols=(0,))
 
 
-    ####################
+    #######################
     # Compare 2 Literature
-    ####################
+    #######################
     pitkin = dir + 'comparison_datasets/pitkin2014/table2.dat'
     pid,pnum = np.loadtxt(pitkin, unpack=True, usecols=(0,1),dtype='str')
     pnum = np.array(pnum, dtype='float')
-
     p_flares = np.zeros(len(kid))
 
-    for i in range(0,len(pid)):
-        x = np.where((kid == pid[i]))
-        if len(x[0]) > 0:
-            p_flares[x] = pnum[i]
+    balona = dir + 'comparison_datasets/balona2015/table1.dat'
+    bid_raw = np.loadtxt(balona, dtype='str', unpack=True, usecols=(0,), comments='#')
+    bid,bnum = np.unique(bid_raw, return_counts=True)
+    b_flares = np.zeros(len(kid))
+
+    shibayama = dir + 'comparison_datasets/shibayama2013/apjs483584t7_mrt.txt'
+    sid_raw = np.loadtxt(shibayama, dtype='str', unpack=True, usecols=(0,), comments='#')
+    sid,snum = np.unique(sid_raw, return_counts=True)
+    s_flares = np.zeros(len(kid))
+
+    for i in range(0,len(kid)):
+        x1 = np.where((kid[i] == pid))
+        if len(x1[0]) > 0:
+            p_flares[i] = pnum[x1]
+
+        x2 = np.where((kid[i] == bid))
+        if len(x2[0]) > 0:
+            b_flares[i] = bnum[x2]
+
+        x3 = np.where((kid[i] == sid))
+        if len(x3[0]) > 0:
+            s_flares[i] = snum[x3]
+
+
+
 
     plt.figure()
     plt.scatter(p_flares, n_flares4)
+    plt.scatter(b_flares, n_flares4,c='r')
+    plt.scatter(s_flares, n_flares4,c='g')
     plt.show()
+
+    # plt.figure()
+    # plt.scatter(p_flares, b_flares)
+    # plt.xlabel('Pitkin')
+    # plt.ylabel('Balona')
+    # plt.show()
 
     return
 
