@@ -77,6 +77,14 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
 
     '''
 
+    # have list of object ID's to run (from the Condor run)
+    home = expanduser("~")
+    dir = home + '/Dropbox/research_projects/nsf_flare_code/'
+    obj_file = 'get_objects.out'
+
+    kid = np.loadtxt(dir + obj_file, dtype='str',
+                     unpack=True, skiprows=1, usecols=(0,))
+
     if rerun is True:
 
         # read in KIC file w/ colors
@@ -95,14 +103,6 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
         pnum = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=str, usecols=(0,),skip_header=1)
         prot = np.genfromtxt(p_file, delimiter=',', unpack=True,dtype=float, usecols=(4,),skip_header=1)
         print('Period data ingested')
-
-        # have list of object ID's to run (from the Condor run)
-        home = expanduser("~")
-        dir = home + '/Dropbox/research_projects/nsf_flare_code/'
-        obj_file = 'get_objects.out'
-
-        kid = np.loadtxt(dir + obj_file, dtype='str',
-                         unpack=True, skiprows=1, usecols=(0,))
 
         gi_color = np.zeros(len(kid)) - 99.
         ri_color = np.zeros(len(kid)) - 99.
@@ -234,6 +234,42 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
 
 
     return
+
+
+def compare_2_lit(outfile='plotdata_v2.csv'):
+    # read in MY flare sample
+    n_flares1, n_flares2, n_flares3, n_flares4, gi_color, ri_color, periods = \
+        np.loadtxt(outfile, delimiter=',', dtype='float', unpack=True)
+
+    # read in the KIC numbers
+    home = expanduser("~")
+    dir = home + '/Dropbox/research_projects/nsf_flare_code/'
+    obj_file = 'get_objects.out'
+
+    kid = np.loadtxt(dir + obj_file, dtype='str',
+                     unpack=True, skiprows=1, usecols=(0,))
+
+
+    ####################
+    # Compare 2 Literature
+    ####################
+    pitkin = dir + 'comparison_datasets/pitkin2014/table2.dat'
+    pid,pnum = np.loadtxt(pitkin, unpack=True, usecols=(0,1),dtype='str')
+    pnum = np.array(pnum, dtype='float')
+
+    p_flares = np.zeros(len(kid))
+
+    for i in range(0,len(pid)):
+        x = np.where((kid == pid[i]))
+        if len(x[0]) > 0:
+            p_flares[x] = pnum[i]
+
+    plt.figure()
+    plt.scatter(p_flares, n_flares4)
+    plt.show()
+
+    return
+
 
 
 '''
