@@ -195,14 +195,24 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
     # 2. galex-g color vs flare rate
     # 3. g-r color vs period, point size/color with flare rate
 
+    #---
     clr = np.log10(n_flares4)
     clr[np.where((clr > 3))] = 3
     clr[np.where((clr < 1))] = 1
 
+    ss = np.argsort(clr)
+
+    cut = np.where((clr[ss] >= 1.2))
+
+
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.size'] = 14
+
     plt.figure()
-    plt.scatter(gi_color, periods, alpha=.7, lw=0, c=clr, cmap=plt.cm.afmhot_r)
+    plt.scatter(gi_color[ss][cut], periods[ss][cut], alpha=.7, lw=0,
+                c=clr[ss][cut], cmap=plt.cm.afmhot_r, s=50)
     plt.xlabel('g-i (mag)')
-    plt.ylabel('Period (days)')
+    plt.ylabel('Rotation Period (days)')
     plt.yscale('log')
     plt.xlim((0,3))
     plt.ylim((0.1,100))
@@ -211,6 +221,7 @@ def k2_mtg_plots(rerun=False, outfile='plotdata_v2.csv'):
     plt.show()
 
 
+    #---
     clr = np.log10(n_flares4)
     clr[np.where((clr > 2.2))] = 2.2
     clr[np.where((clr < 1))] = 1
