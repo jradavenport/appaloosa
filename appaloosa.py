@@ -447,7 +447,7 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
 
 def MeasureS2N(flux, error, model, istart=-1, istop=-1):
     '''
-    this MAY not be something i want....
+    this MAY NOT be something i want....
     '''
     if (istart < 0):
         istart = 0
@@ -497,8 +497,12 @@ def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
 
 def MultiFind(time, flux, error, flags):
     '''
-
+    this needs to be either
+    1. made in to simple multi-pass cleaner,
+    2. made in to "run till no signif change" cleaner, or
+    3. folded back in to main code
     '''
+    
     # the bad data points (search where bad < 1)
     bad = FlagCuts(flags, returngood=False)
 
@@ -558,14 +562,16 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
         error = data[:,3]
 
     _,lg,rg = detrend.FindGaps(time)
-    uQtr = np.unique(qtr)
+    # uQtr = np.unique(qtr)
 
+    ### Basic flattening
     # flatten quarters with polymonial
     flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
     # then flatten between gaps
     flux_gap = detrend.GapFlat(time, flux_qtr)
 
+    ### Build first-pass model
     # fit sin curves
     flux_sin = detrend.FitSin(time, flux_gap, error)
 
@@ -576,9 +582,10 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
     # flux_model = flux_sin + detrend.MultiBoxcar(time, flux_smo, error) # double detrend?
 
     istart, istop = DetectCandidate(time, flux_gap, error, lcflag, flux_model)
-    print(str(len(istart))+' flare candidates found')
 
     if display is True:
+        print(str(len(istart))+' flare candidates found')
+
         plt.figure()
         plt.plot(time, flux_gap, 'k')
         plt.plot(time, flux_model, 'green')

@@ -174,7 +174,7 @@ def FitSin(time, flux, error, maxnum=5, nper=20000,
     Returns
     -------
     '''
-    _, dl, dr = FindGaps(time) # finds right edge of time windows
+    _, dl, dr = FindGaps(time) # find edges of time windows
 
     # minper = 0.1 # days
     # maxper = 30. # days
