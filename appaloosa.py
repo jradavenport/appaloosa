@@ -231,6 +231,25 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
     Note: this algorithm originally ran over sections without "changes" as
     defined by Change Point Analysis. May have serious problems for data
     with dramatic starspot activity. If possible, remove starspot first!
+
+    Parameters
+    ----------
+    flux : numpy array
+        data to search over
+    error : numpy array
+        errors corresponding to data.
+    N1 : int, optional
+        Coefficient from original paper (Default is 3)
+    N2 : int, optional
+        Coefficient from original paper (Default is 1)
+    N3 : int, optional
+        Coefficient from original paper (Default is 3)
+    rolling_std : bool, optional
+        Should the "sigma" in this data be computed by the median of
+        the rolling_std? (Default is False)
+    std_window : float, optional
+        If rolling_std=True, how big of a window should it use?
+        (Default is 0.25)
     '''
 
     med_i = np.median(flux)
