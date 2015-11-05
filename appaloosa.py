@@ -502,7 +502,7 @@ def MultiFind(time, flux, error, flags):
     2. made in to "run till no signif change" cleaner, or
     3. folded back in to main code
     '''
-    
+
     # the bad data points (search where bad < 1)
     bad = FlagCuts(flags, returngood=False)
 
@@ -519,6 +519,26 @@ def MultiFind(time, flux, error, flags):
 
     # should i use a step with rolling skew and std?
 
+    return
+
+
+def FakeFlareGen(time, flux, nfake=1000):
+    '''
+    Create nfake number of events, inject them in to data
+    Use grid of amplitudes and durations, keep ampl in relative flux units
+    Keep track of energy in Equiv Dur
+    '''
+
+    # QUESTION: how many fake flares can I inject at once?
+
+    return #new_lc
+
+
+def FakeFlareRec():
+    '''
+    Re-run flare finding for data + fake flares
+    Figure out completeness curve for this lightcurve vs Equiv Dur
+    '''
     return
 
 
