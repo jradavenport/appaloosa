@@ -216,7 +216,7 @@ def DetectCandidate(time, flux, error, flags, model,
         return cstart, cstop
 
 
-def FINDflare(time, flux, error, N1=3, N2=1, N3=3):
+def FINDflare(flux, error, N1=3, N2=1, N3=3):
     '''
     The algorithm for local changes due to flares defined by
     S. W. Chang et al. (2015), Eqn. 3a-d
@@ -226,50 +226,39 @@ def FINDflare(time, flux, error, N1=3, N2=1, N3=3):
     values are increases in brightness. The signs have been changed, but
     coefficients have not been adjusted to change from log(flux) to flux.
 
-    Note: this algorithm originally run over sections without "changes" as
+    Note: this algorithm originally ran over sections without "changes" as
     defined by Change Point Analysis. May have serious problems for data
-    with dramatic starspot activity. If possible, remove starspot first.
+    with dramatic starspot activity. If possible, remove starspot first!
     '''
-    _, dl, dr = detrend.FindGaps(time)
 
-    istart = []
-    istop = []
-    for i in range(0, len(dl)):
-        flux_i = flux[dl[i]:dr[i]]
-        err_i = error[dl[i]:dr[i]]
+    med_i = np.median(flux)
+    sig_i = np.std(flux)
 
-        med_i = np.median(flux_i)
-        sig_i = np.std(flux_i)
+    ca = flux - med_i
+    cb = np.abs(flux - med_i) / sig_i
+    cc = np.abs(flux - med_i - error) / sig_i
 
-        ca = flux_i - med_i
-        cb = np.abs(flux_i - med_i) / sig_i
-        cc = np.abs(flux_i - med_i - err_i) / sig_i
+    # pass cuts from Eqns 3a,b,c
+    ctmp = np.where((ca > 0) & (cb > N1) & (cc > N2))
 
-        # pass cuts from Eqns 3a,b,c
-        ctmp = np.where((ca > 0) & (cb > N1) & (cc > N2))
+    cindx = np.zeros_like(flux)
+    cindx[ctmp] = 1
 
-        cindx = np.zeros_like(flux_i)
-        cindx[ctmp] = 1
+    # Need to find cumulative number of points that pass "ctmp"
+    # Count in reverse!
+    ConM = np.zeros_like(flux)
+    for k in range(2, len(flux)):
+        ConM[-k] = cindx[-k] * (ConM[-(k-1)] + cindx[-k])
 
-        # Need to find cumulative number of points that pass "ctmp"
-        # Count in reverse!
-        ConM = np.zeros_like(flux_i)
-        for k in range(2, len(flux_i)):
-            ConM[-k] = cindx[-k] * (ConM[-(k-1)] + cindx[-k])
+    # these only defined between dl[i] and dr[i]
+    # find flare start where values in ConM switch from 0 to >=N3
+    istart_i = np.where((ConM[1:] >= N3) &
+                        (ConM[0:-1] - ConM[1:] < 0))[0] + 1
 
-        # these only defined between dl[i] and dr[i]
-        # find flare start where values in ConM switch from 0 to >=N3
-        istart_i = np.where((ConM[1:] >= N3) &
-                            (ConM[0:-1] - ConM[1:] < 0))[0] + 1
+    # use the value of ConM to determine how many points away stop is
+    istop_i = istart_i + (ConM[istart_i] - 1)
 
-        # use the value of ConM to determine how many points away stop is
-        istop_i = istart_i + (ConM[istart_i] - 1)
-
-        # convert index back to whole array size
-        istart = np.append(istart, istart_i + dl[i])
-        istop = np.append(istop, istop_i + dl[i])
-
-    return np.array(istart, dtype='int'), np.array(istop, dtype='int')
+    return np.array(istart_i, dtype='int'), np.array(istop_i, dtype='int')
 
 
 def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
