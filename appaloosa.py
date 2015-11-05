@@ -14,6 +14,7 @@ from rayleigh import RayleighPowerSpectrum
 from gatspy.periodic import LombScargleFast
 import warnings
 import matplotlib.pyplot as plt
+from pandas import rolling_std
 from scipy import stats
 from scipy.optimize import curve_fit
 try:
@@ -216,7 +217,8 @@ def DetectCandidate(time, flux, error, flags, model,
         return cstart, cstop
 
 
-def FINDflare(flux, error, N1=3, N2=1, N3=3):
+def FINDflare(flux, error, N1=3, N2=1, N3=3,
+              rolling_std=False, std_window=0.25):
     '''
     The algorithm for local changes due to flares defined by
     S. W. Chang et al. (2015), Eqn. 3a-d
@@ -232,7 +234,10 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3):
     '''
 
     med_i = np.median(flux)
-    sig_i = np.std(flux)
+    if rolling_std is False:
+        sig_i = np.std(flux)
+    else:
+        sig_i = np.median(rolling_std(flux, std_window))
 
     ca = flux - med_i
     cb = np.abs(flux - med_i) / sig_i

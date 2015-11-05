@@ -3,7 +3,7 @@ Use this file to keep various detrending methods
 
 '''
 import numpy as np
-from pandas import rolling_median, rolling_mean, rolling_std, rolling_skew
+from pandas import rolling_median #, rolling_mean, rolling_std, rolling_skew
 from scipy.optimize import curve_fit
 from gatspy.periodic import LombScargleFast
 import pywt
