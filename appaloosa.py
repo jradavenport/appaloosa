@@ -550,7 +550,8 @@ def MultiFind(time, flux, error, flags, oldway=True):
 
 
 def FakeFlares(time, flux, error, flags, tstart, tstop,
-                 nfake=1000, npass=1, ampl=(1,25), dur=(1,60)):
+               nfake=1000, npass=1, objectid='',
+               ampl=(0.1,100), dur=(0.5,60)):
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
@@ -597,10 +598,11 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         s2n_fake[k] = np.sqrt( np.sum((fl_flux**2.0) / (std**2.0)) )
         ed_fake[k] = EquivDur(time, fl_flux)
 
-        plt.figure()
-        plt.plot(time, fl_flux)
-        print(dur_fake[k], ampl_fake[k], std, s2n_fake[k], ed_fake[k])
-        plt.show()
+        # plt.figure()
+        # plt.plot(time, flux, alpha=0.25)
+        # plt.plot(time, fl_flux)
+        # print(dur_fake[k], ampl_fake[k], std, s2n_fake[k], ed_fake[k])
+        # plt.show()
 
         # inject flare in to light curve
         new_flux = new_flux + fl_flux
@@ -621,18 +623,42 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         if (len(rec[0]) > 0):
             rec_fake[k] = 1
 
-    # Now compute completeness curve, return for saving in flare header file
+    # Compute the TOTAL completeness curve, save in flare header file
+
+    # nbins = int(nfake/10.)
+    # if nbins < 10:
+    #     nbins = 10
+    nbins = 20
 
     # the number of events per bin recovered
-    rec_bin_N, ed_bin = np.histogram(ed_fake, weights=rec_fake, bins=int(nfake/10.))
+    rec_bin_N, ed_bin = np.histogram(ed_fake, weights=rec_fake, bins=nbins)
     # the number of events per bin
-    rec_bin_D, _ = np.histogram(ed_fake, bins=int(nfake/10.))
+    rec_bin_D, _ = np.histogram(ed_fake, bins=nbins)
 
     ed_bin_center = (ed_bin[1:] + ed_bin[:-1])/2.
     rec_bin = rec_bin_N / rec_bin_D
 
-    return ed_bin_center, rec_bin
+    # Compute the Per-Datum completeness, save with each flare
+    _, dl, dr = detrend.FindGaps(time) # find edges of time windows
+    ed68 = np.zeros(len(time)) - 99.0
+    for i in range(len(dl)):
+        xfl = np.where((t0_fake >= time[dl[i]]) &
+                       (t0_fake <= time[dr[i]]))
 
+        if len(xfl[i]) > 10:
+            rec_bin_Ni, ed_bini = np.histogram(ed_fake[xfl],
+                                               weights=rec_fake[xfl],bins=nbins/2.)
+            rec_bin_Di, _ = np.histogram(ed_fake[xfl], bins=nbins/2.)
+
+            ed_bin_centeri = (ed_bini[1:] + ed_bini[:-1])/2.
+            rec_bini = rec_bin_Ni / rec_bin_Di
+
+            x68 = np.where((rec_bini >= 0.68))
+            if len(x68[0])>0:
+                ed68_i = min(ed_bin_centeri[x68])
+                ed68[dl[i]:dr[i]] = ed68_i
+
+    return ed_bin_center, rec_bin, ed68
 
 # objectid = '9726699'  # GJ 1243
 def RunLC(objectid='9726699', ftype='sap', lctype='',
@@ -696,24 +722,24 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
 
     if debug is True:
         print(    str(datetime.datetime.now()) + ' FakeFlares started')
-    ed_fake, frac_rec = FakeFlares(time, flux_gap/medflux - 1.0, error/medflux,
+    ed_fake, frac_rec, ed68 = FakeFlares(time, flux_gap/medflux - 1.0, error/medflux,
                                     lcflag, time[istart], time[istop])
 
     # use this completeness curve to estimate 68% complete
     x68 = np.where((frac_rec >= 0.68))
     if len(x68[0])>0:
-        ed68 = min(ed_fake[x68])
+        ed68T = min(ed_fake[x68])
     else:
-        ed68 = -99
+        ed68T = -99
 
     x90 = np.where((frac_rec >= 0.90))
     if len(x90[0])>0:
-        ed90 = min(ed_fake[x90])
+        ed90T = min(ed_fake[x90])
     else:
-        ed90 = -99
+        ed90T = -99
     if debug is True:
-        print(str(datetime.datetime.now()) + ' ED68 = ' + str(ed68))
-        print(str(datetime.datetime.now()) + ' ED90 = ' + str(ed90))
+        print(str(datetime.datetime.now()) + ' ED68 = ' + str(ed68T))
+        print(str(datetime.datetime.now()) + ' ED90 = ' + str(ed90T))
 
     '''
     ### MY FIRST ATTEMPT AT FLARE FINDING
@@ -776,8 +802,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
     outstring = outstring + '# Date-Run = ' + str(now) + '\n'
     outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
 
-    outstring = outstring + '# ED68 = ' + str(ed68) + '\n'
-    outstring = outstring + '# ED90 = ' + str(ed90) + '\n'
+    outstring = outstring + '# ED68 = ' + str(ed68T) + '\n'
+    outstring = outstring + '# ED90 = ' + str(ed90T) + '\n'
 
     outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
 
@@ -790,6 +816,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
     header = FlareStats(time, flux_gap, error, flux_model,
                         istart=istart[0], istop=istop[0],
                         ReturnHeader=True)
+    header = header + ', ED68i'
     outstring = outstring + '# ' + header + '\n'
 
     if debug is True:
@@ -802,6 +829,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
         outstring = outstring + str(stats_i[0])
         for k in range(1,len(stats_i)):
             outstring = outstring + ', ' + str(stats_i[k])
+
+        outstring = outstring + ', ' + str(ed68[istart[i]])
         outstring = outstring + '\n'
 
     # put flare output in to a set of subdirectories.
