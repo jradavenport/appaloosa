@@ -508,7 +508,7 @@ def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
     return pk, pp
 
 
-def MultiFind(time, flux, error, flags):
+def MultiFind(time, flux, error, flags, oldway=True):
     '''
     this needs to be either
     1. made in to simple multi-pass cleaner,
@@ -516,27 +516,41 @@ def MultiFind(time, flux, error, flags):
     3. folded back in to main code
     '''
 
-    # the bad data points (search where bad < 1)
-    bad = FlagCuts(flags, returngood=False)
+    if oldway is True:
+        ### MY FIRST ATTEMPT AT FLARE FINDING
+        # fit sin curves
+        flux_sin = detrend.FitSin(time, flux, error)
 
-    # first do a pass thru w/ small box to get obvious flares
-    box1 = detrend.MultiBoxcar(time, flux, error, kernel=0.25)
-    f1 = FINDflare(time, flux - box1, error)
+        # run iterative boxcar over data
+        flux_smo = detrend.MultiBoxcar(time, flux - flux_sin, error)
 
-    # keep only the non-flare points
+        flux_model = flux_sin + flux_smo
+        # flux_model = flux_sin + detrend.MultiBoxcar(time, flux_smo, error) # double detrend?
 
-    # second pass
-    box2 = detrend.MultiBoxcar(time, flux, error, kernel=2.0)
-    sin2 = detrend.FitSin(time, flux, error)
-    f2 = FINDflare(time, flux-box2-sin2, error)
+        istart, istop = DetectCandidate(time, flux, error, flags, flux_model)
 
-    # should i use a step with rolling skew and std?
+    else:
+        # the bad data points (search where bad < 1)
+        bad = FlagCuts(flags, returngood=False)
 
-    return
+        # first do a pass thru w/ small box to get obvious flares
+        box1 = detrend.MultiBoxcar(time, flux, error, kernel=0.25)
+        f1 = FINDflare(time, flux - box1, error)
+
+        # keep only the non-flare points
+
+        # second pass
+        box2 = detrend.MultiBoxcar(time, flux, error, kernel=2.0)
+        sin2 = detrend.FitSin(time, flux, error)
+        f2 = FINDflare(time, flux-box2-sin2, error)
+
+        # should i use a step with rolling skew and std?
+
+    return istart, istop, flux_model
 
 
-def FakeFlares(time, flux, error, tstart, tstop,
-                 nfake=100, ampl=(1,25), dur=(3,60)):
+def FakeFlares(time, flux, error, flags, tstart, tstop,
+                 nfake=1000, npass=1, ampl=(1,25), dur=(1,60)):
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
@@ -544,6 +558,8 @@ def FakeFlares(time, flux, error, tstart, tstop,
 
     duration defined in minutes
     amplitude defined multiples of the median error
+
+    still need to implement npass, to re-do whole thing and average results
     '''
 
     # QUESTION: how many fake flares can I inject at once?
@@ -556,6 +572,7 @@ def FakeFlares(time, flux, error, tstart, tstop,
 
     t0_fake = np.zeros(nfake, dtype='float')
     s2n_fake = np.zeros(nfake, dtype='float')
+    ed_fake = np.zeros(nfake, dtype='float')
 
     new_flux = np.copy(flux)
 
@@ -566,8 +583,8 @@ def FakeFlares(time, flux, error, tstart, tstop,
             # choose a random peak time
             t0 =  np.random.choice(time)
 
-            x = np.where((t0 >= tstart) & (t0 <= tstop))[0]
-            if (len(x) < 1):
+            x = np.where((t0 >= tstart) & (t0 <= tstop))
+            if (len(x[0]) < 1):
                 isok = True
 
         t0_fake[k] = t0
@@ -578,22 +595,48 @@ def FakeFlares(time, flux, error, tstart, tstop,
         # in_fl = np.where((time >= t0-dur_fake[k]) & (time <= t0 + 3.0*dur_fake[k]))
 
         s2n_fake[k] = np.sqrt( np.sum((fl_flux**2.0) / (std**2.0)) )
+        ed_fake[k] = EquivDur(time, fl_flux)
+
+        plt.figure()
+        plt.plot(time, fl_flux)
+        print(dur_fake[k], ampl_fake[k], std, s2n_fake[k], ed_fake[k])
+        plt.show()
 
         # inject flare in to light curve
         new_flux = new_flux + fl_flux
 
-    #
-
     '''
     Re-run flare finding for data + fake flares
-    Figure out completeness curve for this lightcurve vs Equiv Dur
+    Figure out: which flares were recovered?
     '''
 
-    return
+    # all the hard decision making should go here
+    istart, istop, flux_model = MultiFind(time, new_flux, error, flags)
+
+    rec_fake = np.zeros(nfake)
+    for k in range(nfake):
+        rec = np.where((t0_fake[k] >= time[istart]) &
+                       (t0_fake[k] <= time[istop]))
+
+        if (len(rec[0]) > 0):
+            rec_fake[k] = 1
+
+    # Now compute completeness curve, return for saving in flare header file
+
+    # the number of events per bin recovered
+    rec_bin_N, ed_bin = np.histogram(ed_fake, weights=rec_fake, bins=int(nfake/10.))
+    # the number of events per bin
+    rec_bin_D, _ = np.histogram(ed_fake, bins=int(nfake/10.))
+
+    ed_bin_center = (ed_bin[1:] + ed_bin[:-1])/2.
+    rec_bin = rec_bin_N / rec_bin_D
+
+    return ed_bin_center, rec_bin
 
 
 # objectid = '9726699'  # GJ 1243
-def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=False):
+def RunLC(objectid='9726699', ftype='sap', lctype='',
+          display=False, readfile=False, debug=False):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -610,6 +653,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
         print('Random ObjectID Selected: ' + objectid)
 
     # get the data from the MYSQL db
+    if debug is True:
+        print(str(datetime.datetime.now()) + ' GetLC started')
     data_raw = GetLC(objectid, readfile=readfile, type=lctype, onecadence=False)
     data = OneCadence(data_raw)
 
@@ -641,8 +686,37 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
     # then flatten between gaps
     flux_gap = detrend.GapFlat(time, flux_qtr)
 
+    # find flares!
+    if debug is True:
+        print(    str(datetime.datetime.now()) + ' MultiFind started')
+    istart, istop, flux_model = MultiFind(time, flux_gap, error, lcflag)
 
-    ### Build first-pass model
+    # run artificial flare test
+    medflux = np.median(flux_model)
+
+    if debug is True:
+        print(    str(datetime.datetime.now()) + ' FakeFlares started')
+    ed_fake, frac_rec = FakeFlares(time, flux_gap/medflux - 1.0, error/medflux,
+                                    lcflag, time[istart], time[istop])
+
+    # use this completeness curve to estimate 68% complete
+    x68 = np.where((frac_rec >= 0.68))
+    if len(x68[0])>0:
+        ed68 = min(ed_fake[x68])
+    else:
+        ed68 = -99
+
+    x90 = np.where((frac_rec >= 0.90))
+    if len(x90[0])>0:
+        ed90 = min(ed_fake[x90])
+    else:
+        ed90 = -99
+    if debug is True:
+        print(str(datetime.datetime.now()) + ' ED68 = ' + str(ed68))
+        print(str(datetime.datetime.now()) + ' ED90 = ' + str(ed90))
+
+    '''
+    ### MY FIRST ATTEMPT AT FLARE FINDING
     # fit sin curves
     flux_sin = detrend.FitSin(time, flux_gap, error)
 
@@ -653,19 +727,26 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
     # flux_model = flux_sin + detrend.MultiBoxcar(time, flux_smo, error) # double detrend?
 
     istart, istop = DetectCandidate(time, flux_gap, error, lcflag, flux_model)
+    '''
 
     if display is True:
         print(str(len(istart))+' flare candidates found')
 
         plt.figure()
         plt.plot(time, flux_gap, 'k')
-        plt.plot(time, flux_model, 'green')
+        # plt.plot(time, flux_model, 'green')
         for g in lg:
             plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
 
         plt.scatter(time[istart], flux_gap[istart], color='red', marker='o',s=40)
         plt.scatter(time[istop], flux_gap[istop], color='orange', marker='p',s=60)
+        plt.show()
 
+        # look at the completeness curve
+        plt.figure()
+        plt.plot(ed_fake, frac_rec)
+        plt.xlabel('Equiv Dur of simulated flares')
+        plt.ylabel('Fraction Recovered')
         plt.show()
 
     '''
@@ -695,14 +776,24 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
     outstring = outstring + '# Date-Run = ' + str(now) + '\n'
     outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
 
+    outstring = outstring + '# ED68 = ' + str(ed68) + '\n'
+    outstring = outstring + '# ED90 = ' + str(ed90) + '\n'
+
+    outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
+
     outstring = outstring + '# N_epoch in LC = ' + str(len(time)) + '\n'
     outstring = outstring + '# Total exp time of LC = ' + str(np.sum(exptime)) + '\n'
     outstring = outstring + '# Columns: '
 
+    if debug is True:
+        print(str(datetime.datetime.now()) + 'Getting output header')
     header = FlareStats(time, flux_gap, error, flux_model,
                         istart=istart[0], istop=istop[0],
                         ReturnHeader=True)
     outstring = outstring + '# ' + header + '\n'
+
+    if debug is True:
+        print(str(datetime.datetime.now()) + 'Getting FlareStats')
     # loop over EACH FLARE, compute stats
     for i in range(0,len(istart)):
         stats_i = FlareStats(time, flux_gap, error, flux_model,
