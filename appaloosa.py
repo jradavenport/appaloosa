@@ -535,23 +535,60 @@ def MultiFind(time, flux, error, flags):
     return
 
 
-def FakeFlareGen(time, flux, nfake=1000):
+def FakeFlares(time, flux, error, tstart, tstop,
+                 nfake=100, ampl=(1,25), dur=(3,60)):
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
     Keep track of energy in Equiv Dur
+
+    duration defined in minutes
+    amplitude defined multiples of the median error
     '''
 
     # QUESTION: how many fake flares can I inject at once?
+    # i.e. can I get away with doing fewer re-runs with more flares injected?
 
-    return #new_lc
+    std = np.median(error)
 
+    ampl_fake = (np.random.random(nfake) * (ampl[1] - ampl[0]) + ampl[0]) * std
+    dur_fake =  (np.random.random(nfake) * (dur[1] - dur[0]) + dur[0]) / 60. / 24.
 
-def FakeFlareRec():
+    t0_fake = np.zeros(nfake, dtype='float')
+    s2n_fake = np.zeros(nfake, dtype='float')
+
+    new_flux = np.copy(flux)
+
+    for k in range(nfake):
+        # generate random peak time, avoid known flares
+        isok = False
+        while isok is False:
+            # choose a random peak time
+            t0 =  np.random.choice(time)
+
+            x = np.where((t0 >= tstart) & (t0 <= tstop))[0]
+            if (len(x) < 1):
+                isok = True
+
+        t0_fake[k] = t0
+
+        # generate the fake flare
+        fl_flux = aflare1(time, t0, dur_fake[k], ampl_fake[k])
+
+        # in_fl = np.where((time >= t0-dur_fake[k]) & (time <= t0 + 3.0*dur_fake[k]))
+
+        s2n_fake[k] = np.sqrt( np.sum((fl_flux**2.0) / (std**2.0)) )
+
+        # inject flare in to light curve
+        new_flux = new_flux + fl_flux
+
+    #
+
     '''
     Re-run flare finding for data + fake flares
     Figure out completeness curve for this lightcurve vs Equiv Dur
     '''
+
     return
 
 
@@ -603,6 +640,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='', display=False, readfile=Fa
 
     # then flatten between gaps
     flux_gap = detrend.GapFlat(time, flux_qtr)
+
 
     ### Build first-pass model
     # fit sin curves
