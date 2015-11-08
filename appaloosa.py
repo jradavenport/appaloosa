@@ -645,7 +645,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         xfl = np.where((t0_fake >= time[dl[i]]) &
                        (t0_fake <= time[dr[i]]))
 
-        if len(xfl[i]) > 10:
+        if len(xfl[0]) > 10:
             rec_bin_Ni, ed_bini = np.histogram(ed_fake[xfl],
                                                weights=rec_fake[xfl],bins=nbins/2.)
             rec_bin_Di, _ = np.histogram(ed_fake[xfl], bins=nbins/2.)
