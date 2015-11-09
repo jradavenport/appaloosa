@@ -174,66 +174,56 @@ def FitSin(time, flux, error, maxnum=5, nper=20000,
     Returns
     -------
     '''
-    _, dl, dr = FindGaps(time) # find edges of time windows
-
-    # minper = 0.1 # days
-    # maxper = 30. # days
-
-    periods = np.linspace(minper, maxper, nper)
+    # periods = np.linspace(minper, maxper, nper)
 
     flux_out = np.array(flux, copy=True)
     sin_out = np.zeros_like(flux) # return the sin function!
 
-    # now loop over every chunk of data and fit N periods
-    for i in range(0, len(dl)):
-        # total baseline of time window
-        dt = max(time[dl[i]:dr[i]]) - min(time[dl[i]:dr[i]])
+    # total baseline of time window
+    dt = max(time) - min(time)
+
+    medflux = np.nanmedian(flux)
+    # ti = time[dl[i]:dr[i]]
+
+    for k in range(0, maxnum):
+        # Use Jake Vanderplas faster version!
+        pgram = LombScargleFast(fit_offset=False)
+        pgram.optimizer.set(period_range=(minper,maxper))
+        pgram = pgram.fit(time,
+                          flux_out - medflux,
+                          error)
+
+        df = (1./minper - 1./maxper) / nper
+        f0 = 1./maxper
+        pwr = pgram.score_frequency_grid(f0, df, nper)
+
+        freq = f0 + df * np.arange(nper)
+        per = 1./freq
+
+        pok = np.where((per < dt) & (per > minper))
+        pk = per[pok][np.argmax(pwr[pok])]
+        pp = np.max(pwr)
 
         if debug is True:
-            print('window (i): '+str(i)+'.  time span (dt):'+str(dt))
+            print('trial (k): '+str(k)+'.  peak period (pk):'+str(pk)+
+                  '.  peak power (pp):'+str(pp))
 
-        medflux = np.median(flux[dl[i]:dr[i]])
-        ti = time[dl[i]:dr[i]]
+        # if a period w/ enough power is detected
+        if (pp > plim):
+            # fit sin curve to window and subtract
+            p0 = [pk, 3.0 * np.nanstd(flux_out-medflux), 0.0, 0.0]
+            try:
+                pfit, pcov = curve_fit(_sinfunc, time, flux_out-medflux, p0=p0)
+            except RuntimeError:
+                pfit = [pk, 0., 0., 0.]
+                if debug is True:
+                    print('Curve_Fit no good')
 
-        for k in range(0, maxnum):
-            # Use Jake Vanderplas faster version!
-            pgram = LombScargleFast(fit_offset=False)
-            pgram.optimizer.set(period_range=(minper,maxper))
-            pgram = pgram.fit(time[dl[i]:dr[i]],
-                              flux_out[dl[i]:dr[i]] - medflux,
-                              error[dl[i]:dr[i]])
-
-            df = (1./minper - 1./maxper) / nper
-            f0 = 1./maxper
-            pwr = pgram.score_frequency_grid(f0, df, nper)
-
-            freq = f0 + df * np.arange(nper)
-            per = 1./freq
-
-            pok = np.where((per < dt) & (per > minper))
-            pk = per[pok][np.argmax(pwr[pok])]
-            pp = np.max(pwr)
-
-            if debug is True:
-                print('trial (k): '+str(k)+'.  peak period (pk):'+str(pk)+
-                      '.  peak power (pp):'+str(pp))
-
-            # if a period w/ enough power is detected
-            if (pp > plim):
-                # fit sin curve to window and subtract
-                p0 = [pk, 3.0 * np.nanstd(flux_out[dl[i]:dr[i]]-medflux), 0.0, 0.0]
-                try:
-                    pfit, pcov = curve_fit(_sinfunc, ti, flux_out[dl[i]:dr[i]]-medflux, p0=p0)
-                except RuntimeError:
-                    pfit = [pk, 0., 0., 0.]
-                    if debug is True:
-                        print('Curve_Fit no good')
-
-                flux_out[dl[i]:dr[i]] = flux_out[dl[i]:dr[i]] - _sinfunc(ti, *pfit)
-                sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + _sinfunc(ti, *pfit)
+            flux_out = flux_out - _sinfunc(time, *pfit)
+            sin_out = sin_out + _sinfunc(time, *pfit)
 
         # add the median flux for this window BACK in
-        sin_out[dl[i]:dr[i]] = sin_out[dl[i]:dr[i]] + medflux
+        sin_out = sin_out + medflux
 
     if returnmodel is True:
         return sin_out
@@ -270,8 +260,6 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     The smoothed light curve model
     '''
 
-    _, dl, dr = FindGaps(time) # find edges of time windows
-
     flux_sm = np.array(flux, copy=True)
     # time_sm = np.array(time, copy=True)
     # error_sm = np.array(error, copy=True)
@@ -279,50 +267,48 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     # for returnindx = True
     indx_out = []
 
-    for i in range(0, len(dl)):
-        # the data within each gap range
-        time_i = time[dl[i]:dr[i]]
-        flux_i = flux[dl[i]:dr[i]]
-        error_i = error[dl[i]:dr[i]]
-        indx_i = np.arange(dl[i], dr[i]) # for tracking final indx used
+    # the data within each gap range
+    time_i = time
+    flux_i = flux
+    error_i = error
+    indx_i = np.arange(len(time)) # for tracking final indx used
 
-        exptime = np.median(time_i[1:]-time_i[:-1])
-        nptsmooth = int(kernel/24.0 / exptime)
+    exptime = np.median(time_i[1:]-time_i[:-1])
+    nptsmooth = int(kernel/24.0 / exptime)
+
+    if (nptsmooth < 4):
+        nptsmooth = 4
+
+    if debug is True:
+        print('# of smoothing points: '+str(nptsmooth))
+
+    # now take N passes of rejection on it
+    for k in range(0, numpass):
+        # rolling median in this data span with the kernel size
+        flux_i_sm = rolling_median(flux_i, nptsmooth, center=True)
+        indx = np.isfinite(flux_i_sm)
+
+        diff_k = (flux_i[indx] - flux_i_sm[indx])
+        lims = np.percentile(diff_k, (pcentclip, 100-pcentclip))
+
+        # iteratively reject points
+        # keep points within sigclip (for phot errors), or
+        # within percentile clip (for scatter)
+        ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
+                           (lims[0] < diff_k) * (diff_k < lims[1]))
 
         if debug is True:
-            print('i = '+str(i))
-            print('# of smoothing points: '+str(nptsmooth))
+            print('k = '+str(k))
+            print('number of accepted points: '+str(len(ok[0])))
 
-        if (nptsmooth < 4):
-            nptsmooth = 4
+        time_i = time_i[indx][ok]
+        flux_i = flux_i[indx][ok]
+        error_i = error_i[indx][ok]
+        indx_i = indx_i[indx][ok]
 
-        # now take N passes of rejection on it
-        for k in range(0, numpass):
-            # rolling median in this data span with the kernel size
-            flux_i_sm = rolling_median(flux_i, nptsmooth, center=True)
-            indx = np.isfinite(flux_i_sm)
+    flux_sm = np.interp(time, time_i, flux_i)
 
-            diff_k = (flux_i[indx] - flux_i_sm[indx])
-            lims = np.percentile(diff_k, (pcentclip, 100-pcentclip))
-
-            # iteratively reject points
-            # keep points within sigclip (for phot errors), or
-            # within percentile clip (for scatter)
-            ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
-                               (lims[0] < diff_k) * (diff_k < lims[1]))
-
-            if debug is True:
-                print('k = '+str(k))
-                print('number of accepted points: '+str(len(ok[0])))
-
-            time_i = time_i[indx][ok]
-            flux_i = flux_i[indx][ok]
-            error_i = error_i[indx][ok]
-            indx_i = indx_i[indx][ok]
-
-        flux_sm[dl[i]:dr[i]] = np.interp(time[dl[i]:dr[i]], time_i, flux_i)
-
-        indx_out = np.append(indx_out, indx_i)
+    indx_out = indx_i
 
     if returnindx is False:
         return flux_sm

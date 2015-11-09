@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 from pandas import rolling_std
 from scipy import stats
 from scipy.optimize import curve_fit
+from scipy.signal import wiener
 try:
     import MySQLdb
     haz_mysql = True
@@ -550,7 +551,7 @@ def MultiFind(time, flux, error, flags, oldway=True):
 
 
 def FakeFlares(time, flux, error, flags, tstart, tstop,
-               nfake=1000, npass=1, objectid='',
+               nfake=100, npass=1, objectid='',
                ampl=(0.1,100), dur=(0.5,60)):
     '''
     Create nfake number of events, inject them in to data
@@ -638,27 +639,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
     ed_bin_center = (ed_bin[1:] + ed_bin[:-1])/2.
     rec_bin = rec_bin_N / rec_bin_D
 
-    # Compute the Per-Datum completeness, save with each flare
-    _, dl, dr = detrend.FindGaps(time) # find edges of time windows
-    ed68 = np.zeros(len(time)) - 99.0
-    for i in range(len(dl)):
-        xfl = np.where((t0_fake >= time[dl[i]]) &
-                       (t0_fake <= time[dr[i]-1]))
-
-        if len(xfl[0]) > 10:
-            rec_bin_Ni, ed_bini = np.histogram(ed_fake[xfl],
-                                               weights=rec_fake[xfl],bins=nbins/2.)
-            rec_bin_Di, _ = np.histogram(ed_fake[xfl], bins=nbins/2.)
-
-            ed_bin_centeri = (ed_bini[1:] + ed_bini[:-1])/2.
-            rec_bini = rec_bin_Ni / rec_bin_Di
-
-            x68 = np.where((rec_bini >= 0.68))
-            if len(x68[0])>0:
-                ed68_i = min(ed_bin_centeri[x68])
-                ed68[dl[i]:dr[i]] = ed68_i
-
-    return ed_bin_center, rec_bin, ed68
+    return ed_bin_center, rec_bin
 
 # objectid = '9726699'  # GJ 1243
 def RunLC(objectid='9726699', ftype='sap', lctype='',
@@ -702,9 +683,6 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
         flux_raw = data[:,2]
         error = data[:,3]
 
-    _,lg,rg = detrend.FindGaps(time)
-    # uQtr = np.unique(qtr)
-
     ### Basic flattening
     # flatten quarters with polymonial
     flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
@@ -712,34 +690,66 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
     # then flatten between gaps
     flux_gap = detrend.GapFlat(time, flux_qtr)
 
-    # find flares!
-    if debug is True:
-        print(    str(datetime.datetime.now()) + ' MultiFind started')
-    istart, istop, flux_model = MultiFind(time, flux_gap, error, lcflag)
+    _, dl, dr = detrend.FindGaps(time)
+    # uQtr = np.unique(qtr)
 
-    # run artificial flare test
-    medflux = np.median(flux_model)
+    istart = []
+    istop = []
+    ed68 = []
+    ed90 = []
+    flux_model = np.zeros_like(flux_gap)
 
-    if debug is True:
-        print(    str(datetime.datetime.now()) + ' FakeFlares started')
-    ed_fake, frac_rec, ed68 = FakeFlares(time, flux_gap/medflux - 1.0, error/medflux,
-                                    lcflag, time[istart], time[istop])
+    for i in range(0, len(dl)):
+        # detect flares in this gap
+        if debug is True:
+            print(i, str(datetime.datetime.now()) + ' MultiFind started')
+        istart_i, istop_i, flux_model_i = MultiFind(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]],
+                                                  error[dl[i]:dr[i]], lcflag[dl[i]:dr[i]])
 
-    # use this completeness curve to estimate 68% complete
-    x68 = np.where((frac_rec >= 0.68))
-    if len(x68[0])>0:
-        ed68T = min(ed_fake[x68])
-    else:
-        ed68T = -99
+        # run artificial flare test in this gap
+        if debug is True:
+            print(str(datetime.datetime.now()) + ' FakeFlares started')
 
-    x90 = np.where((frac_rec >= 0.90))
-    if len(x90[0])>0:
-        ed90T = min(ed_fake[x90])
-    else:
-        ed90T = -99
-    if debug is True:
-        print(str(datetime.datetime.now()) + ' ED68 = ' + str(ed68T))
-        print(str(datetime.datetime.now()) + ' ED90 = ' + str(ed90T))
+        medflux = np.nanmedian(flux_model_i) # flux needs to be normalized
+
+        ed_fake, frac_rec = FakeFlares(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]]/medflux - 1.0,
+                                       error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
+                                       time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i])
+
+        rl = np.isfinite(frac_rec)
+
+        frac_rec_sm = wiener(frac_rec[rl], 3)
+
+        # use this completeness curve to estimate 68% complete
+        x68 = np.where((frac_rec_sm >= 0.68))
+        if len(x68[0])>0:
+            ed68_i = min(ed_fake[rl][x68])
+        else:
+            ed68_i = -99
+
+        x90 = np.where((frac_rec_sm >= 0.90))
+        if len(x90[0])>0:
+            ed90_i = min(ed_fake[rl][x90])
+        else:
+            ed90_i = -99
+
+        ed68 = np.append(ed68, np.zeros(len(istart_i)) + ed68_i)
+        ed90 = np.append(ed90, np.zeros(len(istart_i)) + ed90_i)
+
+        istart = np.append(istart, istart_i + dl[i])
+        istop = np.append(istop, istop_i + dl[i])
+
+        flux_model[dl[i]:dr[i]] = flux_model_i
+
+        # look at the completeness curve
+        # plt.figure()
+        # plt.plot(ed_fake, frac_rec)
+        # plt.scatter(ed_fake[rl], frac_rec[rl])
+        # # plt.plot(ed_fake[rl], savgol_filter(frac_rec[rl], 3, 2))
+        # plt.plot(ed_fake[rl], wiener(frac_rec[rl], 3))
+        # plt.xlabel('Equiv Dur of simulated flares')
+        # plt.ylabel('Fraction Recovered')
+        # plt.show()
 
     '''
     ### MY FIRST ATTEMPT AT FLARE FINDING
@@ -761,18 +771,11 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
         plt.figure()
         plt.plot(time, flux_gap, 'k')
         # plt.plot(time, flux_model, 'green')
-        for g in lg:
+        for g in dl:
             plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
 
         plt.scatter(time[istart], flux_gap[istart], color='red', marker='o',s=40)
         plt.scatter(time[istop], flux_gap[istop], color='orange', marker='p',s=60)
-        plt.show()
-
-        # look at the completeness curve
-        plt.figure()
-        plt.plot(ed_fake, frac_rec)
-        plt.xlabel('Equiv Dur of simulated flares')
-        plt.ylabel('Fraction Recovered')
         plt.show()
 
     '''
@@ -795,15 +798,14 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
     # set this to silence bad fit warnings from polyfit
     warnings.simplefilter('ignore', np.RankWarning)
 
-
     outstring = ''
     outstring = outstring + '# Kepler-ObjectID = ' + objectid + '\n'
     now = datetime.datetime.now()
     outstring = outstring + '# Date-Run = ' + str(now) + '\n'
     outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
 
-    outstring = outstring + '# ED68 = ' + str(ed68T) + '\n'
-    outstring = outstring + '# ED90 = ' + str(ed90T) + '\n'
+    # outstring = outstring + '# ED68 = ' + str(ed68T) + '\n'
+    # outstring = outstring + '# ED90 = ' + str(ed90T) + '\n'
 
     outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
 
@@ -816,7 +818,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
     header = FlareStats(time, flux_gap, error, flux_model,
                         istart=istart[0], istop=istop[0],
                         ReturnHeader=True)
-    header = header + ', ED68i'
+    header = header + ', ED68i, ED90i '
     outstring = outstring + '# ' + header + '\n'
 
     if debug is True:
@@ -830,7 +832,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
         for k in range(1,len(stats_i)):
             outstring = outstring + ', ' + str(stats_i[k])
 
-        outstring = outstring + ', ' + str(ed68[istart[i]])
+        outstring = outstring + ', ' + str(ed68[i]) + ', ' + str(ed90[i])
         outstring = outstring + '\n'
 
     # put flare output in to a set of subdirectories.
