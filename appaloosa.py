@@ -166,7 +166,8 @@ def DetectCandidate(time, flux, error, flags, model,
                     error_cut=2, gapwindow=0.1, minsep=3,
                     returnall=False):
     '''
-    detect flare candidates using sigma threshold, toss out bad flags
+    Detect flare candidates using sigma threshold, toss out bad flags.
+    Uses very simple sigma cut to find significant points.
 
     Parameters
     ----------
@@ -219,7 +220,7 @@ def DetectCandidate(time, flux, error, flags, model,
 
 
 def FINDflare(flux, error, N1=3, N2=1, N3=3,
-              rolling_std=False, std_window=0.25):
+              avg_std=False, std_window=7, returnbinary=False):
     '''
     The algorithm for local changes due to flares defined by
     S. W. Chang et al. (2015), Eqn. 3a-d
@@ -241,23 +242,34 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
         errors corresponding to data.
     N1 : int, optional
         Coefficient from original paper (Default is 3)
+        How many times above the stddev is required.
     N2 : int, optional
         Coefficient from original paper (Default is 1)
+        How many times above the stddev and uncertainty is required
     N3 : int, optional
         Coefficient from original paper (Default is 3)
-    rolling_std : bool, optional
+        The number of consecutive points required to flag as a flare
+    avg_std : bool, optional
         Should the "sigma" in this data be computed by the median of
         the rolling_std? (Default is False)
+        (Not part of original algorithm)
     std_window : float, optional
         If rolling_std=True, how big of a window should it use?
-        (Default is 0.25)
+        (Default is 25 data points)
+        (Not part of original algorithm)
+    returnbinary : bool, optional
+        Should code return the start and stop indicies of flares (default,
+        set to False) or a binary array where 1=flares (set to True)
+        (Not part of original algorithm)
     '''
 
-    med_i = np.median(flux)
-    if rolling_std is False:
-        sig_i = np.std(flux)
+    med_i = np.nanmedian(flux)
+    if avg_std is False:
+        sig_i = np.nanstd(flux) # just the stddev of the window
     else:
-        sig_i = np.median(rolling_std(flux, std_window))
+        # take the average of the rolling stddev in the window.
+        # better for windows w/ significant starspots being removed
+        sig_i = np.nanmedian(rolling_std(flux, std_window))
 
     ca = flux - med_i
     cb = np.abs(flux - med_i) / sig_i
@@ -272,6 +284,7 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
     # Need to find cumulative number of points that pass "ctmp"
     # Count in reverse!
     ConM = np.zeros_like(flux)
+    # this requires a full pass thru the data -> bottleneck
     for k in range(2, len(flux)):
         ConM[-k] = cindx[-k] * (ConM[-(k-1)] + cindx[-k])
 
@@ -283,7 +296,16 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
     # use the value of ConM to determine how many points away stop is
     istop_i = istart_i + (ConM[istart_i] - 1)
 
-    return np.array(istart_i, dtype='int'), np.array(istop_i, dtype='int')
+    istart_i = np.array(istart_i, dtype='int')
+    istop_i = np.array(istop_i, dtype='int')
+
+    if returnbinary is False:
+        return istart_i, istop_i
+    else:
+        bin_out = np.zeros_like(flux, dtype='int')
+        for k in range(len(istart_i)):
+            bin_out[istart_i[k]:istop_i[k]+1] = 1
+        return bin_out
 
 
 def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
@@ -509,7 +531,8 @@ def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
     return pk, pp
 
 
-def MultiFind(time, flux, error, flags, oldway=True):
+def MultiFind(time, flux, error, flags, oldway=False,
+              gapwindow=0.1, minsep=3):
     '''
     this needs to be either
     1. made in to simple multi-pass cleaner,
@@ -534,19 +557,57 @@ def MultiFind(time, flux, error, flags, oldway=True):
         # the bad data points (search where bad < 1)
         bad = FlagCuts(flags, returngood=False)
 
-        # first do a pass thru w/ small box to get obvious flares
-        box1 = detrend.MultiBoxcar(time, flux, error, kernel=0.25)
-        f1 = FINDflare(time, flux - box1, error)
+        # 11111
+        # first do a pass thru w/ largebox to get obvious flares
+        flux_i = np.copy(flux)
+        sin1 = detrend.FitSin(time, flux_i, error)
+        box1 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.5)
+        flux_model = box1 + sin1
 
-        # keep only the non-flare points
+        isflare = FINDflare(time, flux_i - flux_model, error, avg_std=False, returnbinary=True)
 
-        # second pass
-        box2 = detrend.MultiBoxcar(time, flux, error, kernel=2.0)
-        sin2 = detrend.FitSin(time, flux, error)
-        f2 = FINDflare(time, flux-box2-sin2, error)
+        # keep only the non-flare points, w/ no flag problems
+        noflare = np.where((bad < 1) & (isflare < 1))
 
-        # should i use a step with rolling skew and std?
+        flux_i = np.interp(time, time[noflare], flux_i[noflare])
 
+        '''
+        # 22222
+        sin2 = detrend.FitSin(time, flux_i, error)
+        box2 = detrend.MultiBoxcar(time, flux_i - sin2, error, kernel=2.0)
+        flux_model = box2 + sin2
+
+        isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
+        noflare = np.where((bad < 1) & (isflare < 1))
+
+        flux_i = np.interp(time, time[noflare], flux_i[noflare])
+
+
+        # 33333
+        sin3 = detrend.FitSin(time, flux_i, error)
+        box3 = detrend.MultiBoxcar(time, flux_i - sin3, error, kernel=2.0)
+        flux_model = box3 + sin3
+        '''
+        
+        isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
+
+        cand1 = np.where((bad < 1) & (isflare > 0))[0]
+
+        x1 = np.where((np.abs(time[cand1]-time[-1]) < gapwindow))
+        x2 = np.where((np.abs(time[cand1]-time[0]) < gapwindow))
+        cand1 = np.delete(cand1, x1)
+        cand1 = np.delete(cand1, x2)
+
+        # print(len(cand1))
+        if (len(cand1) < 1):
+            istart = []
+            istop = []
+        else:
+            # find start and stop index, combine neighboring candidates in to same events
+            istart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
+            istop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
+
+    # print(istart, len(istart))
     return istart, istop, flux_model
 
 
@@ -641,6 +702,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 
     return ed_bin_center, rec_bin
 
+
 # objectid = '9726699'  # GJ 1243
 def RunLC(objectid='9726699', ftype='sap', lctype='',
           display=False, readfile=False, debug=False):
@@ -693,8 +755,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
     _, dl, dr = detrend.FindGaps(time)
     # uQtr = np.unique(qtr)
 
-    istart = []
-    istop = []
+    istart = np.array([], dtype='int')
+    istop = np.array([], dtype='int')
     ed68 = []
     ed90 = []
     flux_model = np.zeros_like(flux_gap)
@@ -703,6 +765,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
         # detect flares in this gap
         if debug is True:
             print(i, str(datetime.datetime.now()) + ' MultiFind started')
+
         istart_i, istop_i, flux_model_i = MultiFind(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]],
                                                   error[dl[i]:dr[i]], lcflag[dl[i]:dr[i]])
 
@@ -736,8 +799,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
         ed68 = np.append(ed68, np.zeros(len(istart_i)) + ed68_i)
         ed90 = np.append(ed90, np.zeros(len(istart_i)) + ed90_i)
 
-        istart = np.append(istart, istart_i + dl[i])
-        istop = np.append(istop, istop_i + dl[i])
+        istart = np.array(np.append(istart, istart_i + dl[i]), dtype='int')
+        istop = np.array(np.append(istop, istop_i + dl[i]), dtype='int')
 
         flux_model[dl[i]:dr[i]] = flux_model_i
 
@@ -764,6 +827,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
 
     istart, istop = DetectCandidate(time, flux_gap, error, lcflag, flux_model)
     '''
+
+    print(istart)
 
     if display is True:
         print(str(len(istart))+' flare candidates found')
