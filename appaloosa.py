@@ -27,7 +27,8 @@ except ImportError:
 
 def _chisq(data, error, model):
     '''
-    Compute the normalized chi square statistic
+    Compute the normalized chi square statistic:
+    chisq =  1 / N * SUM(i) ( (data(i) - model(i))/error(i) )^2
     '''
     return np.sum( ((data - model) / error)**2.0 ) / data.size
 
@@ -588,7 +589,7 @@ def MultiFind(time, flux, error, flags, oldway=False,
         box3 = detrend.MultiBoxcar(time, flux_i - sin3, error, kernel=2.0)
         flux_model = box3 + sin3
         '''
-        
+
         isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
 
         cand1 = np.where((bad < 1) & (isflare > 0))[0]
