@@ -565,7 +565,7 @@ def MultiFind(time, flux, error, flags, oldway=False,
         box1 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.5)
         flux_model = box1 + sin1
 
-        isflare = FINDflare(time, flux_i - flux_model, error, avg_std=False, returnbinary=True)
+        isflare = FINDflare(time, flux_i - flux_model, error, avg_std=True, returnbinary=True)
 
         # keep only the non-flare points, w/ no flag problems
         noflare = np.where((bad < 1) & (isflare < 1))
@@ -915,6 +915,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
     fout = open(outdir + objectid + '.flare', 'w')
     fout.write(outstring)
     fout.close()
+
+    return
 
 # let this file be called from the terminal directly. e.g.:
 # $python appaloosa.py 12345678

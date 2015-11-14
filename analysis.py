@@ -8,10 +8,9 @@ Routines to do analysis on the appaloosa flare finding runs. Including
 
 import numpy as np
 import matplotlib.pyplot as plt
-# import appaloosa
 from scipy.stats import binned_statistic_2d
 from os.path import expanduser
-
+import appaloosa
 
 def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
     '''
@@ -56,8 +55,8 @@ def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
         # find any appaloosa flares that overlap the FBEYE start/stop times
         # 4 cases to catch: left/right overlaps, totally within, totally without
         x_ap = np.where(((apdata[0,:] <= fbdata[2,i]) & (apdata[1,:] >= fbdata[3,i])) |
-                        ((apdata[0,:] > fbdata[2,i]) & (apdata[0,:] < fbdata[3,i])) |
-                        ((apdata[1,:] > fbdata[2,i]) & (apdata[1,:] < fbdata[3,i]))
+                        ((apdata[0,:] >= fbdata[2,i]) & (apdata[0,:] <= fbdata[3,i])) |
+                        ((apdata[1,:] >= fbdata[2,i]) & (apdata[1,:] <= fbdata[3,i]))
                         )
 
 
@@ -315,6 +314,62 @@ def compare_2_lit(outfile='plotdata_v2.csv'):
 
     return
 
+
+def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
+    # run data thru the normal appaloosa flare-finding methodology
+    appaloosa.RunLC(objectid, display=False, readfile=True)
+
+    apfile = 'aprun/' + objectid[0:3] + '/' + objectid + '.flare'
+    apdata = np.loadtxt(apfile, delimiter=',', dtype='float',
+                        comments='#',skiprows=4)
+
+    fbdata = np.loadtxt(fbeyefile, comments='#', dtype='float')
+    '''
+    t_start, t_stop, t_peak, amplitude, FWHM,
+    duration, t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
+    flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur
+    '''
+
+    time = np.loadtxt(objectid + '.lc.gz', usecols=(1,), unpack=True)
+    fbtime = np.zeros_like(time)
+    aptime = np.zeros_like(time)
+
+    for k in range(0,len(apdata[0,:])):
+        x = np.where((time >= apdata[0,k]) & (time <= apdata[1,k]))
+        aptime[x] = 1
+
+    for k in range(0,len(fbdata[0,:])):
+        x = np.where((time >= fbdata[0,k]) & (time <= fbdata[1,k]))
+        fbtime[x] = 1
+
+    # 4 things to measure:
+    # num flares recovered / num in FBEYE
+    # num time points recovered / time in FBEYE
+    # % of FBEYE flare time recovered (time overlap)
+    # % of specific FBEYE flares recovered at all (any overlap)
+
+
+    n1 = float(len(apdata[0,:])) / float(len(fbdata[0,:]))
+    n2 = float(np.sum(aptime)) / float(np.sum(fbtime))
+
+    n3 = float(np.sum((fbtime == 1) & (aptime == 1))) / float(np.sum(fbtime))
+    n4_i = np.zeros_like(fbdata[0,:])
+
+
+    for i in range(0, len(fbdata[0,:])):
+
+        # find ANY overlap
+        x_any = np.where(((apdata[0,:] <= fbdata[2,i]) & (apdata[1,:] >= fbdata[3,i])) |
+                         ((apdata[0,:] >= fbdata[2,i]) & (apdata[0,:] <= fbdata[3,i])) |
+                         ((apdata[1,:] >= fbdata[2,i]) & (apdata[1,:] <= fbdata[3,i]))
+                         )
+        if (len(x_any[0]) > 0):
+            n4_i[i] = 1
+
+    n4 = float(np.sum(n4_i)) / float(len(fbdata[0,:]))
+
+
+    return (n1, n2, n3, n4)
 
 
 '''
