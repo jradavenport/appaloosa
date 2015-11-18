@@ -3,7 +3,9 @@ Clumsy tests I am writing to help evaluate what is going on in each method.
 '''
 
 import appaloosa.appaloosa as ap
+import appaloosa.analysis as apn
 import numpy as np
+import datetime
 import matplotlib.pyplot as plt
 
 def _mockdata(baseline=1e5, sigma=10,
@@ -54,5 +56,15 @@ def TestMultiFind():
     return (c1, c2, c3)
 
 if __name__ == "__main__":
+    print(str(datetime.datetime.now()))
+    print("TESTING MOCK DATA")
     rec = TestMultiFind()
     print(rec)
+
+    print(str(datetime.datetime.now()))
+    print("RUNNING GJ1243 BENCHMARK")
+    rec2 = apn.benchmark()
+    print(rec2)
+
+    print("FINISHED TESTING")
+    print(str(datetime.datetime.now()))

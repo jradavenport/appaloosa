@@ -377,4 +377,5 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
   $ python analysis.py
 '''
 if __name__ == "__main__":
-    k2_mtg_plots()
+    import sys
+    print(benchmark(objectid=sys.argv[1], fbeyefile=sys.argv[2]))

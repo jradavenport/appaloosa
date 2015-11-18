@@ -532,7 +532,7 @@ def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
     return pk, pp
 
 
-def MultiFind(time, flux, error, flags, oldway=False,
+def MultiFind(time, flux, error, flags, #oldway=False,
               gapwindow=0.1, minsep=3):
     '''
     this needs to be either
@@ -541,6 +541,7 @@ def MultiFind(time, flux, error, flags, oldway=False,
     3. folded back in to main code
     '''
 
+    '''
     if oldway is True:
         ### MY FIRST ATTEMPT AT FLARE FINDING
         # fit sin curves
@@ -555,57 +556,58 @@ def MultiFind(time, flux, error, flags, oldway=False,
         istart, istop = DetectCandidate(time, flux, error, flags, flux_model)
 
     else:
-        # the bad data points (search where bad < 1)
-        bad = FlagCuts(flags, returngood=False)
+    '''
+    # the bad data points (search where bad < 1)
+    bad = FlagCuts(flags, returngood=False)
 
-        # 11111
-        # first do a pass thru w/ largebox to get obvious flares
-        flux_i = np.copy(flux)
-        sin1 = detrend.FitSin(time, flux_i, error)
-        box1 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.5)
-        flux_model = box1 + sin1
+    # 11111
+    # first do a pass thru w/ largebox to get obvious flares
+    flux_i = np.copy(flux)
+    sin1 = detrend.FitSin(time, flux_i, error)
+    box1 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.5)
+    flux_model = box1 + sin1
 
-        isflare = FINDflare(time, flux_i - flux_model, error, avg_std=True, returnbinary=True)
+    isflare = FINDflare(time, flux_i - flux_model, error, avg_std=True, returnbinary=True)
 
-        # keep only the non-flare points, w/ no flag problems
-        noflare = np.where((bad < 1) & (isflare < 1))
+    # keep only the non-flare points, w/ no flag problems
+    noflare = np.where((bad < 1) & (isflare < 1))
 
-        flux_i = np.interp(time, time[noflare], flux_i[noflare])
-
-
-        # 22222
-        sin2 = detrend.FitSin(time, flux_i, error)
-        box2 = detrend.MultiBoxcar(time, flux_i - sin2, error, kernel=2.0)
-        flux_model = box2 + sin2
-
-        isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
-        noflare = np.where((bad < 1) & (isflare < 1))
-
-        flux_i = np.interp(time, time[noflare], flux_i[noflare])
+    flux_i = np.interp(time, time[noflare], flux_i[noflare])
 
 
-        # 33333
-        sin3 = detrend.FitSin(time, flux_i, error)
-        box3 = detrend.MultiBoxcar(time, flux_i - sin3, error, kernel=2.0)
-        flux_model = box3 + sin3
+    # 22222
+    sin2 = detrend.FitSin(time, flux_i, error)
+    box2 = detrend.MultiBoxcar(time, flux_i - sin2, error, kernel=2.0)
+    flux_model = box2 + sin2
 
-        isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
+    isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
+    noflare = np.where((bad < 1) & (isflare < 1))
 
-        cand1 = np.where((bad < 1) & (isflare > 0))[0]
+    flux_i = np.interp(time, time[noflare], flux_i[noflare])
 
-        x1 = np.where((np.abs(time[cand1]-time[-1]) < gapwindow))
-        x2 = np.where((np.abs(time[cand1]-time[0]) < gapwindow))
-        cand1 = np.delete(cand1, x1)
-        cand1 = np.delete(cand1, x2)
 
-        # print(len(cand1))
-        if (len(cand1) < 1):
-            istart = []
-            istop = []
-        else:
-            # find start and stop index, combine neighboring candidates in to same events
-            istart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
-            istop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
+    # 33333
+    sin3 = detrend.FitSin(time, flux_i, error)
+    box3 = detrend.MultiBoxcar(time, flux_i - sin3, error, kernel=2.0)
+    flux_model = box3 + sin3
+
+    isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
+
+    cand1 = np.where((bad < 1) & (isflare > 0))[0]
+
+    x1 = np.where((np.abs(time[cand1]-time[-1]) < gapwindow))
+    x2 = np.where((np.abs(time[cand1]-time[0]) < gapwindow))
+    cand1 = np.delete(cand1, x1)
+    cand1 = np.delete(cand1, x2)
+
+    # print(len(cand1))
+    if (len(cand1) < 1):
+        istart = []
+        istop = []
+    else:
+        # find start and stop index, combine neighboring candidates in to same events
+        istart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
+        istop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
 
     # print(istart, len(istart))
     return istart, istop, flux_model
