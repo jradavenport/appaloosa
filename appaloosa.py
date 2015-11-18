@@ -572,7 +572,7 @@ def MultiFind(time, flux, error, flags, oldway=False,
 
         flux_i = np.interp(time, time[noflare], flux_i[noflare])
 
-        '''
+
         # 22222
         sin2 = detrend.FitSin(time, flux_i, error)
         box2 = detrend.MultiBoxcar(time, flux_i - sin2, error, kernel=2.0)
@@ -588,7 +588,6 @@ def MultiFind(time, flux, error, flags, oldway=False,
         sin3 = detrend.FitSin(time, flux_i, error)
         box3 = detrend.MultiBoxcar(time, flux_i - sin3, error, kernel=2.0)
         flux_model = box3 + sin3
-        '''
 
         isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
 

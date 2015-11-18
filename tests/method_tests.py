@@ -25,7 +25,7 @@ def TestMultiFind():
     # plt.plot(time, flux)
     # plt.show()
 
-    istart, istop, flux_model = ap.MultiFind(time, flux, error, flags, oldway=False)
+    istart, istop, flux_model = ap.MultiFind(time, flux, error, flags)
 
 
     if (len(istart) != 0):
@@ -52,3 +52,7 @@ def TestMultiFind():
 
 
     return (c1, c2, c3)
+
+if __name__ == "__main__":
+    rec = TestMultiFind()
+    print(rec)
