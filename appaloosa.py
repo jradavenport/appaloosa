@@ -560,6 +560,15 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     # the bad data points (search where bad < 1)
     bad = FlagCuts(flags, returngood=False)
 
+
+    # just use the multi-pass boxcar
+    flux_model1 = detrend.MultiBoxcar(time, flux, error, kernel=0.2)
+    flux_model2 = detrend.MultiBoxcar(time, flux, error, kernel=2.0)
+
+    flux_model = (flux_model1 + flux_model2) / 2.
+
+
+    '''
     # 11111
     # first do a pass thru w/ largebox to get obvious flares
     flux_i = np.copy(flux)
@@ -573,8 +582,10 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     noflare = np.where((bad < 1) & (isflare < 1))
 
     flux_i = np.interp(time, time[noflare], flux_i[noflare])
+    '''
 
 
+    '''
     # 22222
     sin2 = detrend.FitSin(time, flux_i, error)
     box2 = detrend.MultiBoxcar(time, flux_i - sin2, error, kernel=2.0)
@@ -590,6 +601,7 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     sin3 = detrend.FitSin(time, flux_i, error)
     box3 = detrend.MultiBoxcar(time, flux_i - sin3, error, kernel=2.0)
     flux_model = box3 + sin3
+    '''
 
     isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
 
@@ -608,6 +620,13 @@ def MultiFind(time, flux, error, flags, #oldway=False,
         # find start and stop index, combine neighboring candidates in to same events
         istart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
         istop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
+
+
+    plt.figure()
+    plt.scatter(time, flux)
+    plt.plot(time,flux_model)
+    plt.scatter(time[cand1], flux[cand1], c='red')
+    plt.show()
 
     # print(istart, len(istart))
     return istart, istop, flux_model
@@ -639,7 +658,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
     s2n_fake = np.zeros(nfake, dtype='float')
     ed_fake = np.zeros(nfake, dtype='float')
 
-    new_flux = np.copy(flux)
+    new_flux = np.array(flux, copy=True)
 
     for k in range(nfake):
         # generate random peak time, avoid known flares
@@ -707,7 +726,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 
 # objectid = '9726699'  # GJ 1243
 def RunLC(objectid='9726699', ftype='sap', lctype='',
-          display=False, readfile=False, debug=False):
+          display=False, readfile=False, debug=False, dofake=True):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -775,28 +794,34 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
         if debug is True:
             print(str(datetime.datetime.now()) + ' FakeFlares started')
 
-        medflux = np.nanmedian(flux_model_i) # flux needs to be normalized
+        if dofake is True:
+            medflux = np.nanmedian(flux_model_i) # flux needs to be normalized
 
-        ed_fake, frac_rec = FakeFlares(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]]/medflux - 1.0,
-                                       error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
-                                       time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i])
+            ed_fake, frac_rec = FakeFlares(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]]/medflux - 1.0,
+                                           error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
+                                           time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i])
 
-        rl = np.isfinite(frac_rec)
+            rl = np.isfinite(frac_rec)
 
-        frac_rec_sm = wiener(frac_rec[rl], 3)
+            frac_rec_sm = wiener(frac_rec[rl], 3)
 
-        # use this completeness curve to estimate 68% complete
-        x68 = np.where((frac_rec_sm >= 0.68))
-        if len(x68[0])>0:
-            ed68_i = min(ed_fake[rl][x68])
+            # use this completeness curve to estimate 68% complete
+            x68 = np.where((frac_rec_sm >= 0.68))
+            if len(x68[0])>0:
+                ed68_i = min(ed_fake[rl][x68])
+            else:
+                ed68_i = -99
+
+            x90 = np.where((frac_rec_sm >= 0.90))
+            if len(x90[0])>0:
+                ed90_i = min(ed_fake[rl][x90])
+            else:
+                ed90_i = -99
+
         else:
-            ed68_i = -99
-
-        x90 = np.where((frac_rec_sm >= 0.90))
-        if len(x90[0])>0:
-            ed90_i = min(ed_fake[rl][x90])
-        else:
-            ed90_i = -99
+            # for speed you can skip the fake-flare tests
+            ed68_i = -199
+            ed90_i = -199
 
         ed68 = np.append(ed68, np.zeros(len(istart_i)) + ed68_i)
         ed90 = np.append(ed90, np.zeros(len(istart_i)) + ed90_i)
@@ -830,7 +855,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
     istart, istop = DetectCandidate(time, flux_gap, error, lcflag, flux_model)
     '''
 
-    print(istart)
+    # print(istart)
 
     if display is True:
         print(str(len(istart))+' flare candidates found')

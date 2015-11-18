@@ -6,6 +6,7 @@ import appaloosa.appaloosa as ap
 import appaloosa.analysis as apn
 import numpy as np
 import datetime
+import warnings
 import matplotlib.pyplot as plt
 
 def _mockdata(baseline=1e5, sigma=10,
@@ -21,6 +22,10 @@ def _mockdata(baseline=1e5, sigma=10,
 
 
 def TestMultiFind():
+
+    # set this to silence bad fit warnings from polyfit
+    warnings.simplefilter('ignore', np.RankWarning)
+
     time, flux, error, flags = _mockdata()
 
     # plt.figure()
