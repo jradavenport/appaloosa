@@ -316,6 +316,7 @@ def compare_2_lit(outfile='plotdata_v2.csv'):
 
 
 def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
+
     # run data thru the normal appaloosa flare-finding methodology
     appaloosa.RunLC(objectid, display=False, readfile=True)
 
@@ -334,12 +335,12 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
     fbtime = np.zeros_like(time)
     aptime = np.zeros_like(time)
 
-    for k in range(0,len(apdata[0,:])):
-        x = np.where((time >= apdata[0,k]) & (time <= apdata[1,k]))
+    for k in range(0,len(apdata[:,0])):
+        x = np.where((time >= apdata[k,0]) & (time <= apdata[k,1]))
         aptime[x] = 1
 
-    for k in range(0,len(fbdata[0,:])):
-        x = np.where((time >= fbdata[0,k]) & (time <= fbdata[1,k]))
+    for k in range(0,len(fbdata[:,0])):
+        x = np.where((time >= fbdata[k,0]) & (time <= fbdata[k,1]))
         fbtime[x] = 1
 
     # 4 things to measure:
@@ -349,27 +350,27 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
     # % of specific FBEYE flares recovered at all (any overlap)
 
 
-    n1 = float(len(apdata[0,:])) / float(len(fbdata[0,:]))
+    n1 = float(len(apdata[:,0])) / float(len(fbdata[:,0]))
     n2 = float(np.sum(aptime)) / float(np.sum(fbtime))
 
-    n3 = float(np.sum((fbtime == 1) & (aptime == 1))) / float(np.sum(fbtime))
-    n4_i = np.zeros_like(fbdata[0,:])
+    n3 = float(np.sum((fbtime == 1) & (aptime == 1))) / float(np.sum(fbtime == 1))
+    n4_i = np.zeros_like(fbdata[:,0])
 
 
-    for i in range(0, len(fbdata[0,:])):
+    for i in range(0, len(fbdata[:,0])):
 
         # find ANY overlap
-        x_any = np.where(((apdata[0,:] <= fbdata[2,i]) & (apdata[1,:] >= fbdata[3,i])) |
-                         ((apdata[0,:] >= fbdata[2,i]) & (apdata[0,:] <= fbdata[3,i])) |
-                         ((apdata[1,:] >= fbdata[2,i]) & (apdata[1,:] <= fbdata[3,i]))
+        x_any = np.where(((apdata[:,0] <= fbdata[i,2]) & (apdata[:,1] >= fbdata[i,3])) |
+                         ((apdata[:,0] >= fbdata[i,2]) & (apdata[:,0] <= fbdata[i,3])) |
+                         ((apdata[:,1] >= fbdata[i,2]) & (apdata[:,1] <= fbdata[i,3]))
                          )
         if (len(x_any[0]) > 0):
             n4_i[i] = 1
 
-    n4 = float(np.sum(n4_i)) / float(len(fbdata[0,:]))
+    n4 = float(np.sum(n4_i)) / float(len(fbdata[:,0]))
 
 
-    return (n1, n2, n3, n4)
+    return (len(apdata[:,0]), len(fbdata[:,0]), n1, n2, n3, n4)
 
 
 '''
