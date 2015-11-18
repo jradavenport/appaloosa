@@ -180,7 +180,7 @@ def FitSin(time, flux, error, maxnum=5, nper=20000,
     sin_out = np.zeros_like(flux) # return the sin function!
 
     # total baseline of time window
-    dt = max(time) - min(time)
+    dt = np.nanmax(time) - np.nanmin(time)
 
     medflux = np.nanmedian(flux)
     # ti = time[dl[i]:dr[i]]
@@ -260,12 +260,12 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     The smoothed light curve model
     '''
 
-    flux_sm = np.array(flux, copy=True)
+    # flux_sm = np.array(flux, copy=True)
     # time_sm = np.array(time, copy=True)
     # error_sm = np.array(error, copy=True)
-
+    #
     # for returnindx = True
-    indx_out = []
+    # indx_out = []
 
     # the data within each gap range
     time_i = time
@@ -273,7 +273,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     error_i = error
     indx_i = np.arange(len(time)) # for tracking final indx used
 
-    exptime = np.median(time_i[1:]-time_i[:-1])
+    exptime = np.nanmedian(time_i[1:]-time_i[:-1])
     nptsmooth = int(kernel/24.0 / exptime)
 
     if (nptsmooth < 4):
@@ -288,23 +288,24 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
         flux_i_sm = rolling_median(flux_i, nptsmooth, center=True)
         indx = np.isfinite(flux_i_sm)
 
-        diff_k = (flux_i[indx] - flux_i_sm[indx])
-        lims = np.percentile(diff_k, (pcentclip, 100-pcentclip))
+        if (sum(indx) > 1):
+            diff_k = (flux_i[indx] - flux_i_sm[indx])
+            lims = np.nanpercentile(diff_k, (pcentclip, 100-pcentclip))
 
-        # iteratively reject points
-        # keep points within sigclip (for phot errors), or
-        # within percentile clip (for scatter)
-        ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
-                           (lims[0] < diff_k) * (diff_k < lims[1]))
+            # iteratively reject points
+            # keep points within sigclip (for phot errors), or
+            # within percentile clip (for scatter)
+            ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
+                               (lims[0] < diff_k) * (diff_k < lims[1]))
 
-        if debug is True:
-            print('k = '+str(k))
-            print('number of accepted points: '+str(len(ok[0])))
+            if debug is True:
+                print('k = '+str(k))
+                print('number of accepted points: '+str(len(ok[0])))
 
-        time_i = time_i[indx][ok]
-        flux_i = flux_i[indx][ok]
-        error_i = error_i[indx][ok]
-        indx_i = indx_i[indx][ok]
+            time_i = time_i[indx][ok]
+            flux_i = flux_i[indx][ok]
+            error_i = error_i[indx][ok]
+            indx_i = indx_i[indx][ok]
 
     flux_sm = np.interp(time, time_i, flux_i)
 

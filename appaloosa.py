@@ -768,7 +768,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
             print(i, str(datetime.datetime.now()) + ' MultiFind started')
 
         istart_i, istop_i, flux_model_i = MultiFind(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]],
-                                                  error[dl[i]:dr[i]], lcflag[dl[i]:dr[i]])
+                                                    error[dl[i]:dr[i]], lcflag[dl[i]:dr[i]])
 
         # run artificial flare test in this gap
         if debug is True:
