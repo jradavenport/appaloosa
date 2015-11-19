@@ -3,6 +3,7 @@ Clumsy tests I am writing to help evaluate what is going on in each method.
 '''
 
 import appaloosa as ap
+from analysis import benchmark
 from aflare import aflare1
 import numpy as np
 import datetime
@@ -88,12 +89,16 @@ def TestFINDflare():
     ####
     # TEST W/ STEP FUNCTION FLARE
 
-    time = np.arange(25)
+    time = np.arange(40)
     flux = np.ones_like(time)
-    fl1 = np.array([0,0,0,0,0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0]) * 10.
+    fl1 = np.array([0,0,0,0,0,0,0,0,0,0,
+                    1,1,1,1,0,0,0,0,0,0,
+                    0,0,0,0,0,0,0,0,0,0,
+                    0,0,0,0,0,0,0,0,0,0])
     error = np.ones_like(time) * 1e-5
 
-    istart, istop = ap.FINDflare(flux + fl1, error, debug=True)
+    print(np.std(flux+fl1))
+    istart, istop = ap.FINDflare(flux + fl1, error, debug=False)
 
     if (len(istart) != 1):
         c4 = False
@@ -125,14 +130,14 @@ def TestFINDflare():
 
 
 if __name__ == "__main__":
-    # print(str(datetime.datetime.now()))
-    # rec = TestMultiFind()
-    # print(rec)
-    #
-    # print(str(datetime.datetime.now()))
-    # print("RUNNING GJ1243 BENCHMARK")
-    # rec2 = apn.benchmark()
-    # print(rec2)
+    print(str(datetime.datetime.now()))
+    rec = TestMultiFind()
+    print(rec)
+
+    print(str(datetime.datetime.now()))
+    print("RUNNING GJ1243 BENCHMARK")
+    rec2 = benchmark()
+    print(rec2)
 
     print(str(datetime.datetime.now()))
     rec3 = TestFINDflare()

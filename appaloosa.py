@@ -286,9 +286,9 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
 
     if debug is True:
         print("DEBUG: ")
-        print(ca)
-        print(cb)
-        print(cc)
+        print(sum(ca>0))
+        print(sum(cb>N1))
+        print(sum(cc>N2))
 
     # pass cuts from Eqns 3a,b,c
     ctmp = np.where((ca > 0) & (cb > N1) & (cc > N2))
@@ -547,7 +547,7 @@ def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
 
 
 def MultiFind(time, flux, error, flags, #oldway=False,
-              gapwindow=0.1, minsep=3):
+              gapwindow=0.1, minsep=3, debug=False):
     '''
     this needs to be either
     1. made in to simple multi-pass cleaner,
@@ -590,7 +590,7 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     box1 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.5)
     flux_model = box1 + sin1
 
-    isflare = FINDflare(time, flux_i - flux_model, error, avg_std=True, returnbinary=True)
+    isflare = FINDflare(flux_i - flux_model, error, avg_std=True, returnbinary=True)
 
     # keep only the non-flare points, w/ no flag problems
     noflare = np.where((bad < 1) & (isflare < 1))
@@ -606,7 +606,7 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     box2 = detrend.MultiBoxcar(time, flux_i - sin2, error, kernel=2.0)
     flux_model = box2 + sin2
 
-    isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
+    isflare = FINDflare(flux-flux_model, error, avg_std=True, returnbinary=True)
     noflare = np.where((bad < 1) & (isflare < 1))
 
     flux_i = np.interp(time, time[noflare], flux_i[noflare])
@@ -619,7 +619,7 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     '''
 
     # FINDflare needs tests!
-    isflare = FINDflare(time, flux-flux_model, error, avg_std=False, returnbinary=True)
+    isflare = FINDflare(flux-flux_model, error, avg_std=True, returnbinary=True)
 
     cand1 = np.where((bad < 1) & (isflare > 0))[0]
 
@@ -637,12 +637,12 @@ def MultiFind(time, flux, error, flags, #oldway=False,
         istart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
         istop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
 
-
-    plt.figure()
-    plt.scatter(time, flux)
-    plt.plot(time,flux_model, c='black')
-    plt.scatter(time[cand1], flux[cand1], c='red')
-    plt.show()
+    if debug is True:
+        plt.figure()
+        plt.scatter(time, flux)
+        plt.plot(time,flux_model, c='black')
+        plt.scatter(time[cand1], flux[cand1], c='red')
+        plt.show()
 
     # print(istart, len(istart))
     return istart, istop, flux_model
