@@ -363,6 +363,7 @@ def EquivDur(time, flux):
 
     Output has units of SECONDS
     '''
+
     p = np.trapz(flux, x=(time * 60.0 * 60.0 * 24.0))
     return p
 
@@ -649,8 +650,8 @@ def MultiFind(time, flux, error, flags, #oldway=False,
 
 
 def FakeFlares(time, flux, error, flags, tstart, tstop,
-               nfake=100, npass=1, objectid='',
-               ampl=(0.1,100), dur=(0.5,60)):
+               nfake=100, npass=1, ampl=(0.1,100), dur=(0.5,60),
+               objectid='9726699', savefile=False):
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
@@ -722,8 +723,6 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         if (len(rec[0]) > 0):
             rec_fake[k] = 1
 
-    # Compute the TOTAL completeness curve, save in flare header file
-
     # nbins = int(nfake/10.)
     # if nbins < 10:
     #     nbins = 10
@@ -736,6 +735,43 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 
     ed_bin_center = (ed_bin[1:] + ed_bin[:-1])/2.
     rec_bin = rec_bin_N / rec_bin_D
+
+    if savefile is True:
+        # look to see if output folder exists
+        fldr = objectid[0:3]
+        outdir = 'aprun/' + fldr + '/'
+        if not os.path.isdir(outdir):
+            try:
+                os.makedirs(outdir)
+            except OSError:
+                pass
+
+        rl = np.isfinite(rec_bin)
+        frac_rec_sm = wiener(rec_bin[rl], 3)
+
+        # use this completeness curve to estimate 68% complete
+        x68 = np.where((frac_rec_sm >= 0.68))
+        if len(x68[0])>0:
+            ed68_i = min(ed_bin_center[rl][x68])
+        else:
+            ed68_i = -99
+
+        x90 = np.where((frac_rec_sm >= 0.90))
+        if len(x90[0])>0:
+            ed90_i = min(ed_bin_center[rl][x90])
+        else:
+            ed90_i = -99
+
+        outstring = str(min(time)) + ', ' + str(max(time)) + ', ' + str(std) + \
+                    ', ' + str(nfake) + ', ' + str(ampl[0]) + ', ' + str(ampl[1]) + \
+                    ', ' + str(dur[0]) + ', ' + str(dur[1]) + \
+                    ', ' + str(ed68_i) + ', ' + str(ed90_i) + '\n'
+
+        outfile = objectid + '.fake'
+        # use mode "a+", append or create
+        ff = open(outdir + outfile, 'a+')
+        ff.write(outstring)
+        ff.close()
 
     return ed_bin_center, rec_bin
 
@@ -818,7 +854,6 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
                                            time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i])
 
             rl = np.isfinite(frac_rec)
-
             frac_rec_sm = wiener(frac_rec[rl], 3)
 
             # use this completeness curve to estimate 68% complete
@@ -954,11 +989,14 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
             pass
 
     # open the output file to store data on every flare recovered
-    fout = open(outdir + objectid + '.flare', 'w')
+    outfile = objectid + '.flare'
+
+    fout = open(outdir + outfile, 'w')
     fout.write(outstring)
     fout.close()
 
     return
+
 
 # let this file be called from the terminal directly. e.g.:
 # $python appaloosa.py 12345678
