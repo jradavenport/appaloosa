@@ -221,7 +221,8 @@ def DetectCandidate(time, flux, error, flags, model,
 
 
 def FINDflare(flux, error, N1=3, N2=1, N3=3,
-              avg_std=False, std_window=7, returnbinary=False):
+              avg_std=False, std_window=7,
+              returnbinary=False, debug=False):
     '''
     The algorithm for local changes due to flares defined by
     S. W. Chang et al. (2015), Eqn. 3a-d
@@ -265,6 +266,10 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
     '''
 
     med_i = np.nanmedian(flux)
+
+    if debug is True:
+        print("DEBUG: med_i = " + str(med_i))
+
     if avg_std is False:
         sig_i = np.nanstd(flux) # just the stddev of the window
     else:
@@ -272,9 +277,18 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
         # better for windows w/ significant starspots being removed
         sig_i = np.nanmedian(rolling_std(flux, std_window))
 
+    if debug is True:
+        print("DEBUG: sig_i = " + str(sig_i))
+
     ca = flux - med_i
     cb = np.abs(flux - med_i) / sig_i
     cc = np.abs(flux - med_i - error) / sig_i
+
+    if debug is True:
+        print("DEBUG: ")
+        print(ca)
+        print(cb)
+        print(cc)
 
     # pass cuts from Eqns 3a,b,c
     ctmp = np.where((ca > 0) & (cb > N1) & (cc > N2))
@@ -561,7 +575,7 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     bad = FlagCuts(flags, returngood=False)
 
 
-    # just use the multi-pass boxcar
+    # just use the multi-pass boxcar twice and average. Dumb but OK to 1st order
     flux_model1 = detrend.MultiBoxcar(time, flux, error, kernel=0.2)
     flux_model2 = detrend.MultiBoxcar(time, flux, error, kernel=2.0)
 
@@ -584,6 +598,7 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     flux_i = np.interp(time, time[noflare], flux_i[noflare])
     '''
 
+    # and even more...
 
     '''
     # 22222
@@ -603,7 +618,8 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     flux_model = box3 + sin3
     '''
 
-    isflare = FINDflare(time, flux-flux_model, error, avg_std=True, returnbinary=True)
+    # FINDflare needs tests!
+    isflare = FINDflare(time, flux-flux_model, error, avg_std=False, returnbinary=True)
 
     cand1 = np.where((bad < 1) & (isflare > 0))[0]
 
@@ -624,7 +640,7 @@ def MultiFind(time, flux, error, flags, #oldway=False,
 
     plt.figure()
     plt.scatter(time, flux)
-    plt.plot(time,flux_model)
+    plt.plot(time,flux_model, c='black')
     plt.scatter(time[cand1], flux[cand1], c='red')
     plt.show()
 
