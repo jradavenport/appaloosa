@@ -851,7 +851,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
 
             ed_fake, frac_rec = FakeFlares(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]]/medflux - 1.0,
                                            error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
-                                           time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i])
+                                           time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i],
+                                           savefile=True, objectid=objectid)
 
             rl = np.isfinite(frac_rec)
             frac_rec_sm = wiener(frac_rec[rl], 3)
