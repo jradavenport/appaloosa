@@ -8,6 +8,8 @@ from scipy.optimize import curve_fit
 from gatspy.periodic import LombScargleFast
 import pywt
 from scipy import signal
+from scipy.interpolate import LSQUnivariateSpline, UnivariateSpline
+
 
 
 def rolling_poly(time, flux, error, order=3, window=0.5):
@@ -153,7 +155,7 @@ def _sinfunc(t, per, amp, t0, yoff):
 
 
 def FitSin(time, flux, error, maxnum=5, nper=20000,
-           minper=0.1, maxper=30.0, plim=0.1,
+           minper=0.1, maxper=30.0, plim=0.25,
            returnmodel=True, debug=False):
     '''
     Use Lomb Scargle to find periods, fit sins, remove, repeat.
@@ -315,6 +317,23 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
         return flux_sm
     else:
         return np.array(indx_out, dtype='int')
+
+
+def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3):
+
+    weight = 1. / (error**2.0)
+
+    knots = np.arange(min(time) + ksep, max(time) - ksep, ksep)
+
+    for k in range(numpass):
+        spl = LSQUnivariateSpline(time, flux, knots, w=weight, k=order)
+        # spl = UnivariateSpline(time, flux, w=weight, k=order, s=1)
+
+        chisq = ((flux - spl(time))**2.) / (error**2.0)
+
+        weight = Q / ((error**2.0) * (chisq + Q))
+
+    return spl(time)
 
 
 def WaveletSmooth(time, flux, threshold=1, wavelet='db6', all=False):

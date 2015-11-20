@@ -25,7 +25,7 @@ except ImportError:
     haz_mysql = False
 
 
-def _chisq(data, error, model):
+def chisq(data, error, model):
     '''
     Compute the normalized chi square statistic:
     chisq =  1 / N * SUM(i) ( (data(i) - model(i))/error(i) )^2
@@ -467,7 +467,7 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
         popt1 = np.array([-99., -99., -99.])
 
     # flare_chisq = total( flareflux - modelflux)**2.  / total(error)**2
-    flare_chisq = _chisq(flareflux, flareerror, modelflux)
+    flare_chisq = chisq(flareflux, flareerror, modelflux)
 
     # measure KS stats of flare versus model
     ks_d, ks_p = stats.ks_2samp(flareflux, modelflux)
@@ -547,7 +547,7 @@ def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
     return pk, pp
 
 
-def MultiFind(time, flux, error, flags, mode=2,
+def MultiFind(time, flux, error, flags, mode=3,
               gapwindow=0.1, minsep=3, debug=False):
     '''
     this needs to be either
@@ -578,49 +578,26 @@ def MultiFind(time, flux, error, flags, mode=2,
         box2 = detrend.MultiBoxcar(time, flux_i - sin1, error, kernel=0.25)
         flux_model = (box2 + sin1)
 
-    isflare = FINDflare(flux_i - flux_model, error, avg_std=True, N1=2, N3=1,
-                        returnbinary=True)
-
-
 
     if (mode == 3):
         # do iterative rejection and spline fit - like FBEYE did
         # also like DFM & Hogg suggest w/ BART
-        
-        isok = 0
-        flux_model = detrend.MultiBoxcar(time, flux_i, error, kernel=0.3, numpass=1, sigclip=3)
-        chi = _chisq(flux_i, error, flux_model)
+        box1 = detrend.MultiBoxcar(time, flux, error, kernel=2.0, numpass=2)
+        sin1 = detrend.FitSin(time, box1, error, maxnum=2, maxper=(max(time)-min(time)))
 
-        while (isok != 1):
-            box_i = detrend.MultiBoxcar(time, flux_i, error, kernel=0.3, numpass=1, sigclip=3)
-            
+        box2 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.3)
+        sin2 = detrend.FitSin(time, box2 + sin1, error, maxper=(max(time)-min(time)))
 
+        box3 = detrend.MultiBoxcar(time, flux - sin2, error, kernel=0.2)
 
-    '''
-    # keep only the non-flare points, w/ no flag problems
-    noflare = np.where((bad < 1) & (isflare < 1))
-
-    flux_i = np.interp(time, time[noflare], flux_i[noflare])
+        flux_model = detrend.IRLSSpline(time, box3, error) + sin2
 
 
-    # 22222
-    sin2 = detrend.FitSin(time, flux_i, error)
-    box2 = detrend.MultiBoxcar(time, flux_i - sin2, error, kernel=2.0)
-    flux_model = box2 + sin2
-
-    isflare = FINDflare(flux-flux_model, error, avg_std=True, returnbinary=True)
-    noflare = np.where((bad < 1) & (isflare < 1))
-
-    flux_i = np.interp(time, time[noflare], flux_i[noflare])
+    # run final flare-find on DATA - MODEL
+    isflare = FINDflare(flux - flux_model, error, avg_std=True, N1=2, N3=2,
+                        returnbinary=True)
 
 
-    # 33333
-    sin3 = detrend.FitSin(time, flux_i, error)
-    box3 = detrend.MultiBoxcar(time, flux_i - sin3, error, kernel=2.0)
-    flux_model = box3 + sin3
-
-    isflare = FINDflare(flux-flux_model, error, avg_std=True, returnbinary=True)
-    '''
 
     # now pick out final flare candidate points from above
     cand1 = np.where((bad < 1) & (isflare > 0))[0]
@@ -641,7 +618,7 @@ def MultiFind(time, flux, error, flags, mode=2,
 
     if debug is True:
         plt.figure()
-        plt.scatter(time, flux)
+        plt.scatter(time, flux, alpha=0.5)
         plt.plot(time,flux_model, c='black')
         plt.scatter(time[cand1], flux[cand1], c='red')
         plt.show()
