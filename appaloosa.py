@@ -547,7 +547,7 @@ def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
     return pk, pp
 
 
-def MultiFind(time, flux, error, flags, #oldway=False,
+def MultiFind(time, flux, error, flags, mode=2,
               gapwindow=0.1, minsep=3, debug=False):
     '''
     this needs to be either
@@ -556,52 +556,53 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     3. folded back in to main code
     '''
 
-    '''
-    if oldway is True:
-        ### MY FIRST ATTEMPT AT FLARE FINDING
-        # fit sin curves
-        flux_sin = detrend.FitSin(time, flux, error)
 
-        # run iterative boxcar over data
-        flux_smo = detrend.MultiBoxcar(time, flux - flux_sin, error)
-
-        flux_model = flux_sin + flux_smo
-        # flux_model = flux_sin + detrend.MultiBoxcar(time, flux_smo, error) # double detrend?
-
-        istart, istop = DetectCandidate(time, flux, error, flags, flux_model)
-
-    else:
-    '''
     # the bad data points (search where bad < 1)
     bad = FlagCuts(flags, returngood=False)
+    flux_i = np.copy(flux)
+
+    if (mode == 1):
+        # just use the multi-pass boxcar and average. Dumb
+        flux_model1 = detrend.MultiBoxcar(time, flux, error, kernel=0.2)
+        flux_model2 = detrend.MultiBoxcar(time, flux, error, kernel=1.0)
+        flux_model3 = detrend.MultiBoxcar(time, flux, error, kernel=3.0)
+
+        flux_model = (flux_model1 + flux_model2 + flux_model3) / 3.
 
 
-    # just use the multi-pass boxcar twice and average. Dumb but OK to 1st order
-    flux_model1 = detrend.MultiBoxcar(time, flux, error, kernel=0.2)
-    flux_model2 = detrend.MultiBoxcar(time, flux, error, kernel=2.0)
+    if (mode == 2):
+        # first do a pass thru w/ largebox to get obvious flares
+        box1 = detrend.MultiBoxcar(time, flux_i, error, kernel=2.0, numpass=2)
+        sin1 = detrend.FitSin(time, box1, error, maxnum=2, maxper=(max(time)-min(time)))
 
-    flux_model = (flux_model1 + flux_model2) / 2.
+        box2 = detrend.MultiBoxcar(time, flux_i - sin1, error, kernel=0.25)
+        flux_model = (box2 + sin1)
+
+    isflare = FINDflare(flux_i - flux_model, error, avg_std=True, N1=2, N3=1,
+                        returnbinary=True)
+
+
+
+    if (mode == 3):
+        # do iterative rejection and spline fit - like FBEYE did
+        # also like DFM & Hogg suggest w/ BART
+        
+        isok = 0
+        flux_model = detrend.MultiBoxcar(time, flux_i, error, kernel=0.3, numpass=1, sigclip=3)
+        chi = _chisq(flux_i, error, flux_model)
+
+        while (isok != 1):
+            box_i = detrend.MultiBoxcar(time, flux_i, error, kernel=0.3, numpass=1, sigclip=3)
+            
 
 
     '''
-    # 11111
-    # first do a pass thru w/ largebox to get obvious flares
-    flux_i = np.copy(flux)
-    sin1 = detrend.FitSin(time, flux_i, error)
-    box1 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.5)
-    flux_model = box1 + sin1
-
-    isflare = FINDflare(flux_i - flux_model, error, avg_std=True, returnbinary=True)
-
     # keep only the non-flare points, w/ no flag problems
     noflare = np.where((bad < 1) & (isflare < 1))
 
     flux_i = np.interp(time, time[noflare], flux_i[noflare])
-    '''
 
-    # and even more...
 
-    '''
     # 22222
     sin2 = detrend.FitSin(time, flux_i, error)
     box2 = detrend.MultiBoxcar(time, flux_i - sin2, error, kernel=2.0)
@@ -617,11 +618,11 @@ def MultiFind(time, flux, error, flags, #oldway=False,
     sin3 = detrend.FitSin(time, flux_i, error)
     box3 = detrend.MultiBoxcar(time, flux_i - sin3, error, kernel=2.0)
     flux_model = box3 + sin3
+
+    isflare = FINDflare(flux-flux_model, error, avg_std=True, returnbinary=True)
     '''
 
-    # FINDflare needs tests!
-    isflare = FINDflare(flux-flux_model, error, avg_std=True, returnbinary=True)
-
+    # now pick out final flare candidate points from above
     cand1 = np.where((bad < 1) & (isflare > 0))[0]
 
     x1 = np.where((np.abs(time[cand1]-time[-1]) < gapwindow))
@@ -734,6 +735,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
     rec_bin_D, _ = np.histogram(ed_fake, bins=nbins)
 
     ed_bin_center = (ed_bin[1:] + ed_bin[:-1])/2.
+
     rec_bin = rec_bin_N / rec_bin_D
 
     if savefile is True:

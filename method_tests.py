@@ -97,7 +97,7 @@ def TestFINDflare():
                     0,0,0,0,0,0,0,0,0,0])
     error = np.ones_like(time) * 1e-5
 
-    print(np.std(flux+fl1))
+    # print(np.std(flux+fl1))
     istart, istop = ap.FINDflare(flux + fl1, error, debug=False)
 
     if (len(istart) != 1):
@@ -135,13 +135,14 @@ if __name__ == "__main__":
     print(rec)
 
     print(str(datetime.datetime.now()))
-    print("RUNNING GJ1243 BENCHMARK")
-    rec2 = benchmark()
-    print(rec2)
-
-    print(str(datetime.datetime.now()))
     rec3 = TestFINDflare()
     print(rec3)
+
+    print(str(datetime.datetime.now()))
+    print("RUNNING GJ1243 BENCHMARK")
+    rec2 = benchmark()
+    print("# in Appaloosa, # in FBEYE, # AP / # FB, Time AP / Time FB, Time AP & FB / Time FB, Frac Any Overlap")
+    print(rec2)
 
     print("FINISHED TESTING")
     print(str(datetime.datetime.now()))
