@@ -320,7 +320,23 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
 
 
 def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3):
+    '''
+    IRLS = Iterative Re-weight Least Squares
 
+    Parameters
+    ----------
+    time
+    flux
+    error
+    Q
+    ksep
+    numpass
+    order
+
+    Returns
+    -------
+
+    '''
     weight = 1. / (error**2.0)
 
     knots = np.arange(min(time) + ksep, max(time) - ksep, ksep)
