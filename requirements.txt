@@ -1,0 +1,9 @@
+numpy>=1.10
+scipy>=0.14
+gatspy>=0.2
+matplotlib>=1.4
+pandas
+astroML
+astropy
+scikit-learn>=0.15
+PyWavelets
