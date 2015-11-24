@@ -10,7 +10,6 @@ import datetime
 from version import __version__
 from aflare import aflare1
 import detrend
-from rayleigh import RayleighPowerSpectrum
 from gatspy.periodic import LombScargleFast
 import warnings
 import matplotlib.pyplot as plt
@@ -18,6 +17,7 @@ from pandas import rolling_std
 from scipy import stats
 from scipy.optimize import curve_fit
 from scipy.signal import wiener
+# from rayleigh import RayleighPowerSpectrum
 try:
     import MySQLdb
     haz_mysql = True
