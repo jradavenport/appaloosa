@@ -11,7 +11,6 @@ from scipy import signal
 from scipy.interpolate import LSQUnivariateSpline, UnivariateSpline
 
 
-
 def rolling_poly(time, flux, error, order=3, window=0.5):
     '''
     Fit polynomials in a sliding window
