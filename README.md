@@ -1,1 +1,2 @@
 # appaloosa
+![](./misc/horse.JPG)
