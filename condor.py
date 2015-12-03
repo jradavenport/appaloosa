@@ -132,13 +132,13 @@ def PrepWWU(prefix=''):
     # where is the list of KeplerObjectID's stored for this machine?
     home = expanduser("~")
     dir = home + '/data/kepler/'
-    file = 'all_fits.lis'
+    file = 'all_fits.lis' # created manually
 
     kid = np.loadtxt(dir + file, dtype='str',
                      unpack=True, usecols=(0,))
 
     # Put all the run outputs in this data directory as well
-    workdir = home + '/results/' + prefix + '/'
+    workdir = home + '/data/' + prefix + '/'
     if not os.path.isdir(workdir):
         try:
             os.makedirs(workdir)

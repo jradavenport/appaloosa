@@ -148,16 +148,18 @@ def GetLCfits(file):
     error = data_rec['SAP_FLUX_ERR']
     sap_quality = data_rec['SAP_QUALITY']
 
-    qtr = np.zeros_like(time)
+    isrl = np.isfinite(flux_raw)
 
-    dt = np.median(time[1:] - time[0:-1])
+    qtr = np.zeros_like(time[isrl])
+
+    dt = np.nanmedian(time[1:] - time[0:-1])
     if (dt < 0.01):
         dtime = 54.2 / 60. / 60. / 24.
     else:
         dtime = 30 * 54.2 / 60. / 60. / 24.
-    exptime = np.ones_like(time) * dtime
+    exptime = np.ones_like(time[isrl]) * dtime
 
-    return qtr, time, sap_quality, exptime, flux_raw, error
+    return qtr, time[isrl], sap_quality[isrl], exptime, flux_raw[isrl], error[isrl]
 
 
 def OneCadence(data):
@@ -791,7 +793,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 
 
 # objectid = '9726699'  # GJ 1243
-def RunLC(file='', objectid='9726699', ftype='sap', lctype='',
+def RunLC(file='', objectid='', ftype='sap', lctype='',
           display=False, readfile=False, debug=False, dofake=True,
           dbmode='fits'):
     '''
@@ -850,8 +852,9 @@ def RunLC(file='', objectid='9726699', ftype='sap', lctype='',
 
     ######################
     elif dbmode is 'fits':
+        print(file)
         objectid = str(int( file[file.find('kplr')+4:file.find('-')] ))
-        qtr, time, sap_quality, exptime, flux_raw, error = GetLCfits(file)
+        qtr, time, lcflag, exptime, flux_raw, error = GetLCfits(file)
 
         # put flare output in to a set of subdirectories.
         # use first 3 digits to help keep directories to ~1k files
@@ -866,6 +869,8 @@ def RunLC(file='', objectid='9726699', ftype='sap', lctype='',
         outfile = outdir + file[file.find('kplr'):]
         # file.replace('data', 'results')
 
+    if debug is True:
+        print('outfile = ' + outfile)
 
     ### Basic flattening
     # flatten quarters with polymonial
@@ -875,6 +880,12 @@ def RunLC(file='', objectid='9726699', ftype='sap', lctype='',
     flux_gap = detrend.GapFlat(time, flux_qtr)
 
     _, dl, dr = detrend.FindGaps(time)
+    if debug is True:
+        print("dl")
+        print(dl)
+        print("dr")
+        print(dr)
+
     # uQtr = np.unique(qtr)
 
     istart = np.array([], dtype='int')
@@ -964,7 +975,8 @@ def RunLC(file='', objectid='9726699', ftype='sap', lctype='',
 
         plt.figure()
         plt.plot(time, flux_gap, 'k')
-        # plt.plot(time, flux_model, 'green')
+        plt.plot(time, flux_model, 'green')
+
         for g in dl:
             plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
 
