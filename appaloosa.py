@@ -5,6 +5,7 @@ script to carry out flare finding in Kepler LC's
 
 import numpy as np
 import os.path
+from os.path import expanduser
 import time
 import datetime
 from version import __version__
@@ -17,6 +18,8 @@ from pandas import rolling_std
 from scipy import stats
 from scipy.optimize import curve_fit
 from scipy.signal import wiener
+from astropy.io import fits
+
 # from rayleigh import RayleighPowerSpectrum
 try:
     import MySQLdb
@@ -33,11 +36,11 @@ def chisq(data, error, model):
     return np.sum( ((data - model) / error)**2.0 ) / data.size
 
 
-def GetLC(objectid, type='', readfile=False,
+def GetLCdb(objectid, type='', readfile=False,
           savefile=False, exten = '.lc.gz',
           onecadence=False):
     '''
-    Retrieve the lightcurve/data from the database.
+    Retrieve the lightcurve/data from the UW database.
 
     Parameters
     ----------
@@ -123,6 +126,38 @@ def GetLC(objectid, type='', readfile=False,
         np.savetxt(str(objectid) + exten, data)
 
     return data
+
+
+def GetLCfits(file):
+    '''
+
+    Parameters
+    ----------
+    file : str
+
+    Returns
+    -------
+    qtr, time, sap_quality, exptime, flux_raw, error
+    '''
+
+    hdu = fits.open(file)
+    data_rec = hdu[1].data
+
+    time = data_rec['TIME']
+    flux_raw = data_rec['SAP_FLUX']
+    error = data_rec['SAP_FLUX_ERR']
+    sap_quality = data_rec['SAP_QUALITY']
+
+    qtr = np.zeros_like(time)
+
+    dt = np.median(time[1:] - time[0:-1])
+    if (dt < 0.01):
+        dtime = 54.2 / 60. / 60. / 24.
+    else:
+        dtime = 30 * 54.2 / 60. / 60. / 24.
+    exptime = np.ones_like(time) * dtime
+
+    return qtr, time, sap_quality, exptime, flux_raw, error
 
 
 def OneCadence(data):
@@ -629,7 +664,7 @@ def MultiFind(time, flux, error, flags, mode=3,
 
 def FakeFlares(time, flux, error, flags, tstart, tstop,
                nfake=100, npass=1, ampl=(0.1,100), dur=(0.5,60),
-               objectid='9726699', savefile=False):
+               outfile='', savefile=False):
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
@@ -717,13 +752,13 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 
     if savefile is True:
         # look to see if output folder exists
-        fldr = objectid[0:3]
-        outdir = 'aprun/' + fldr + '/'
-        if not os.path.isdir(outdir):
-            try:
-                os.makedirs(outdir)
-            except OSError:
-                pass
+        # fldr = objectid[0:3]
+        # outdir = 'aprun/' + fldr + '/'
+        # if not os.path.isdir(outdir):
+        #     try:
+        #         os.makedirs(outdir)
+        #     except OSError:
+        #         pass
 
         rl = np.isfinite(rec_bin)
         frac_rec_sm = wiener(rec_bin[rl], 3)
@@ -746,9 +781,9 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
                     ', ' + str(dur[0]) + ', ' + str(dur[1]) + \
                     ', ' + str(ed68_i) + ', ' + str(ed90_i) + '\n'
 
-        outfile = objectid + '.fake'
+
         # use mode "a+", append or create
-        ff = open(outdir + outfile, 'a+')
+        ff = open(outfile, 'a+')
         ff.write(outstring)
         ff.close()
 
@@ -756,14 +791,13 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 
 
 # objectid = '9726699'  # GJ 1243
-def RunLC(objectid='9726699', ftype='sap', lctype='',
-          display=False, readfile=False, debug=False, dofake=True):
+def RunLC(file='', objectid='9726699', ftype='sap', lctype='',
+          display=False, readfile=False, debug=False, dofake=True,
+          dbmode='fits'):
     '''
     Main wrapper to obtain and process a light curve
     '''
 
-    # read the objectID from the CONDOR job...
-    # objectid = sys.argv[1]
 
     # pick and process a totally random LC.
     # important for reality checking!
@@ -773,29 +807,65 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
         objectid = obj[rand_id]
         print('Random ObjectID Selected: ' + objectid)
 
-    # get the data from the MYSQL db
+    # get the data
     if debug is True:
         print(str(datetime.datetime.now()) + ' GetLC started')
-    data_raw = GetLC(objectid, readfile=readfile, type=lctype, onecadence=False)
-    data = OneCadence(data_raw)
 
-    # data columns are:
-    # QUARTER, TIME, PDCFLUX, PDCFLUX_ERR, SAP_QUALITY, LCFLAG, SAPFLUX, SAPFLUX_ERR
+    #####################
+    if dbmode is 'mysql':
+        data_raw = GetLCdb(objectid, readfile=readfile, type=lctype, onecadence=False)
 
-    qtr = data[:,0]
-    time = data[:,1]
-    lcflag = data[:,4]
+        data = OneCadence(data_raw)
 
-    exptime = data[:,5]
-    exptime[np.where((exptime < 1))] = 54.2 / 60. / 60. / 24.
-    exptime[np.where((exptime > 0))] = 30 * 54.2 / 60. / 60. / 24.
+        # data columns are:
+        # QUARTER, TIME, PDCFLUX, PDCFLUX_ERR, SAP_QUALITY, LCFLAG, SAPFLUX, SAPFLUX_ERR
 
-    if ftype == 'sap':
-        flux_raw = data[:,6]
-        error = data[:,7]
-    else: # for PDC data
-        flux_raw = data[:,2]
-        error = data[:,3]
+        qtr = data[:,0]
+        time = data[:,1]
+        lcflag = data[:,4] # actual SAP_QUALITY
+
+        exptime = data[:,5] # actually the LCFLAG
+        exptime[np.where((exptime < 1))] = 54.2 / 60. / 60. / 24.
+        exptime[np.where((exptime > 0))] = 30 * 54.2 / 60. / 60. / 24.
+
+        if ftype == 'sap':
+            flux_raw = data[:,6]
+            error = data[:,7]
+        else: # for PDC data
+            flux_raw = data[:,2]
+            error = data[:,3]
+
+        # put flare output in to a set of subdirectories.
+        # use first 3 digits to help keep directories to ~1k files
+        fldr = objectid[0:3]
+        outdir = 'aprun/' + fldr + '/'
+        if not os.path.isdir(outdir):
+            try:
+                os.makedirs(outdir)
+            except OSError:
+                pass
+        # open the output file to store data on every flare recovered
+        outfile = outdir + objectid
+
+
+    ######################
+    elif dbmode is 'fits':
+        objectid = str(int( file[file.find('kplr')+4:file.find('-')] ))
+        qtr, time, sap_quality, exptime, flux_raw, error = GetLCfits(file)
+
+        # put flare output in to a set of subdirectories.
+        # use first 3 digits to help keep directories to ~1k files
+        fldr = objectid[0:3]
+        outdir = 'aprun/' + fldr + '/'
+        if not os.path.isdir(outdir):
+            try:
+                os.makedirs(outdir)
+            except OSError:
+                pass
+
+        outfile = outdir + file[file.find('kplr'):]
+        # file.replace('data', 'results')
+
 
     ### Basic flattening
     # flatten quarters with polymonial
@@ -831,7 +901,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
             ed_fake, frac_rec = FakeFlares(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]]/medflux - 1.0,
                                            error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
                                            time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i],
-                                           savefile=True, objectid=objectid)
+                                           savefile=True,
+                                           outfile=outfile + '.fake')
 
             rl = np.isfinite(frac_rec)
             frac_rec_sm = wiener(frac_rec[rl], 3)
@@ -923,6 +994,7 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
 
     outstring = ''
     outstring = outstring + '# Kepler-ObjectID = ' + objectid + '\n'
+    outstring = outstring + '# File = ' + file + '\n'
     now = datetime.datetime.now()
     outstring = outstring + '# Date-Run = ' + str(now) + '\n'
     outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
@@ -958,20 +1030,8 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
         outstring = outstring + ', ' + str(ed68[i]) + ', ' + str(ed90[i])
         outstring = outstring + '\n'
 
-    # put flare output in to a set of subdirectories.
-    # use first 3 digits to help keep directories to ~1k files
-    fldr = objectid[0:3]
-    outdir = 'aprun/' + fldr + '/'
-    if not os.path.isdir(outdir):
-        try:
-            os.makedirs(outdir)
-        except OSError:
-            pass
 
-    # open the output file to store data on every flare recovered
-    outfile = objectid + '.flare'
-
-    fout = open(outdir + outfile, 'w')
+    fout = open(outfile + '.flare', 'w')
     fout.write(outstring)
     fout.close()
 
@@ -982,5 +1042,5 @@ def RunLC(objectid='9726699', ftype='sap', lctype='',
 # $python appaloosa.py 12345678
 if __name__ == "__main__":
     import sys
-    RunLC(objectid=str(sys.argv[1]), display=False)
+    RunLC(file=str(sys.argv[1]), display=False, dbmode='fits')
 

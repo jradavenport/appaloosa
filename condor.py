@@ -131,11 +131,11 @@ def PrepWWU(prefix=''):
 
     # where is the list of KeplerObjectID's stored for this machine?
     home = expanduser("~")
-    dir = home + '/data/'
-    file = 'get_objects.out'
+    dir = home + '/data/kepler/'
+    file = 'all_fits.lis'
 
     kid = np.loadtxt(dir + file, dtype='str',
-                     unpack=True, skiprows=1, usecols=(0,))
+                     unpack=True, usecols=(0,))
 
     # Put all the run outputs in this data directory as well
     workdir = home + '/results/' + prefix + '/'
@@ -148,7 +148,7 @@ def PrepWWU(prefix=''):
     condor_file = workdir + prefix + '.cfg'
     shellscript = workdir + prefix + '.sh'
 
-    pyversion = home + "/anaconda/bin/python"
+    pyversion = home + "/anaconda2/bin/python"
 
     # the path to the actual science code
     python_code = home + '/python/appaloosa/appaloosa.py'
@@ -197,5 +197,5 @@ def PrepWWU(prefix=''):
 # $python conda.py
 if __name__ == "__main__":
     # for now just bulid the UW condor prep in
-    PrepUW()
+    PrepWWU()
     # PrepWWU()
