@@ -167,7 +167,7 @@ def PrepWWU(prefix='', nice=True):
     # use "nice" to make my jobs run at lowest priority, only free cores
     # good practice when jamming over a million jobs in to the queue
     if nice is True:
-        f2.write('nice_use = True \n')
+        f2.write('nice_user = True \n')
         f2.write(' \n')
 
     f2.write('Log = ' + workdir  + 'log.txt \n')
