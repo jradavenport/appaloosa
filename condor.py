@@ -132,7 +132,10 @@ def PrepWWU(prefix=''):
     # where is the list of KeplerObjectID's stored for this machine?
     home = expanduser("~")
     dir = home + '/data/kepler/'
-    file = 'all_fits.lis' # created manually
+
+    file = 'all_fits.lis' # created manually, path to every FITS file
+    # because so many files, had to create list like this:
+    # $ find Q*_public/ -type f -name '*.fits' > all_fits.lis
 
     kid = np.loadtxt(dir + file, dtype='str',
                      unpack=True, usecols=(0,))

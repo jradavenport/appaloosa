@@ -622,12 +622,12 @@ def MultiFind(time, flux, error, flags, mode=3,
         box1 = detrend.MultiBoxcar(time, flux, error, kernel=2.0, numpass=2)
         sin1 = detrend.FitSin(time, box1, error, maxnum=2, maxper=(max(time)-min(time)))
 
-        box2 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.3)
-        sin2 = detrend.FitSin(time, box2 + sin1, error, maxper=(max(time)-min(time)))
+        box3 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.3)
+        # sin2 = detrend.FitSin(time, box2 + sin1, error, maxper=(max(time)-min(time)))
+        #
+        # box3 = detrend.MultiBoxcar(time, flux - sin2, error, kernel=0.2)
 
-        box3 = detrend.MultiBoxcar(time, flux - sin2, error, kernel=0.2)
-
-        flux_model = detrend.IRLSSpline(time, box3, error) + sin2
+        flux_model = detrend.IRLSSpline(time, box3, error, numpass=10) + sin1
 
 
     # run final flare-find on DATA - MODEL

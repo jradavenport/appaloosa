@@ -341,7 +341,8 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3):
     knots = np.arange(min(time) + ksep, max(time) - ksep, ksep)
 
     for k in range(numpass):
-        spl = LSQUnivariateSpline(time, flux, knots, w=weight, k=order)
+        spl = LSQUnivariateSpline(time, flux, knots, w=weight, k
+        =order)
         # spl = UnivariateSpline(time, flux, w=weight, k=order, s=1)
 
         chisq = ((flux - spl(time))**2.) / (error**2.0)
