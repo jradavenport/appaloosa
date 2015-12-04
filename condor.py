@@ -163,14 +163,14 @@ def PrepWWU(prefix=''):
     f2.write('Initialdir = ' + workdir + '\n')
     f2.write('Universe = vanilla \n')
     f2.write(' \n')
-    f2.write('Log = ' + workdir + prefix + '_log.txt \n')
-    f2.write('Error = ' + workdir + prefix + '_err.txt \n')
-    f2.write('Output = ' + workdir + prefix + '_out.txt \n')
+    f2.write('Log = ' + workdir  + 'log.txt \n')
+    f2.write('Error = ' + workdir + 'err.txt \n')
+    f2.write('Output = ' + workdir + 'out.txt \n')
     f2.write(' \n')
 
-    for k in kid:
+    for k in range(len(kid)):
         # put entry in to CONDOR .cfg file for this window
-        f2.write('Arguments = ' + k + ' \n')
+        f2.write('Arguments = ' + dir + kid[k] + ' \n')
         f2.write('Queue \n')
 
     f2.write(' \n')
