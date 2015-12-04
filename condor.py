@@ -110,7 +110,7 @@ def PrepUW(prefix=''):
     return
 
 
-def PrepWWU(prefix=''):
+def PrepWWU(prefix='', nice=True):
     '''
     Generate the Condor config file needed to script the running of Appaloosa,
     and the little helper shell script. Built for running on the WWU CS Compute Cluster.
@@ -163,6 +163,13 @@ def PrepWWU(prefix=''):
     f2.write('Initialdir = ' + workdir + '\n')
     f2.write('Universe = vanilla \n')
     f2.write(' \n')
+
+    # use "nice" to make my jobs run at lowest priority, only free cores
+    # good practice when jamming over a million jobs in to the queue
+    if nice is True:
+        f2.write('nice_use = True \n')
+        f2.write(' \n')
+
     f2.write('Log = ' + workdir  + 'log.txt \n')
     f2.write('Error = ' + workdir + 'err.txt \n')
     f2.write('Output = ' + workdir + 'out.txt \n')
