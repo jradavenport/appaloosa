@@ -162,6 +162,37 @@ def GetLCfits(file):
     return qtr, time[isrl], sap_quality[isrl], exptime, flux_raw[isrl], error[isrl]
 
 
+def GetLCk2(file):
+    '''
+    Read K2 data in.
+
+    Currently supporting the ascii-dumps of MAST .fits files
+
+    Parameters
+    ----------
+    file : str
+
+    Returns
+    -------
+    qtr, time, sap_quality, exptime, flux_raw, error
+    '''
+
+    time, flux_raw, error, sap_quality = np.loadtxt(file, unpack=True, usecols=(0,3,4,9), skiprows=1)
+
+    isrl = np.isfinite(flux_raw)
+
+    qtr = np.zeros_like(time[isrl])
+
+    dt = np.nanmedian(time[1:] - time[0:-1])
+    if (dt < 0.01):
+        dtime = 54.2 / 60. / 60. / 24.
+    else:
+        dtime = 30 * 54.2 / 60. / 60. / 24.
+    exptime = np.ones_like(time[isrl]) * dtime
+
+    return qtr, time[isrl], sap_quality[isrl], exptime, flux_raw[isrl], error[isrl]
+
+
 def OneCadence(data):
     '''
     Within each quarter of data from the database, pick the data with the
@@ -852,7 +883,6 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 
     ######################
     elif dbmode is 'fits':
-        print(file)
         objectid = str(int( file[file.find('kplr')+4:file.find('-')] ))
         qtr, time, lcflag, exptime, flux_raw, error = GetLCfits(file)
 
@@ -868,6 +898,22 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 
         outfile = outdir + file[file.find('kplr'):]
         # file.replace('data', 'results')
+
+    ######################
+    elif dbmode is 'k2':
+        objectid = str(int( file[file.find('ktwo')+4:file.find('-')] ))
+        qtr, time, lcflag, exptime, flux_raw, error = GetLCk2(file)
+
+        home = expanduser("~")
+        outdir = home + '/research/k2-cluster-flares/aprun/'
+        if not os.path.isdir(outdir):
+            try:
+                os.makedirs(outdir)
+            except OSError:
+                pass
+
+        outfile = outdir + file[file.find('kplr'):]
+
 
     if debug is True:
         print('outfile = ' + outfile)
@@ -1005,7 +1051,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     warnings.simplefilter('ignore', np.RankWarning)
 
     outstring = ''
-    outstring = outstring + '# Kepler-ObjectID = ' + objectid + '\n'
+    outstring = outstring + '# ObjectID = ' + objectid + '\n'
     outstring = outstring + '# File = ' + file + '\n'
     now = datetime.datetime.now()
     outstring = outstring + '# Date-Run = ' + str(now) + '\n'
