@@ -205,12 +205,12 @@ def PrepWWU(prefix='', nice=False, bin=10):
 
     # fix permissions
     os.system("chmod 777 " + shellscript)
-    os.system("chmod 777 " + condor_file)
+    os.system("chmod 777 " + condor_file + '*')
 
     print('')
     print('WWU Condor prep is complete.')
     print('To launch: on the CS Compute Cluser, do this:')
-    print('$ condor_submit ' + condor_file)
+    print('$ condor_submit ' + condor_file + ' &> /dev/null')
     print('')
 
     return
