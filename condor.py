@@ -110,7 +110,7 @@ def PrepUW(prefix=''):
     return
 
 
-def PrepWWU(prefix='', nice=True):
+def PrepWWU(prefix='', nice=False, bin=10):
     '''
     Generate the Condor config file needed to script the running of Appaloosa,
     and the little helper shell script. Built for running on the WWU CS Compute Cluster.
@@ -157,31 +157,44 @@ def PrepWWU(prefix='', nice=True):
     python_code = home + '/python/appaloosa/appaloosa.py'
 
     # 2222222222222222 create CONDOR .cfg file
-    f2 = open(condor_file, 'w')
-    f2.write('Notification = never \n')
-    f2.write('Executable = '+ shellscript +' \n')
-    f2.write('Initialdir = ' + workdir + '\n')
-    f2.write('Universe = vanilla \n')
-    f2.write(' \n')
+    for i in range(bin):
+        if bin is 1:
+            inum = ''
+        else:
+            inum = str(i)
 
-    # use "nice" to make my jobs run at lowest priority, only free cores
-    # good practice when jamming over a million jobs in to the queue
-    if nice is True:
-        f2.write('nice_user = True \n')
+        f2 = open(condor_file + inum, 'w')
+        f2.write('Notification = never \n')
+        f2.write('Executable = '+ shellscript +' \n')
+        f2.write('Initialdir = ' + workdir + '\n')
+        f2.write('Universe = vanilla \n')
         f2.write(' \n')
 
-    f2.write('Log = ' + workdir  + 'log.txt \n')
-    f2.write('Error = ' + workdir + 'err.txt \n')
-    f2.write('Output = ' + workdir + 'out.txt \n')
-    f2.write(' \n')
+        # use "nice" to make my jobs run at lowest priority, only free cores
+        # good practice when jamming over a million jobs in to the queue
+        if nice is True:
+            f2.write('nice_user = True \n')
+            f2.write(' \n')
 
-    for k in range(len(kid)):
-        # put entry in to CONDOR .cfg file for this window
-        f2.write('Arguments = ' + dir + kid[k] + ' \n')
-        f2.write('Queue \n')
+        f2.write('Log = ' + workdir  + 'log.txt \n')
+        f2.write('Error = ' + workdir + 'err.txt \n')
+        f2.write('Output = ' + workdir + 'out.txt \n')
+        f2.write(' \n')
 
-    f2.write(' \n')
-    f2.close()
+        isplit = int(float(len(kid)) / bin)
+        istart = i * isplit
+        istop = (i + 1) * isplit
+        if (i + 1) == bin:
+            # the last window should be large enough to finish it
+            istop = len(kid)
+
+        for k in range(istart, istop):
+            # put entry in to CONDOR .cfg file for this window
+            f2.write('Arguments = ' + dir + kid[k] + ' \n')
+            f2.write('Queue \n')
+
+        f2.write(' \n')
+        f2.close()
 
     # 33333333333333333
     # create the very simple PYTHON-launching shell script
