@@ -193,6 +193,40 @@ def GetLCk2(file):
     return qtr, time[isrl], sap_quality[isrl], exptime, flux_raw[isrl], error[isrl]
 
 
+def GetLCtxt(file, skiprows=1):
+    '''
+    Import the most basic lightcurve, with columns:
+    (time, flux, error)
+
+    Other columns (quarter, flags, etc) are filled w/ 0's
+
+    Parameters
+    ----------
+    file : str
+    skiprows : int, optional
+
+    Returns
+    -------
+
+    '''
+
+    time, flux_raw, error = np.loadtxt(file, unpack=True, usecols=(0,1,2), skiprows=skiprows)
+
+    isrl = np.isfinite(flux_raw)
+
+    qtr = np.zeros_like(time[isrl])
+    sap_quality = np.zeros_like(time[isrl])
+
+    dt = np.nanmedian(time[1:] - time[0:-1])
+    if (dt < 0.01):
+        dtime = 54.2 / 60. / 60. / 24.
+    else:
+        dtime = 30 * 54.2 / 60. / 60. / 24.
+    exptime = np.ones_like(time[isrl]) * dtime
+
+    return qtr, time[isrl], sap_quality, exptime, flux_raw[isrl], error[isrl]
+
+
 def OneCadence(data):
     '''
     Within each quarter of data from the database, pick the data with the
@@ -462,7 +496,7 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     if (istart < 0):
         istart = 0
     if (istop < 0):
-        istop = len(flux)
+        istop = len(flux)-1
 
     # can't have flare start/stop at same point
     if (istart == istop):
@@ -697,7 +731,7 @@ def MultiFind(time, flux, error, flags, mode=3,
 
 def FakeFlares(time, flux, error, flags, tstart, tstop,
                nfake=100, npass=1, ampl=(0.1,100), dur=(0.5,60),
-               outfile='', savefile=False):
+               outfile='', savefile=False, gapwindow=0.1):
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
@@ -759,7 +793,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
     '''
 
     # all the hard decision making should go here
-    istart, istop, flux_model = MultiFind(time, new_flux, error, flags)
+    istart, istop, flux_model = MultiFind(time, new_flux, error, flags, gapwindow=gapwindow)
 
     rec_fake = np.zeros(nfake)
     for k in range(nfake):
@@ -826,7 +860,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 # objectid = '9726699'  # GJ 1243
 def RunLC(file='', objectid='', ftype='sap', lctype='',
           display=False, readfile=False, debug=False, dofake=True,
-          dbmode='fits'):
+          dbmode='fits', gapwindow=0.1,):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -843,6 +877,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     # get the data
     if debug is True:
         print(str(datetime.datetime.now()) + ' GetLC started')
+        print(file, objectid)
 
     #####################
     if dbmode is 'mysql':
@@ -904,15 +939,16 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         objectid = str(int( file[file.find('ktwo')+4:file.find('-')] ))
         qtr, time, lcflag, exptime, flux_raw, error = GetLCk2(file)
 
-        home = expanduser("~")
-        outdir = home + '/research/k2-cluster-flares/aprun/'
-        if not os.path.isdir(outdir):
-            try:
-                os.makedirs(outdir)
-            except OSError:
-                pass
+        # just put the output right along side the input. Not awesome, but works
+        outfile = file
 
-        outfile = outdir + file[file.find('kplr'):]
+    ######################
+    elif dbmode is 'txt':
+        objectid = file[0:3]
+        qtr, time, lcflag, exptime, flux_raw, error = GetLCtxt(file)
+
+        # just put the output right along side the input. Not awesome, but works
+        outfile = file
 
 
     if debug is True:
@@ -946,7 +982,8 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
             print(i, str(datetime.datetime.now()) + ' MultiFind started')
 
         istart_i, istop_i, flux_model_i = MultiFind(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]],
-                                                    error[dl[i]:dr[i]], lcflag[dl[i]:dr[i]])
+                                                    error[dl[i]:dr[i]], lcflag[dl[i]:dr[i]],
+                                                    gapwindow=gapwindow)
 
         # run artificial flare test in this gap
         if debug is True:
@@ -958,7 +995,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
             ed_fake, frac_rec = FakeFlares(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]]/medflux - 1.0,
                                            error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
                                            time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i],
-                                           savefile=True,
+                                           savefile=True, gapwindow=gapwindow,
                                            outfile=outfile + '.fake')
 
             rl = np.isfinite(frac_rec)
@@ -1069,7 +1106,6 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     if debug is True:
         print(str(datetime.datetime.now()) + 'Getting output header')
     header = FlareStats(time, flux_gap, error, flux_model,
-                        istart=istart[0], istop=istop[0],
                         ReturnHeader=True)
     header = header + ', ED68i, ED90i '
     outstring = outstring + '# ' + header + '\n'
