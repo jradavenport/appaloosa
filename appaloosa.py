@@ -177,7 +177,7 @@ def GetLCk2(file):
     qtr, time, sap_quality, exptime, flux_raw, error
     '''
 
-    time, flux_raw, error, sap_quality = np.loadtxt(file, unpack=True, usecols=(0,3,4,9), skiprows=1)
+    time, flux_raw, error, sap_quality = np.loadtxt(file, unpack=True, usecols=(0,7,8,9), skiprows=1)
 
     isrl = np.isfinite(flux_raw)
 
@@ -731,7 +731,8 @@ def MultiFind(time, flux, error, flags, mode=3,
 
 def FakeFlares(time, flux, error, flags, tstart, tstop,
                nfake=100, npass=1, ampl=(0.1,100), dur=(0.5,60),
-               outfile='', savefile=False, gapwindow=0.1):
+               outfile='', savefile=False, gapwindow=0.1,
+               verboseout=False):
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
@@ -828,7 +829,15 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         #         pass
 
         rl = np.isfinite(rec_bin)
-        frac_rec_sm = wiener(rec_bin[rl], 3)
+        w_in = rec_bin[rl]
+
+        frac_rec_sm = wiener(w_in, 3)
+
+        # print('>')
+        # print('rl ', len(rl), rl)
+        # print('rec_bin ', len(rec_bin), rec_bin)
+        # print('w_in', np.size(w_in), w_in)
+        # print('frac_rec_sm', len(frac_rec_sm), frac_rec_sm)
 
         # use this completeness curve to estimate 68% complete
         x68 = np.where((frac_rec_sm >= 0.68))
@@ -848,6 +857,13 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
                     ', ' + str(dur[0]) + ', ' + str(dur[1]) + \
                     ', ' + str(ed68_i) + ', ' + str(ed90_i) + '\n'
 
+        # print(len(ed_bin_center), len(rec_bin), len(frac_rec_sm), len(rl))
+        if verboseout is True:
+            for i in range(len(w_in)-1):
+                outstring = outstring + \
+                            str(ed_bin_center[rl][i]) + ', ' + \
+                            str(rec_bin[rl][i]) + ', ' + \
+                            str(frac_rec_sm[i]) + '\n'
 
         # use mode "a+", append or create
         ff = open(outfile, 'a+')
@@ -860,7 +876,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 # objectid = '9726699'  # GJ 1243
 def RunLC(file='', objectid='', ftype='sap', lctype='',
           display=False, readfile=False, debug=False, dofake=True,
-          dbmode='fits', gapwindow=0.1,):
+          dbmode='fits', gapwindow=0.1, verbosefake=False):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -995,7 +1011,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
             ed_fake, frac_rec = FakeFlares(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]]/medflux - 1.0,
                                            error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
                                            time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i],
-                                           savefile=True, gapwindow=gapwindow,
+                                           savefile=True, verboseout=verbosefake, gapwindow=gapwindow,
                                            outfile=outfile + '.fake')
 
             rl = np.isfinite(frac_rec)
@@ -1096,8 +1112,6 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 
     # outstring = outstring + '# ED68 = ' + str(ed68T) + '\n'
     # outstring = outstring + '# ED90 = ' + str(ed90T) + '\n'
-
-    outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
 
     outstring = outstring + '# N_epoch in LC = ' + str(len(time)) + '\n'
     outstring = outstring + '# Total exp time of LC = ' + str(np.sum(exptime)) + '\n'
