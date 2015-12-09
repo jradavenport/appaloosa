@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from scipy.stats import binned_statistic_2d
 from os.path import expanduser
 import appaloosa
+import pandas as pd
 
 def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
     '''
@@ -391,13 +392,20 @@ def PostCondor(biglist):
     return
 
 
-def paper1_plots(condorfile='condorout.dat', kicfile='kicdata.dat'):
+def paper1_plots(condorfile='condorout.dat',
+                 kicfile='kic.txt.gz'):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
     The Condor results are aggregated from PostCondor() above
 
     '''
+
+    # read in KIC file
+    # http://archive.stsci.edu/pub/kepler/catalogs/ - data source
+    # http://archive.stsci.edu/kepler/kic10/help/quickcol.html - info
+    
+    kicdata = pd.read_csv(kicfile, delimiter='|')
 
 
     # goal plots:
