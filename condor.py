@@ -176,9 +176,9 @@ def PrepWWU(prefix='', nice=False, bin=10):
             f2.write('nice_user = True \n')
             f2.write(' \n')
 
-        f2.write('Log = ' + workdir  + 'log.txt \n')
-        f2.write('Error = ' + workdir + 'err.txt \n')
-        f2.write('Output = ' + workdir + 'out.txt \n')
+        f2.write('Log = ' + workdir  + 'log' + inum + '.txt \n')
+        f2.write('Error = ' + workdir + 'err' + inum + '.txt \n')
+        f2.write('Output = ' + workdir + 'out' + inum + '.txt \n')
         f2.write(' \n')
 
         isplit = int(float(len(kid)) / bin)
