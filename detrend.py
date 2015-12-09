@@ -61,7 +61,7 @@ def GapFlat(time, flux, order=3):
     '''
     _, dl, dr = FindGaps(time) # finds right edge of time windows
 
-    tot_med = np.median(flux) # the total from all quarters
+    tot_med = np.nanmedian(flux) # the total from all quarters
 
     flux_flat = np.array(flux, copy=True)
 
@@ -95,7 +95,7 @@ def QtrFlat(time, flux, qtr, order=3):
 
     uQtr = np.unique(qtr)
 
-    tot_med = np.median(flux) # the total from all quarters
+    tot_med = np.nanmedian(flux) # the total from all quarters
 
     flux_flat = np.ones_like(flux) * tot_med
 
@@ -414,7 +414,7 @@ def Wavelet_Peaks(time, flux):
     for i in range(0, len(dl)):
         flux_i = flux[dl[i]:dr[i]]
         time_i = time[dl[i]:dr[i]]
-        exptime = np.median(time_i[1:]-time_i[:-1])
+        exptime = np.nanmedian(time_i[1:]-time_i[:-1])
         if (exptime*24.*60. < 5):
             widths = np.arange(1,100)
         else:

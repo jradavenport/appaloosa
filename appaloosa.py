@@ -539,7 +539,7 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     contfit = np.polyfit(conttime, contflux, cpoly)
     contline = np.polyval(contfit, flaretime) # poly fit to cont. regions
 
-    medflux = np.median(model)
+    medflux = np.nanmedian(model)
 
     # measure flare amplitude
     ampl = np.max(flareflux-contline) / medflux
@@ -634,7 +634,7 @@ def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
     pgram = LombScargleFast(fit_offset=False)
     pgram.optimizer.set(period_range=(minper,maxper))
 
-    pgram = pgram.fit(time, energy - np.median(energy))
+    pgram = pgram.fit(time, energy - np.nanmedian(energy))
 
     df = (1./minper - 1./maxper) / nper
     f0 = 1./maxper
@@ -747,7 +747,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
     # QUESTION: how many fake flares can I inject at once?
     # i.e. can I get away with doing fewer re-runs with more flares injected?
 
-    std = np.median(error)
+    std = np.nanmedian(error)
 
     ampl_fake = (np.random.random(nfake) * (ampl[1] - ampl[0]) + ampl[0]) * std
     dur_fake =  (np.random.random(nfake) * (dur[1] - dur[0]) + dur[0]) / 60. / 24.
