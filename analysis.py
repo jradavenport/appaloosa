@@ -373,6 +373,44 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
     return (len(apdata[:,0]), len(fbdata[:,0]), n1, n2, n3, n4)
 
 
+def PostCondor(biglist):
+    '''
+    Run this on the WWU compute cluster after Condor has finished with
+    all jobs. This code goes thru every .flare file and computes basic
+    stats, which are returned in a big file for plotting
+
+    '''
+
+    files = np.loadtxt(biglist, dtype='str')
+
+    for k in range(len(files)):
+        # read in file
+        fdata = np.loadtxt(files[k])
+
+
+    return
+
+
+def paper1_plots(condorfile='condorout.dat', kicfile='kicdata.dat'):
+    '''
+    Make plots for the first paper, which describes the Kepler flare sample.
+
+    The Condor results are aggregated from PostCondor() above
+
+    '''
+
+
+    # goal plots:
+    # 1. color vs flare rate
+    # 2. galex-g color vs flare rate
+    # 3. g-r color vs period, point size/color with flare rate
+
+
+
+
+    return
+
+
 '''
   let this file be called from the terminal directly. e.g.:
   $ python analysis.py
