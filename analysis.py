@@ -404,7 +404,7 @@ def paper1_plots(condorfile='condorout.dat',
     # read in KIC file
     # http://archive.stsci.edu/pub/kepler/catalogs/ - data source
     # http://archive.stsci.edu/kepler/kic10/help/quickcol.html - info
-    
+
     kicdata = pd.read_csv(kicfile, delimiter='|')
 
 
@@ -415,6 +415,20 @@ def paper1_plots(condorfile='condorout.dat',
 
 
 
+
+    return
+
+
+def energies(objectlist, kicfile='kic.txt.gz'):
+    '''
+    Compute the quiescent energy for every star. Use the KIC colors and
+    an isochrone to get the absolute Kepler mag for each star, and thus
+    the distance & luminosity.
+
+    Returns
+    -------
+
+    '''
 
     return
 
