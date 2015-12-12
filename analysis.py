@@ -376,17 +376,58 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def PostCondor(biglist):
     '''
-    Run this on the WWU compute cluster after Condor has finished with
-    all jobs. This code goes thru every .flare file and computes basic
-    stats, which are returned in a big file for plotting
+    Run this on the WWU compute cluster (or local machine if files tar'd up)
+    after Condor has finished with all jobs.
+    This code goes thru every .flare file and computes basic stats,
+    which are returned in a big file for plotting
 
     '''
 
+    # generated via:
+    # $ find aprun/* -name "*.flare" > file.lis
+    # can take a while for filesystem to do this...
     files = np.loadtxt(biglist, dtype='str')
 
     for k in range(len(files)):
-        # read in file
-        fdata = np.loadtxt(files[k])
+        # read in flare and fake results
+        fdata = np.loadtxt(files[k], delimiter=',', dtype='float',comments='#', ndmin=2)
+        '''
+        t_start, t_stop, t_peak, amplitude, FWHM,
+        duration, t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
+        flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur,
+        ed68_i, ed90_i
+        '''
+
+        ffake = np.loadtxt(files[k].replace('.flare', '.fake'), delimiter=',',
+                           dtype='float',comments='#', ndmin=2)
+        ''' t_min, t_max, std, nfake, amplmin, amplmax, durmin, durmax, ed68, ed90 '''
+
+        # pick flares in acceptable energy range (above ed68)
+        ed68_all = ffake[:,8]
+        x = np.where((ed68_all > - 10))
+        if len(x[0]) > 0:
+            edcut = np.nanmedian(ed68_all[x])
+        else:
+            edcut = 99
+
+        # flares must be greater than the "average" ED cut, or the localized one
+        ok_fl = np.where((fdata[:,14] >= edcut) |
+                         (fdata[:,14] >= fdata[:,15])
+                         )
+        # if there ARE any good flares, compute output
+
+        # Stats to compute:
+        # - # flares
+        # - Freq. of Flares
+        # - flare rate vs energy
+        '''
+        here's the problem... how do you combine data for diff months/qtr's
+        where you have diff exp times, noise properties, completeness limits?
+
+        need to put data into some kind of relative unit, scale by time or something
+        this is prob easiest if binned on to fixed ED bins... but that a bit
+        unsatisfying since would like to keep all data.
+        '''
 
 
     return
