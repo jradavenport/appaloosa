@@ -374,7 +374,7 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
     return (len(apdata[:,0]), len(fbdata[:,0]), n1, n2, n3, n4)
 
 
-def PostCondor(biglist):
+def PostCondor(flares='flares.lis'):
     '''
     Run this on the WWU compute cluster (or local machine if files tar'd up)
     after Condor has finished with all jobs.
@@ -384,9 +384,9 @@ def PostCondor(biglist):
     '''
 
     # generated via:
-    # $ find aprun/* -name "*.flare" > file.lis
+    # $ find aprun/* -name "*.flare" > flares.lis
     # can take a while for filesystem to do this...
-    files = np.loadtxt(biglist, dtype='str')
+    files = np.loadtxt(flares, dtype='str')
 
     for k in range(len(files)):
         # read in flare and fake results
