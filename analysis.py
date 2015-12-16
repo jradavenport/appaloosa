@@ -10,6 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import binned_statistic_2d
 from os.path import expanduser
+import os
 import appaloosa
 import pandas as pd
 
@@ -374,14 +375,20 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
     return (len(apdata[:,0]), len(fbdata[:,0]), n1, n2, n3, n4)
 
 
-def PostCondor(flares='flares.lis'):
+def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
     '''
-    Run this on the WWU compute cluster (or local machine if files tar'd up)
-    after Condor has finished with all jobs.
+    This requires the data from the giant Condor run. Either in a tarball,
+    or on the WWU cluster
+
     This code goes thru every .flare file and computes basic stats,
-    which are returned in a big file for plotting
+    which are returned in a new big file for plotting, comparing to the KIC, etc.
 
     '''
+
+    # the fixed ED bins to sum the N flares over
+    edbins = np.arange(-5, 5, 0.2)
+    edbins = np.append(-10, edbins)
+    edbins = np.append(edbins, 10)
 
     # generated via:
     # $ find aprun/* -name "*.flare" > flares.lis
@@ -390,15 +397,8 @@ def PostCondor(flares='flares.lis'):
 
     for k in range(len(files)):
         # read in flare and fake results
-        fdata = np.loadtxt(files[k], delimiter=',', dtype='float',comments='#', ndmin=2)
-        '''
-        t_start, t_stop, t_peak, amplitude, FWHM,
-        duration, t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
-        flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur,
-        ed68_i, ed90_i
-        '''
 
-        ffake = np.loadtxt(files[k].replace('.flare', '.fake'), delimiter=',',
+        ffake = np.loadtxt(files[k], delimiter=',',
                            dtype='float',comments='#', ndmin=2)
         ''' t_min, t_max, std, nfake, amplmin, amplmax, durmin, durmax, ed68, ed90 '''
 
@@ -410,11 +410,25 @@ def PostCondor(flares='flares.lis'):
         else:
             edcut = 99
 
-        # flares must be greater than the "average" ED cut, or the localized one
-        ok_fl = np.where((fdata[:,14] >= edcut) |
-                         (fdata[:,14] >= fdata[:,15])
-                         )
-        # if there ARE any good flares, compute output
+        if os.path.isfile(files[k].replace('.fake', '.flare')):
+            fdata = np.loadtxt(files[k].replace('.fake', '.flare'),
+                               delimiter=',', dtype='float',comments='#', ndmin=2)
+            '''
+            t_start, t_stop, t_peak, amplitude, FWHM,
+            duration, t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
+            flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur,
+            ed68_i, ed90_i
+            '''
+
+            # flares must be greater than the "average" ED cut, or the localized one
+            ok_fl = np.where((fdata[:,14] >= edcut) |
+                             (fdata[:,14] >= fdata[:,15])
+                             )
+
+            # compute ED stats, etc
+
+        # Produce stats, even if no flares pass cut. The 0's are important
+        # ** NEED TO REDESIGN THIS TO SEARCH OVER ALL FILES, NOT JUST ONES WITH FLARES **
 
         # Stats to compute:
         # - # flares
@@ -428,6 +442,14 @@ def PostCondor(flares='flares.lis'):
         this is prob easiest if binned on to fixed ED bins... but that a bit
         unsatisfying since would like to keep all data.
         '''
+
+        # columns to output:
+        # KICnumber, ED68cut, Total Nflares, Total Flares/Day, Long/Short flag, Duration (days),
+        #   [in K fixed bins of ED, the total # of flares]
+
+        kicnum = files[k][files[k].find('kplr')+4 : files[k].find('-2')]
+        Nflares = len(ok_fl[0])
+        edcut_out = str(edcut)
 
 
     return
