@@ -395,6 +395,9 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
     # can take a while for filesystem to do this...
     files = np.loadtxt(flares, dtype='str')
 
+    fout = open(outfile, 'w')
+    fout.write('# KICnumber, lsflag (0=llc,1=slc), dur (days), log(ed68), tot Nflares, [ Flares/Day (logEDbin) ] \n')
+
     for k in range(len(files)):
         # read in flare and fake results
 
@@ -402,13 +405,15 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
                            dtype='float',comments='#', ndmin=2)
         ''' t_min, t_max, std, nfake, amplmin, amplmax, durmin, durmax, ed68, ed90 '''
 
+        dur = np.nanmax(ffake[:,1]) - np.nanmin(ffake[:,0])
+
         # pick flares in acceptable energy range (above ed68)
         ed68_all = ffake[:,8]
         x = np.where((ed68_all > - 10))
         if len(x[0]) > 0:
             edcut = np.nanmedian(ed68_all[x])
         else:
-            edcut = 99
+            edcut = 9e9
 
         if os.path.isfile(files[k].replace('.fake', '.flare')):
             fdata = np.loadtxt(files[k].replace('.fake', '.flare'),
@@ -425,10 +430,17 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
                              (fdata[:,14] >= fdata[:,15])
                              )
 
-            # compute ED stats, etc
+            Nflares = len(ok_fl[0])
 
-        # Produce stats, even if no flares pass cut. The 0's are important
-        # ** NEED TO REDESIGN THIS TO SEARCH OVER ALL FILES, NOT JUST ONES WITH FLARES **
+            ed_hist, _ = np.histogram(np.log10(fdata[ok_fl,14]), bins=edbins)
+
+        else:
+            # Produce stats, even if no flares pass cut. The 0's are important
+            Nflares = 0
+            ed_hist = np.zeros(len(edbins) - 1)
+
+
+        ed_freq = ed_hist / dur
 
         # Stats to compute:
         # - # flares
@@ -444,13 +456,26 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
         '''
 
         # columns to output:
-        # KICnumber, ED68cut, Total Nflares, Total Flares/Day, Long/Short flag, Duration (days),
+        # KICnumber, Long/Short flag, Duration (days), ED68cut, Total Nflares,
         #   [in K fixed bins of ED, the total # of flares]
 
         kicnum = files[k][files[k].find('kplr')+4 : files[k].find('-2')]
-        Nflares = len(ok_fl[0])
-        edcut_out = str(edcut)
+        edcut_out = str(np.log10(edcut))
+        Nflares_out = str(Nflares)
+        dur_out = str(dur)
 
+        if (files[k].find('slc') == -1):
+            lsflag = '1'
+        else:
+            lsflag = '0'
+
+        outstring = kicnum + ', ' + lsflag + ', ' + dur_out + ', ' + edcut_out + ', ' + Nflares_out
+        for i in range(len(ed_freq)):
+            outstring = outstring + ', ' + str(ed_freq[i])
+
+        fout.write(outstring + '\n')
+
+    fout.close()
 
     return
 
