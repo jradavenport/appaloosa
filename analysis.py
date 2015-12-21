@@ -480,7 +480,7 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
     return
 
 
-def paper1_plots(condorfile='condorout.dat',
+def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz'):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
@@ -495,28 +495,41 @@ def paper1_plots(condorfile='condorout.dat',
 
     kicdata = pd.read_csv(kicfile, delimiter='|')
 
+    fdata = pd.read_csv(condorfile)
 
     # goal plots:
     # 1. color vs flare rate
-    # 2. galex-g color vs flare rate
-    # 3. g-r color vs period, point size/color with flare rate
-
+    # 2. galex-g color vs flare rate for a bin of SpT
+    # 3. g-i color vs period, point size/color with flare rate
+    # combined FFD for a couple months, then for all the months of 1 star
+    # combined FFD for all of a couple stars in same mass range
 
 
 
     return
 
 
-def energies(objectlist, kicfile='kic.txt.gz'):
+def energies(objectlist, kicfile='kic.txt.gz',
+             isochrone='0.5gyr.dat'):
     '''
-    Compute the quiescent energy for every star. Use the KIC colors and
-    an isochrone to get the absolute Kepler mag for each star, and thus
+    Compute the quiescent energy for every star. Use the KIC (g-i) color,
+    with an isochrone, get the absolute Kepler mag for each star, and thus
     the distance & luminosity.
+
+    Isochrone is a 0.5 Gyr track from the Padova CMD v2.7
+    http://stev.oapd.inaf.it/cgi-bin/cmd_2.7
+
+    Kepler and Sloan phot system both in AB mags.
 
     Returns
     -------
-
+    Quiescent Luminosities in the Kepler band
     '''
+
+    AB_zero = 3631e-23 # standard AB mag zeropoint [erg/s/cm2/Hz]
+    w0_kp = 6400e-8 # Kepler approx central wavelength [cm]
+
+
 
     return
 
