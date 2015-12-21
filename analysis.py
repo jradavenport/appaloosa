@@ -14,6 +14,34 @@ import os
 import appaloosa
 import pandas as pd
 
+
+def _ABmag2flux(mag, zeropt=48.60):
+    '''
+    Replicate the IDL procedure:
+    http://idlastro.gsfc.nasa.gov/ftp/pro/astro/mag2flux.pro
+    flux = 10**(-0.4*(mag +2.406 + 4*np.log10(wave0)))
+
+    But more explainable...
+    '''
+
+    c = 2.99792458e18 # speed of light, in [A/s]
+    wave0 = 6400.0 # approximate center of Kepler filter in [A]
+    fwhm = 4000.0 # approximate width of Kepler filter in [A]
+
+    # standard equation from Oke & Gunn (1883)
+    # has units: [erg/s/cm2/Hz]
+    f_nu = 10.0 ** ( (mag + zeropt) / (-2.5) )
+
+    # has units of [erg/s/cm2/A]
+    f_lambda = f_nu * c / (wave0**2.0)
+
+    # Finally: units of [erg/s/cm2]
+    flux = f_lambda * fwhm
+    # now all we'll need downstream is the distance to get L [erg/s]
+
+    return flux
+
+
 def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
     '''
     compare flare finding and properties between appaloosa and FBEYE
@@ -528,6 +556,7 @@ def energies(objectlist, kicfile='kic.txt.gz',
 
     AB_zero = 3631e-23 # standard AB mag zeropoint [erg/s/cm2/Hz]
     w0_kp = 6400e-8 # Kepler approx central wavelength [cm]
+    # e.g. see http://stev.oapd.inaf.it/~lgirardi/cmd_2.7/photsys.html
 
 
 
