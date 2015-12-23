@@ -15,19 +15,18 @@ import appaloosa
 import pandas as pd
 
 
-def _ABmag2flux(mag, zeropt=48.60):
+def _ABmag2flux(mag, zeropt=48.60,
+                wave0=6400.0, fwhm=4000.0):
     '''
     Replicate the IDL procedure:
     http://idlastro.gsfc.nasa.gov/ftp/pro/astro/mag2flux.pro
     flux = 10**(-0.4*(mag +2.406 + 4*np.log10(wave0)))
 
-    But more explainable...
+    Parameters set for Kepler band specifically
+    e.g. see http://stev.oapd.inaf.it/~lgirardi/cmd_2.7/photsys.html
     '''
 
     c = 2.99792458e18 # speed of light, in [A/s]
-    wave0 = 6400.0 # approximate center of Kepler filter in [A]
-    # e.g. see http://stev.oapd.inaf.it/~lgirardi/cmd_2.7/photsys.html
-    fwhm = 4000.0 # approximate width of Kepler filter in [A]
 
     # standard equation from Oke & Gunn (1883)
     # has units: [erg/s/cm2/Hz]
@@ -529,13 +528,16 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     fdata = pd.read_table(condorfile, delimiter=',', skiprows=1, header=None)
     # need KICnumber, Flare Freq data in units of ED
-    # kicnum_c = fdata.iloc[:,0]
+    kicnum_c = fdata.iloc[:,0].unique()
 
 
     # match two dataframes on KIC number
-    bigdata = pd.merge(kicdata, fdata, how='outer',
-                       left_on='kic_kepler_id', right_on=fdata.columns[0])
+    # bigdata = pd.merge(kicdata, kicnum_c, how='inner',
+    #                    left_on='kic_kepler_id', right_on=0)
 
+    bigdata = kicdata[kicdata['kic_kepler_id'].isin(kicnum_c)]
+
+    Lkp_uniq = energies(bigdata['kic_gmag'], bigdata['kic_imag'])
 
     # goal plots:
     # color vs flare rate
@@ -547,8 +549,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     return
 
 
-def energies(objectlist, kicfile='kic.txt.gz',
-             isochrone='0.5gyr.dat'):
+def energies(gmag, imag, isochrone='0.5gyr.dat', clr_thresh=0.05):
     '''
     Compute the quiescent energy for every star. Use the KIC (g-i) color,
     with an isochrone, get the absolute Kepler mag for each star, and thus
@@ -564,8 +565,16 @@ def energies(objectlist, kicfile='kic.txt.gz',
     Quiescent Luminosities in the Kepler band
     '''
 
+    # read in Padova isochrone file
+    dir = dir = os.path.dirname(os.path.realpath(__file__)) + '/misc/'
 
+    Mkp, Mg, Mi = np.loadtxt(dir + isochrone, comments='#',
+                             unpack=True, usecols=(8,9,11))
 
+    # now go thru each star, match to isochrone, compute distance and Lkp
+    # for k in range(len(gmag)):
+    #     clr_dist = np.nanargmin(np.abs((gmag-imag) - (Mg-Mi)))
+    #     if clr_dist < clr_thresh
 
     return
 
