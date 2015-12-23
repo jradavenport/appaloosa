@@ -42,6 +42,27 @@ def _ABmag2flux(mag, zeropt=48.60,
     return flux
 
 
+def _DistModulus(m_app, M_abs):
+    '''
+    Trivial wrapper to invert the classic equation:
+    m - M = 5 log(d) - 5
+
+    Parameters
+    ----------
+    m_app
+        apparent magnitude
+    M_abs
+        absolute magnitude
+
+    Returns
+    -------
+    distance, in pc
+    '''
+    mu = m_app - M_abs
+    dist = 10.0**(mu/5.0 + 1)
+    return dist
+
+
 def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
     '''
     compare flare finding and properties between appaloosa and FBEYE
@@ -518,8 +539,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     '''
 
     # read in KIC file
-    # http://archive.stsci.edu/pub/kepler/catalogs/ - data source
-    # http://archive.stsci.edu/kepler/kic10/help/quickcol.html - info
+    # http://archive.stsci.edu/pub/kepler/catalogs/ <- data source
+    # http://archive.stsci.edu/kepler/kic10/help/quickcol.html <- info
 
     kicdata = pd.read_csv(kicfile, delimiter='|')
     # need KICnumber, gmag, imag, logg (for cutting out crap only)
@@ -549,7 +570,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     return
 
 
-def energies(gmag, imag, isochrone='0.5gyr.dat', clr_thresh=0.05):
+def energies(gmag, imag, isochrone='0.5gyr.dat'):
     '''
     Compute the quiescent energy for every star. Use the KIC (g-i) color,
     with an isochrone, get the absolute Kepler mag for each star, and thus
@@ -566,17 +587,35 @@ def energies(gmag, imag, isochrone='0.5gyr.dat', clr_thresh=0.05):
     '''
 
     # read in Padova isochrone file
+    # note, I've cheated and clipped this isochrone to only have the
+    # Main Sequence, up to the blue Turn-Off limit.
     dir = dir = os.path.dirname(os.path.realpath(__file__)) + '/misc/'
 
     Mkp, Mg, Mi = np.loadtxt(dir + isochrone, comments='#',
                              unpack=True, usecols=(8,9,11))
 
-    # now go thru each star, match to isochrone, compute distance and Lkp
-    # for k in range(len(gmag)):
-    #     clr_dist = np.nanargmin(np.abs((gmag-imag) - (Mg-Mi)))
-    #     if clr_dist < clr_thresh
+    # To match observed data to the isochrone, cheat:
+    # e.g. Find interpolated g, given g-i. Same for Kp
+    Mgi = (Mg-Mi)
+    ss = np.argsort(Mgi) # needs to be sorted for interpolation
 
-    return
+    Mkp_o = np.interp((gmag-imag), Mgi[ss], Mkp[ss])
+    Mg_o = np.interp((gmag-imag), Mgi[ss], Mg[ss])
+
+    dist = _DistModulus(gmag, Mg_o)
+
+    dm = (gmag - Mg_o)
+    # returns Flux [erg/s/cm^2]
+    F_kp = _ABmag2flux(Mkp_o - dm)
+
+    # again, classic bread/butter right here,
+    # change Flux to Luminosity [erg/s]
+    L_kp = F_kp * (4.0 * np.pi * dist**2.0)
+
+    # !! Should be able to include errors on (g-i), propogate to
+    #    errors on Distance, and thus lower error limit on L_kp !!
+
+    return L_kp
 
 
 '''
