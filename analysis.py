@@ -26,6 +26,7 @@ def _ABmag2flux(mag, zeropt=48.60):
 
     c = 2.99792458e18 # speed of light, in [A/s]
     wave0 = 6400.0 # approximate center of Kepler filter in [A]
+    # e.g. see http://stev.oapd.inaf.it/~lgirardi/cmd_2.7/photsys.html
     fwhm = 4000.0 # approximate width of Kepler filter in [A]
 
     # standard equation from Oke & Gunn (1883)
@@ -522,13 +523,22 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # http://archive.stsci.edu/kepler/kic10/help/quickcol.html - info
 
     kicdata = pd.read_csv(kicfile, delimiter='|')
+    # need KICnumber, gmag, imag, logg (for cutting out crap only)
+    # kicnum_k = kicdata['kic_kepler_id']
 
-    fdata = pd.read_csv(condorfile)
+
+    fdata = pd.read_table(condorfile, delimiter=',', skiprows=1, header=None)
+    # need KICnumber, Flare Freq data in units of ED
+    # kicnum_c = fdata.iloc[:,0]
+
+
+    # match two dataframes on KIC number
+    bigdata = pd.merge(kicdata, fdata, how='outer',
+                       left_on='kic_kepler_id', right_on=fdata.columns[0])
+
 
     # goal plots:
-    # 1. color vs flare rate
-    # 2. galex-g color vs flare rate for a bin of SpT
-    # 3. g-i color vs period, point size/color with flare rate
+    # color vs flare rate
     # combined FFD for a couple months, then for all the months of 1 star
     # combined FFD for all of a couple stars in same mass range
 
@@ -554,9 +564,6 @@ def energies(objectlist, kicfile='kic.txt.gz',
     Quiescent Luminosities in the Kepler band
     '''
 
-    AB_zero = 3631e-23 # standard AB mag zeropoint [erg/s/cm2/Hz]
-    w0_kp = 6400e-8 # Kepler approx central wavelength [cm]
-    # e.g. see http://stev.oapd.inaf.it/~lgirardi/cmd_2.7/photsys.html
 
 
 
