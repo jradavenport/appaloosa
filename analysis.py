@@ -553,12 +553,23 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     # match two dataframes on KIC number
-    # bigdata = pd.merge(kicdata, kicnum_c, how='inner',
+    # bigdata = pd.merge(kicdata, kicnum_c, how='outer',
     #                    left_on='kic_kepler_id', right_on=0)
 
     bigdata = kicdata[kicdata['kic_kepler_id'].isin(kicnum_c)]
 
     Lkp_uniq = energies(bigdata['kic_gmag'], bigdata['kic_imag'])
+
+    '''
+    Now i have the L_kp values for the unique stars in the Condor run
+
+    Here's what I have to do still:
+    - Loop over all uniq stars, combine all FFD data from the months/quarters into 1 set of params
+    - Convert FFD params from ED in to energy
+    - Make plots of combining FFD quarters/months, convince self it works... (GJ 1243)
+    - Make summary plot(s) of "Master Flare Rate" or something, versus (Prot, Color)
+    '''
+
 
     # goal plots:
     # color vs flare rate
@@ -570,7 +581,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     return
 
 
-def energies(gmag, imag, isochrone='0.5gyr.dat'):
+def energies(gmag, imag, isochrone='0.5gyr.dat', return_dist=False):
     '''
     Compute the quiescent energy for every star. Use the KIC (g-i) color,
     with an isochrone, get the absolute Kepler mag for each star, and thus
@@ -602,6 +613,7 @@ def energies(gmag, imag, isochrone='0.5gyr.dat'):
     Mkp_o = np.interp((gmag-imag), Mgi[ss], Mkp[ss])
     Mg_o = np.interp((gmag-imag), Mgi[ss], Mg[ss])
 
+    pc2cm = 3.08568025e18
     dist = _DistModulus(gmag, Mg_o)
 
     dm = (gmag - Mg_o)
@@ -610,12 +622,18 @@ def energies(gmag, imag, isochrone='0.5gyr.dat'):
 
     # again, classic bread/butter right here,
     # change Flux to Luminosity [erg/s]
-    L_kp = F_kp * (4.0 * np.pi * dist**2.0)
+    L_kp = F_kp * (4.0 * np.pi * (dist * pc2cm)**2.0)
 
     # !! Should be able to include errors on (g-i), propogate to
     #    errors on Distance, and thus lower error limit on L_kp !!
 
-    return L_kp
+    # !! Should have some confidence about the interpolation,
+    #    e.g. if beyond g-i isochrone range !!
+
+    if return_dist is True:
+        return np.log10(L_kp), dist
+    else:
+        return np.log10(L_kp)
 
 
 '''
