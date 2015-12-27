@@ -59,7 +59,7 @@ def _DistModulus(m_app, M_abs):
     distance, in pc
     '''
     mu = m_app - M_abs
-    dist = 10.0**(mu/5.0 + 1)
+    dist = 10.0**(mu/5.0 + 1.0)
     return dist
 
 
@@ -558,7 +558,44 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     bigdata = kicdata[kicdata['kic_kepler_id'].isin(kicnum_c)]
 
-    Lkp_uniq = energies(bigdata['kic_gmag'], bigdata['kic_imag'])
+    Lkp_uniq, dist_uniq = energies(bigdata['kic_gmag'],
+                                   bigdata['kic_kmag'], return_dist=True)
+
+    '''
+    # Check Kkp for GJ 1243 against our previous estimate:
+    Lkp_hawley = [31.64,31.53, 31.18, 30.67, 30.22]
+    dist_hawley = [16.2, 14.2, 18.2, 12.05, 4.55]
+    id_hawley = [4142913, 4470937, 10647081, 9726699, 8451881]
+
+    for k in range(len(id_hawley)):
+        x = np.where((bigdata['kic_kepler_id']==id_hawley[k]))
+        print(x)
+        print('Dist: ', dist_hawley[k], dist_uniq[x])
+        print('Lkp: ', Lkp_hawley[k], Lkp_uniq[x])
+    '''
+
+    # make FFD plot for GJ 1243
+    gj1243 = np.where((fdata[0].values == 9726699))[0]
+
+    edbins = np.arange(-5, 5, 0.2)
+    edbins = np.append(-10, edbins)
+    edbins = np.append(edbins, 10)
+
+    plt.figure()
+    for i in range(len(gj1243)):
+        if fdata.loc[gj1243[i], 1] == 0:
+            clr = 'red'
+        else:
+            clr = 'blue'
+        plt.plot(edbins[1:], fdata.loc[gj1243[i], 5:]+1e-6,
+                 color=clr, marker='o')
+        plt.plot(edbins[1:], fdata.loc[gj1243[i], 5:]+1e-6,
+                 color=clr)
+    plt.yscale('log')
+    plt.xlabel('log ED (s)')
+    plt.ylabel('Flare Freq (#/day)')
+    plt.show()
+
 
     '''
     Now i have the L_kp values for the unique stars in the Condor run
@@ -577,11 +614,11 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # combined FFD for all of a couple stars in same mass range
 
 
-
     return
 
 
-def energies(gmag, imag, isochrone='0.5gyr.dat', return_dist=False):
+# def energies(gmag, rmag, imag, isochrone='1.0gyr.dat', return_dist=False):
+def energies(gmag, kmag, isochrone='1.0gyr.dat', return_dist=False):
     '''
     Compute the quiescent energy for every star. Use the KIC (g-i) color,
     with an isochrone, get the absolute Kepler mag for each star, and thus
@@ -602,27 +639,62 @@ def energies(gmag, imag, isochrone='0.5gyr.dat', return_dist=False):
     # Main Sequence, up to the blue Turn-Off limit.
     dir = dir = os.path.dirname(os.path.realpath(__file__)) + '/misc/'
 
-    Mkp, Mg, Mi = np.loadtxt(dir + isochrone, comments='#',
-                             unpack=True, usecols=(8,9,11))
+    '''
+    Mkp, Mg, Mr, Mi = np.loadtxt(dir + isochrone, comments='#',
+                                 unpack=True, usecols=(8,9,10,11))
 
     # To match observed data to the isochrone, cheat:
     # e.g. Find interpolated g, given g-i. Same for Kp
+
+    # do this 3 times, each color combo. Average result for M_kp
     Mgi = (Mg-Mi)
     ss = np.argsort(Mgi) # needs to be sorted for interpolation
-
-    Mkp_o = np.interp((gmag-imag), Mgi[ss], Mkp[ss])
+    Mkp_go = np.interp((gmag-imag), Mgi[ss], Mkp[ss])
     Mg_o = np.interp((gmag-imag), Mgi[ss], Mg[ss])
 
-    pc2cm = 3.08568025e18
-    dist = _DistModulus(gmag, Mg_o)
+    Mgr = (Mg-Mr)
+    ss = np.argsort(Mgr)
+    Mkp_ro = np.interp((gmag-rmag), Mgr[ss], Mkp[ss])
+    Mr_o = np.interp((gmag-rmag), Mgr[ss], Mr[ss])
 
-    dm = (gmag - Mg_o)
+    Mri = (Mr-Mi)
+    ss = np.argsort(Mri)
+    Mkp_io = np.interp((rmag-imag), Mri[ss], Mkp[ss])
+    Mi_o = np.interp((rmag-imag), Mri[ss], Mi[ss])
+
+    Mkp_o = (Mkp_go + Mkp_ro + Mkp_io) / 3.0
+
+    dist_g = np.array(_DistModulus(gmag, Mg_o), dtype='float')
+    dist_r = np.array(_DistModulus(rmag, Mr_o), dtype='float')
+    dist_i = np.array(_DistModulus(imag, Mi_o), dtype='float')
+    dist = (dist_g + dist_r + dist_i) / 3.0
+
+    dm_g = (gmag - Mg_o)
+    dm_r = (rmag - Mr_o)
+    dm_i = (imag - Mi_o)
+    dm = (dm_g + dm_r + dm_i) / 3.0
+    '''
+
+
+    Mkp, Mg, Mk = np.loadtxt(dir + isochrone, comments='#',
+                             unpack=True, usecols=(8,9,18))
+
+    Mgk = (Mg-Mk)
+    ss = np.argsort(Mgk) # needs to be sorted for interpolation
+    Mkp_o = np.interp((gmag-kmag), Mgk[ss], Mkp[ss])
+    Mk_o = np.interp((gmag-kmag), Mgk[ss], Mk[ss])
+
+    dist = np.array(_DistModulus(kmag, Mk_o), dtype='float')
+    dm = (kmag - Mk_o)
+
+    pc2cm = 3.08568025e18
+
     # returns Flux [erg/s/cm^2]
-    F_kp = _ABmag2flux(Mkp_o - dm)
+    F_kp = _ABmag2flux(Mkp_o + dm)
 
     # again, classic bread/butter right here,
     # change Flux to Luminosity [erg/s]
-    L_kp = F_kp * (4.0 * np.pi * (dist * pc2cm)**2.0)
+    L_kp = np.array(F_kp * (4.0 * np.pi * (dist * pc2cm)**2.0), dtype='float')
 
     # !! Should be able to include errors on (g-i), propogate to
     #    errors on Distance, and thus lower error limit on L_kp !!
