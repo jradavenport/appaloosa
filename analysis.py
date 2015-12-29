@@ -581,24 +581,41 @@ def paper1_plots(condorfile='condorout.dat.gz',
     edbins = np.append(-10, edbins)
     edbins = np.append(edbins, 10)
 
+    fnorm = np.zeros_like(edbins[1:])
+    fsum = np.zeros_like(edbins[1:])
+
     plt.figure()
-    for i in range(len(gj1243)):
-        if fdata.loc[gj1243[i], 1] == 0:
-            clr = 'red'
-        else:
-            clr = 'blue'
-        plt.plot(edbins[1:], fdata.loc[gj1243[i], 5:]+1e-6,
-                 color=clr, marker='o')
-        plt.plot(edbins[1:], fdata.loc[gj1243[i], 5:]+1e-6,
-                 color=clr)
+
+    # the "master FFD" from the GJ 1243 work (short cadence only)
+    mx,my = np.loadtxt('gj1243_ffd_master_xy.dat', unpack=True, skiprows=1)
+    # plt.scatter(mx, my, c='k', alpha=0.35)
+
+    Lkp_i = Lkp_uniq[np.where((bigdata['kic_kepler_id'].values == 9726699))][0]
+    for i in range(0,len(gj1243)):
+        ok = np.where((edbins[1:] >= fdata.loc[gj1243[i],3]))[0]
+        if len(ok) > 0:
+            plt.plot(edbins[1:][ok][::-1] + Lkp_i,
+                     np.cumsum(fdata.loc[gj1243[i],5:].values[ok][::-1]),
+                     alpha=0.5, color='red')
+            fnorm[ok] = fnorm[ok] + 1
+            fsum[ok] = fsum[ok] + fdata.loc[gj1243[i],5:].values[ok]
+
+    plt.plot(edbins[1:][::-1] + Lkp_i,
+             np.cumsum(fsum[::-1]/fnorm[::-1]),
+             linewidth=4, color='blue')
+
+    #plt.plot(edbins[1:][::-1]+30.6, np.cumsum(fdata.loc[gj1243,5:][::-1]).sum(axis=0)/len(gj1243),c='red')
     plt.yscale('log')
-    plt.xlabel('log ED (s)')
-    plt.ylabel('Flare Freq (#/day)')
+    plt.xlabel('log Energy (erg)')
+    plt.ylabel('Cumulative Flare Freq (#/day)')
+    plt.xlim(30.5, 34.5)
+    plt.ylim(1e-3, 1e1)
+    plt.savefig('gj1243_example.png', dpi=300)
     plt.show()
 
 
+
     '''
-    Now i have the L_kp values for the unique stars in the Condor run
 
     Here's what I have to do still:
     - Loop over all uniq stars, combine all FFD data from the months/quarters into 1 set of params
