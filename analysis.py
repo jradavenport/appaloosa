@@ -575,7 +575,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     '''
 
     # make FFD plot for GJ 1243
-    gj1243 = np.where((fdata[0].values == 9726699))[0]
+    star = np.where((fdata[0].values == 9726699))[0]
 
     edbins = np.arange(-5, 5, 0.2)
     edbins = np.append(-10, edbins)
@@ -591,26 +591,31 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # plt.scatter(mx, my, c='k', alpha=0.35)
 
     Lkp_i = Lkp_uniq[np.where((bigdata['kic_kepler_id'].values == 9726699))][0]
-    for i in range(0,len(gj1243)):
-        ok = np.where((edbins[1:] >= fdata.loc[gj1243[i],3]))[0]
+    for i in range(0,len(star)):
+        ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
         if len(ok) > 0:
+            if fdata.loc[star[i],1] == 1:
+                clr = 'red'
+            else:
+                clr = 'blue'
             plt.plot(edbins[1:][ok][::-1] + Lkp_i,
-                     np.cumsum(fdata.loc[gj1243[i],5:].values[ok][::-1]),
-                     alpha=0.5, color='red')
+                     np.cumsum(fdata.loc[star[i],5:].values[ok][::-1]),
+                     alpha=0.5, color=clr)
+
             fnorm[ok] = fnorm[ok] + 1
-            fsum[ok] = fsum[ok] + fdata.loc[gj1243[i],5:].values[ok]
+            fsum[ok] = fsum[ok] + fdata.loc[star[i],5:].values[ok]
 
     plt.plot(edbins[1:][::-1] + Lkp_i,
              np.cumsum(fsum[::-1]/fnorm[::-1]),
-             linewidth=4, color='blue')
+             linewidth=4, color='black')
 
-    #plt.plot(edbins[1:][::-1]+30.6, np.cumsum(fdata.loc[gj1243,5:][::-1]).sum(axis=0)/len(gj1243),c='red')
+    #plt.plot(edbins[1:][::-1]+30.6, np.cumsum(fdata.loc[star,5:][::-1]).sum(axis=0)/len(star),c='red')
     plt.yscale('log')
     plt.xlabel('log Energy (erg)')
     plt.ylabel('Cumulative Flare Freq (#/day)')
-    plt.xlim(30.5, 34.5)
-    plt.ylim(1e-3, 1e1)
-    plt.savefig('gj1243_example.png', dpi=300)
+    plt.xlim(31, 34.5)
+    plt.ylim(1e-3, 3e0)
+    # plt.savefig('gj1243_example.png', dpi=300)
     plt.show()
 
 
@@ -730,5 +735,5 @@ def energies(gmag, kmag, isochrone='1.0gyr.dat', return_dist=False):
   $ python analysis.py
 '''
 if __name__ == "__main__":
-    import sys
-    print(benchmark(objectid=sys.argv[1], fbeyefile=sys.argv[2]))
+    # import sys
+    paper1_plots()
