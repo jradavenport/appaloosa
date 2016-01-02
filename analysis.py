@@ -574,23 +574,30 @@ def paper1_plots(condorfile='condorout.dat.gz',
         print('Lkp: ', Lkp_hawley[k], Lkp_uniq[x])
     '''
 
-    # make FFD plot for GJ 1243
-    star = np.where((fdata[0].values == 9726699))[0]
-
     edbins = np.arange(-5, 5, 0.2)
     edbins = np.append(-10, edbins)
     edbins = np.append(edbins, 10)
 
+    # arrays for FFD
     fnorm = np.zeros_like(edbins[1:])
     fsum = np.zeros_like(edbins[1:])
+
+    # vars for L_fl/L_kp (Lurie 2015)
+    # ED_tot = 0.
+    # dur_tot = 0.
+
+
+    # make FFD plot for GJ 1243
+    s_num = 9726699
+    star = np.where((fdata[0].values == s_num))[0]
 
     plt.figure()
 
     # the "master FFD" from the GJ 1243 work (short cadence only)
-    mx,my = np.loadtxt('gj1243_ffd_master_xy.dat', unpack=True, skiprows=1)
+    # mx,my = np.loadtxt('gj1243_ffd_master_xy.dat', unpack=True, skiprows=1)
     # plt.scatter(mx, my, c='k', alpha=0.35)
 
-    Lkp_i = Lkp_uniq[np.where((bigdata['kic_kepler_id'].values == 9726699))][0]
+    Lkp_i = Lkp_uniq[np.where((bigdata['kic_kepler_id'].values == s_num))][0]
     for i in range(0,len(star)):
         ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
         if len(ok) > 0:
@@ -605,9 +612,22 @@ def paper1_plots(condorfile='condorout.dat.gz',
             fnorm[ok] = fnorm[ok] + 1
             fsum[ok] = fsum[ok] + fdata.loc[star[i],5:].values[ok]
 
-    plt.plot(edbins[1:][::-1] + Lkp_i,
-             np.cumsum(fsum[::-1]/fnorm[::-1]),
-             linewidth=4, color='black')
+            # ED_tot = ED_tot + sum(fdata.loc[star[i],5:].values[ok] *
+            #                       fdata.loc[star[i],2] *
+            #                       edbins[1:][ok])
+        #
+        # dur_tot = dur_tot + fdata.loc[star[i],2]
+    # Lfl_Lkp = ED_tot / dur_tot
+
+    # the important arrays
+    ffd_x = edbins[1:][::-1] + Lkp_i
+    ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
+
+    ffd_ok = np.where((ffd_y > 0))
+    fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
+
+
+    plt.plot(ffd_x, ffd_y, linewidth=4, color='black')
 
     #plt.plot(edbins[1:][::-1]+30.6, np.cumsum(fdata.loc[star,5:][::-1]).sum(axis=0)/len(star),c='red')
     plt.yscale('log')
@@ -619,6 +639,26 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.show()
 
 
+    ffd_ab = np.zeros((2,len(kicnum_c)))
+    for k in range(len(kicnum_c)):
+        star = np.where((fdata[0].values == kicnum_c[k]))[0]
+        mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[k]))
+        if len(mtch[0])>0:
+            Lkp_i = Lkp_uniq[mtch][0]
+
+            for i in range(0,len(star)):
+                ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
+                if len(ok) > 0:
+                    fnorm[ok] = fnorm[ok] + 1
+                    fsum[ok] = fsum[ok] + fdata.loc[star[i],5:].values[ok]
+
+            # the important arrays
+            ffd_x = edbins[1:][::-1] + Lkp_i
+            ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
+
+            ffd_ok = np.where((ffd_y > 0))
+            fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
+            ffd_ab[:,k] = fit
 
     '''
 
