@@ -552,6 +552,30 @@ def paper1_plots(condorfile='condorout.dat.gz',
     kicnum_c = fdata.iloc[:,0].unique()
 
 
+    # total # flares in dataset!
+    print('total # flares found: ', fdata.loc[:,4].sum())
+
+    plt.figure()
+    plt.hist(fdata.loc[:,4].values, bins=100)
+    plt.yscale('log')
+    plt.xlabel('# Flares')
+    plt.ylabel('# Data Segments')
+    plt.savefig('Nflares_file_hist.png', dpi=300)
+    plt.show()
+
+
+    num_fl_tot = fdata.groupby([0])[4].sum()
+
+    plt.figure()
+    plt.hist(num_fl_tot.values, bins=100, range=(0,1000))
+    plt.yscale('log')
+    plt.xlabel('# Flares')
+    plt.ylabel('# Stars')
+    plt.savefig('Nflares_hist.png', dpi=300)
+    plt.show()
+
+
+
     # match two dataframes on KIC number
     # bigdata = pd.merge(kicdata, kicnum_c, how='outer',
     #                    left_on='kic_kepler_id', right_on=0)
@@ -626,6 +650,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     ffd_ok = np.where((ffd_y > 0))
     fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
 
+    print('FFD fit parameters for GJ 1243')
+    print(fit)
 
     plt.plot(ffd_x, ffd_y, linewidth=4, color='black')
 
@@ -639,7 +665,34 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.show()
 
 
+
+    # Compute Rate at log E = 32
+    r32 = np.zeros(len(kicnum_c)) - 99.
+
+    for k in range(len(kicnum_c)):
+        star = np.where((fdata[0].values == kicnum_c[k]))[0]
+        mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[k]))
+        if len(mtch[0])>0:
+            Lkp_i = Lkp_uniq[mtch][0]
+
+            for i in range(0,len(star)):
+                ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
+                if len(ok) > 0:
+                    fnorm[ok] = fnorm[ok] + 1
+                    fsum[ok] = fsum[ok] + fdata.loc[star[i],5:].values[ok]
+
+            # the important arrays
+            ffd_x = edbins[1:][::-1] + Lkp_i
+            ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
+
+            # x32 = np.where((ffd_x >= 32.0))
+            if (sum(ffd_x >= 32.0) > 0):
+                r32[k] = max(ffd_y[ffd_x >= 32.0])
+
+    '''
+    # now compute FFD for every star
     ffd_ab = np.zeros((2,len(kicnum_c)))
+
     for k in range(len(kicnum_c)):
         star = np.where((fdata[0].values == kicnum_c[k]))[0]
         mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[k]))
@@ -660,12 +713,17 @@ def paper1_plots(condorfile='condorout.dat.gz',
             fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
             ffd_ab[:,k] = fit
 
+    #
+    hh = plt.hist(ffd_ab[0,:], bins=np.arange(-1,1,0.01))
+    plt.yscale('log')
+    plt.show()
+    '''
+
+    ###
+
     '''
 
     Here's what I have to do still:
-    - Loop over all uniq stars, combine all FFD data from the months/quarters into 1 set of params
-    - Convert FFD params from ED in to energy
-    - Make plots of combining FFD quarters/months, convince self it works... (GJ 1243)
     - Make summary plot(s) of "Master Flare Rate" or something, versus (Prot, Color)
     '''
 
