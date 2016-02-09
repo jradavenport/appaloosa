@@ -4,6 +4,10 @@ Routines to do analysis on the appaloosa flare finding runs. Including
   - check against other sample of flares from Kepler
   - completeness and efficiency tests against FBEYE results
   - completeness and efficiency tests against fake data (?)
+
+
+  Run on WWU workstation in dir:
+  ~/research/kepler-flares/
 '''
 
 import numpy as np
@@ -555,13 +559,13 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # total # flares in dataset!
     print('total # flares found: ', fdata.loc[:,4].sum())
 
-    plt.figure()
-    plt.hist(fdata.loc[:,4].values, bins=100)
-    plt.yscale('log')
-    plt.xlabel('# Flares')
-    plt.ylabel('# Data Segments')
-    plt.savefig('Nflares_file_hist.png', dpi=300)
-    plt.show()
+    # plt.figure()
+    # plt.hist(fdata.loc[:,4].values, bins=100)
+    # plt.yscale('log')
+    # plt.xlabel('# Flares')
+    # plt.ylabel('# Data Segments')
+    # plt.savefig('Nflares_file_hist.png', dpi=300)
+    # plt.show()
 
 
     num_fl_tot = fdata.groupby([0])[4].sum()
@@ -661,39 +665,20 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylabel('Cumulative Flare Freq (#/day)')
     plt.xlim(31, 34.5)
     plt.ylim(1e-3, 3e0)
-    # plt.savefig('gj1243_example.png', dpi=300)
+    plt.savefig('gj1243_example.png', dpi=300)
     plt.show()
 
 
 
-    # Compute Rate at log E = 32
-    r32 = np.zeros(len(kicnum_c)) - 99.
+    # For every star: compute flare rate at some arbitrary energy
+    Epoint = 32
+    rate_E = np.zeros(len(kicnum_c)) - 99.
 
-    for k in range(len(kicnum_c)):
-        star = np.where((fdata[0].values == kicnum_c[k]))[0]
-        mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[k]))
-        if len(mtch[0])>0:
-            Lkp_i = Lkp_uniq[mtch][0]
-
-            for i in range(0,len(star)):
-                ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
-                if len(ok) > 0:
-                    fnorm[ok] = fnorm[ok] + 1
-                    fsum[ok] = fsum[ok] + fdata.loc[star[i],5:].values[ok]
-
-            # the important arrays
-            ffd_x = edbins[1:][::-1] + Lkp_i
-            ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
-
-            # x32 = np.where((ffd_x >= 32.0))
-            if (sum(ffd_x >= 32.0) > 0):
-                r32[k] = max(ffd_y[ffd_x >= 32.0])
-
-    '''
-    # now compute FFD for every star
+    # Also, compute FFD for every star
     ffd_ab = np.zeros((2,len(kicnum_c)))
 
     for k in range(len(kicnum_c)):
+        # find the k'th star in the KIC list
         star = np.where((fdata[0].values == kicnum_c[k]))[0]
         mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[k]))
         if len(mtch[0])>0:
@@ -705,19 +690,41 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     fnorm[ok] = fnorm[ok] + 1
                     fsum[ok] = fsum[ok] + fdata.loc[star[i],5:].values[ok]
 
-            # the important arrays
+            # the important arrays for the averaged FFD
             ffd_x = edbins[1:][::-1] + Lkp_i
             ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
 
+            # Fit the FFD w/ a line, save the coefficeints
             ffd_ok = np.where((ffd_y > 0))
             fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
             ffd_ab[:,k] = fit
 
-    #
-    hh = plt.hist(ffd_ab[0,:], bins=np.arange(-1,1,0.01))
-    plt.yscale('log')
+            # determine the value of the FFD at the Energy point
+            if (sum(ffd_x >= Epoint) > 0):
+                rate_E[k] = max(ffd_y[ffd_x >= Epoint])
+
+
+
+    #########################################
+    #      NGC 6811 plots
+    
+    ocfile='meibom2011_tbl1.txt'
+
+    # Remake the gyrochronology plot from Meibom et al (2011) for NGC 6811 (color vs Prot),
+    #  and add another panel of (color vs flare rate) or something similar
+
+    ocdata = pd.read_table(ocfile, header=None, comment='#', delim_whitespace=True)
+    # col's I care about:
+    # KIC=0, g=7, r=8, Per=9
+
+    plt.figure()
+    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9])
+    plt.xlabel('g-r (mag)')
+    plt.ylabel('P$_{rot}$ (days)')
     plt.show()
-    '''
+
+
+
 
     ###
 
