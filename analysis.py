@@ -576,8 +576,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('# Flares')
     plt.ylabel('# Stars')
     plt.savefig('Nflares_hist.png', dpi=300)
-    plt.show()
-
+    # plt.show()
+    plt.close()
 
 
     # match two dataframes on KIC number
@@ -586,8 +586,28 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     bigdata = kicdata[kicdata['kic_kepler_id'].isin(kicnum_c)]
 
+
+    # compute the distances and luminosities of all stars
     Lkp_uniq, dist_uniq = energies(bigdata['kic_gmag'],
                                    bigdata['kic_kmag'], return_dist=True)
+
+
+
+    # ingest Amy McQuillans rotation period catalog
+    rotfile = 'Table_Periodic.txt'
+
+    rotdata = pd.read_table(rotfile, delimiter=',', comment='#', header=None)
+    # KID,Teff,logg,Mass,Prot,Prot_err,Rper,LPH,w,DC,Flag
+
+
+    #########################################
+    #      Explanatory Figures
+    # including detrending examples, sample LC portions, etc
+    # put early in script so can remamke quickly
+
+
+
+
 
     '''
     # Check Kkp for GJ 1243 against our previous estimate:
@@ -615,7 +635,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # dur_tot = 0.
 
 
-    # make FFD plot for GJ 1243
+    # make FFD plot for specific star, in this case GJ 1243
     s_num = 9726699
     star = np.where((fdata[0].values == s_num))[0]
 
@@ -666,8 +686,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlim(31, 34.5)
     plt.ylim(1e-3, 3e0)
     plt.savefig('gj1243_example.png', dpi=300)
-    plt.show()
-
+    # plt.show()
+    plt.close()
 
 
     # For every star: compute flare rate at some arbitrary energy
@@ -707,7 +727,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     #########################################
     #      NGC 6811 plots
-    
+
     ocfile='meibom2011_tbl1.txt'
 
     # Remake the gyrochronology plot from Meibom et al (2011) for NGC 6811 (color vs Prot),
@@ -721,8 +741,28 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9])
     plt.xlabel('g-r (mag)')
     plt.ylabel('P$_{rot}$ (days)')
-    plt.show()
+    plt.savefig('ngc6811_gyro.png', dpi=300)
+    # plt.show()
+    plt.close()
 
+    rate_oc = np.zeros(ocdata.shape[0]) - 99.
+    fit_oc = np.zeros(ocdata.shape[0]) - 99.
+
+    for k in range(ocdata.shape[0]):
+        mtch = np.where((kicnum_c == ocdata.iloc[:,0].values[k]))
+        if len(mtch[0])>0:
+            rate_oc[k] = rate_E[mtch]
+            fit_oc[k] = np.polyval(ffd_ab[:,mtch], 32)
+
+
+    plt.figure()
+    # plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), rate_oc)
+    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), fit_oc)
+    # now add contours for the entire field, use Prot from Amy McQuillan's work
+    plt.xlabel('g-r (mag)')
+    plt.ylabel('R$_{32}$ (#/day)')
+    plt.savefig('ngc6811_flare.png', dpi=300)
+    plt.show()
 
 
 
