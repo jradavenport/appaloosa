@@ -12,11 +12,14 @@ Routines to do analysis on the appaloosa flare finding runs. Including
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib.colors import LogNorm
 from scipy.stats import binned_statistic_2d
 from os.path import expanduser
 import os
 import appaloosa
 import pandas as pd
+import pickle
 
 
 def _ABmag2flux(mag, zeropt=48.60,
@@ -693,15 +696,21 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # For every star: compute flare rate at some arbitrary energy
     Epoint = 32
     rate_E = np.zeros(len(kicnum_c)) - 99.
+    fit_E = np.zeros(len(kicnum_c)) - 99.
 
     # Also, compute FFD for every star
     ffd_ab = np.zeros((2,len(kicnum_c)))
 
+    gr_all = np.zeros(len(kicnum_c)) - 99.
     for k in range(len(kicnum_c)):
-        # find the k'th star in the KIC list
+        # find the k'th star in the KIC list in the Flare outputs
         star = np.where((fdata[0].values == kicnum_c[k]))[0]
+        # find this star in the KIC data
         mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[k]))
         if len(mtch[0])>0:
+            gr_all[k] = bigdata['kic_gmag'].values[mtch][0] - \
+                        bigdata['kic_rmag'].values[mtch][0]
+
             Lkp_i = Lkp_uniq[mtch][0]
 
             for i in range(0,len(star)):
@@ -718,6 +727,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
             ffd_ok = np.where((ffd_y > 0))
             fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
             ffd_ab[:,k] = fit
+            fit_E[k] = np.polyval(fit, Epoint)
 
             # determine the value of the FFD at the Energy point
             if (sum(ffd_x >= Epoint) > 0):
@@ -752,16 +762,19 @@ def paper1_plots(condorfile='condorout.dat.gz',
         mtch = np.where((kicnum_c == ocdata.iloc[:,0].values[k]))
         if len(mtch[0])>0:
             rate_oc[k] = rate_E[mtch]
-            fit_oc[k] = np.polyval(ffd_ab[:,mtch], 32)
+            fit_oc[k] = np.polyval(ffd_ab[:,mtch], Epoint)
 
 
     plt.figure()
-    # plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), rate_oc)
+     # add contours for the entire field
+    plt.hist2d(gr_all, fit_E, bins=100, range=[[0,1.5], [0,0.05]], alpha=1.0, norm=LogNorm(), cmap=cm.Greys_r)
+
+   # plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), rate_oc)
     plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), fit_oc)
-    # now add contours for the entire field, use Prot from Amy McQuillan's work
+
     plt.xlabel('g-r (mag)')
     plt.ylabel('R$_{32}$ (#/day)')
-    plt.savefig('ngc6811_flare.png', dpi=300)
+    plt.savefig('ngc6811_flare_all.png', dpi=300)
     plt.show()
 
 
