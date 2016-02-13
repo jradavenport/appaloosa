@@ -602,6 +602,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     rotdata = pd.read_table(rotfile, delimiter=',', comment='#', header=None)
     # KID,Teff,logg,Mass,Prot,Prot_err,Rper,LPH,w,DC,Flag
 
+    Prot_all = np.zeros(len(kicnum_c)) - 99.
+
 
     #########################################
     #      Explanatory Figures
@@ -733,6 +735,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
             if (sum(ffd_x >= Epoint) > 0):
                 rate_E[k] = max(ffd_y[ffd_x >= Epoint])
 
+        rotmtch = np.where(rotdata.iloc[:,0].values == kicnum_c[k])
+        if len(rotmtch[0])>0:
+            Prot_all[k] = rotdata.iloc[:,4].values[rotmtch]
+
 
 
     #########################################
@@ -746,6 +752,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     ocdata = pd.read_table(ocfile, header=None, comment='#', delim_whitespace=True)
     # col's I care about:
     # KIC=0, g=7, r=8, Per=9
+
 
     plt.figure()
     plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9])
@@ -765,9 +772,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
             fit_oc[k] = np.polyval(ffd_ab[:,mtch], Epoint)
 
 
+
     plt.figure()
      # add contours for the entire field
-    plt.hist2d(gr_all, fit_E, bins=100, range=[[0,1.5], [0,0.05]], alpha=1.0, norm=LogNorm(), cmap=cm.Greys_r)
+    plt.hist2d(gr_all, fit_E, bins=100, range=[[0,1.5], [0,0.05]], alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
 
    # plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), rate_oc)
     plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), fit_oc)
@@ -775,8 +783,53 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('g-r (mag)')
     plt.ylabel('R$_{32}$ (#/day)')
     plt.savefig('ngc6811_flare_all.png', dpi=300)
+    plt.close()
+
+
+
+    ##################
+    #  # now the big master plot, style taken from the K2 meeting plot...
+    clr = np.log10(fit_E)
+    okclr = np.where(np.isfinite(clr))
+
+    plt.figure()
+    hh = plt.hist(clr[okclr], bins=100)
     plt.show()
 
+    ##### try it first as a scatter plot
+    plt.figure()
+    plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr], alpha=0.7, lw=0, cmap=cm.afmhot_r, s=50)
+    plt.xlabel('g-r (mag)')
+    plt.ylabel('P$_{rot}$ (days)')
+    plt.yscale('log')
+    plt.xlim((0,1.7))
+    plt.ylim((0.1,100))
+    cb = plt.colorbar()
+    cb.set_label('log R$_{32}$ (#/day)')
+    plt.savefig('masterplot.png', dpi=300)
+    plt.close()
+
+
+    plt.figure()
+    plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr], alpha=0.7, lw=0, cmap=cm.afmhot_r, s=50)
+    cb = plt.colorbar()
+    cb.set_label('log R$_{32}$ (#/day)')
+    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9], c=np.log10(fit_oc), cmap=cm.YlGnBu_r, s=50)
+    plt.xlabel('g-r (mag)')
+    plt.ylabel('P$_{rot}$ (days)')
+    plt.yscale('log')
+    plt.xlim((0,1.7))
+    plt.ylim((0.1,100))
+    cb2 = plt.colorbar()
+    cb2.set_label('log R$_{32}$ (#/day)')
+    plt.savefig('masterplot_cluster.png', dpi=300)
+    plt.show()
+
+
+
+    ##### now as a pixelated plot
+    # bin2d, xx, yy, _ = binned_statistic_2d(gr_all, np.log10(Prot_all), clr,
+    #                                        statistic='median', range=[[-1,4],[-1,2]], bins=75)
 
 
     ###
@@ -817,7 +870,13 @@ def energies(gmag, kmag, isochrone='1.0gyr.dat', return_dist=False):
     # read in Padova isochrone file
     # note, I've cheated and clipped this isochrone to only have the
     # Main Sequence, up to the blue Turn-Off limit.
-    dir = dir = os.path.dirname(os.path.realpath(__file__)) + '/misc/'
+
+    try:
+        __file__
+    except NameError:
+        __file__ = os.getenv("HOME") +  '/python/appaloosa/analysis.py'
+
+    dir = os.path.dirname(os.path.realpath(__file__)) + '/misc/'
 
     '''
     Mkp, Mg, Mr, Mi = np.loadtxt(dir + isochrone, comments='#',
