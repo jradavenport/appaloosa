@@ -18,6 +18,7 @@ from pandas import rolling_std
 from scipy import stats
 from scipy.optimize import curve_fit
 from scipy.signal import wiener
+from scipy import signal
 from astropy.io import fits
 
 # from rayleigh import RayleighPowerSpectrum
@@ -670,7 +671,7 @@ def MultiFind(time, flux, error, flags, mode=3,
         flux_model3 = detrend.MultiBoxcar(time, flux, error, kernel=3.0)
 
         flux_model = (flux_model1 + flux_model2 + flux_model3) / 3.
-
+        flux_diff = flux - flux_model
 
     if (mode == 2):
         # first do a pass thru w/ largebox to get obvious flares
@@ -679,6 +680,7 @@ def MultiFind(time, flux, error, flags, mode=3,
 
         box2 = detrend.MultiBoxcar(time, flux_i - sin1, error, kernel=0.25)
         flux_model = (box2 + sin1)
+        flux_diff = flux - flux_model
 
 
     if (mode == 3):
@@ -694,11 +696,15 @@ def MultiFind(time, flux, error, flags, mode=3,
 
         flux_model = detrend.IRLSSpline(time, box3, error, numpass=10) + sin1
 
+        signalfwhm=0.01
+        dt = np.nanmedian(time[1:] - time[0:-1])
+        ftime = np.arange(0, 2, dt)
+        modelfilter = aflare1(ftime, 1, signalfwhm, 1)
+        flux_diff = signal.correlate(flux - flux_model, mode='same')
 
     # run final flare-find on DATA - MODEL
-    isflare = FINDflare(flux - flux_model, error, avg_std=True, N1=2, N3=2,
-                        returnbinary=True)
-
+    isflare = FINDflare(flux_diff, error, N1=1, N3=2,
+                        returnbinary=True, avg_std=True)
 
 
     # now pick out final flare candidate points from above
@@ -727,6 +733,24 @@ def MultiFind(time, flux, error, flags, mode=3,
 
     # print(istart, len(istart))
     return istart, istop, flux_model
+
+
+# sketching some baby step ideas w/a matched filter
+'''
+def MatchedFilterFind(time, flux, signalfwhm=0.01):
+    dt = np.nanmedian(time[1:] - time[0:-1])
+    ftime = np.arange(0, 2, dt)
+    modelfilter = aflare1(ftime, 1, signalfwhm, 1)
+
+    corr = signal.correlate(flux-np.nanmedian(flux), modelfilter, mode='same')
+
+    plt.figure()
+    plt.plot(time, flux - np.nanmedian(flux))
+    plt.plot(time, corr,'red')
+    plt.show()
+
+    return
+'''
 
 
 def FakeFlares(time, flux, error, flags, tstart, tstop,
