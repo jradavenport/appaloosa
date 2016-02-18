@@ -112,3 +112,7 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
     print('for use in analysis.py next.')
 
     return
+
+if __name__ == "__main__":
+    # import sys
+    PostCondor()
