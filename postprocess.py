@@ -4,8 +4,10 @@ import os
 
 def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
     '''
-    This requires the data from the giant Condor run. Either in a tarball,
-    or on the WWU cluster
+    This requires the data from the giant Condor run.
+
+    Run on WWU workstation in dir: ~/research/kepler-flares/
+    or on cluster in dir: ~/data/HEXRUNID/
 
     This code goes thru every .flare file and computes basic stats,
     which are returned in a new big file for plotting, comparing to the KIC, etc.
