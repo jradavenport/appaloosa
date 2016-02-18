@@ -19,7 +19,7 @@ from os.path import expanduser
 import os
 import appaloosa
 import pandas as pd
-import pickle
+# import pickle
 
 
 def _ABmag2flux(mag, zeropt=48.60,
@@ -432,11 +432,13 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 
 def paper1_plots(condorfile='condorout.dat.gz',
-                 kicfile='kic.txt.gz'):
+                 kicfile='kic.txt.gz', statsfile='stats.txt'):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
-    The Condor results are aggregated from PostCondor() above
+    The Condor results are aggregated from PostCondor()
+
+    Run on WWU workstation in dir: ~/research/kepler-flares/
 
     '''
 
@@ -478,6 +480,11 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.savefig('Nflares_hist.png', dpi=300)
     # plt.show()
     plt.close()
+
+
+    ff = open(statsfile, 'w')
+    ff.write('This is the stats file for appaloosa.analysis.paper1_plots() \n')
+    ff.write('N stars with 25 or more flares: ' + str(len(np.where((num_fl_tot.values >= 25))[0])) + '\n')
 
 
     # match two dataframes on KIC number
@@ -576,8 +583,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     ffd_ok = np.where((ffd_y > 0))
     fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
 
-    print('FFD fit parameters for GJ 1243')
-    print(fit)
+    ff.write('FFD fit parameters for GJ 1243: ' + str(fit) + '\n')
+
 
     plt.plot(ffd_x, ffd_y, linewidth=4, color='black')
 
@@ -684,7 +691,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     plt.figure()
      # add contours for the entire field
-    plt.hist2d(gr_all, fit_E, bins=100, range=[[0,1.5], [0,0.05]], alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
+    plt.hist2d(gr_all, fit_E, bins=100, range=[[0,1.7], [-0.01,0.04]], alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
 
    # plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), rate_oc)
     plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), fit_oc)
@@ -714,7 +721,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.close()
     # plt.show()
 
-    print(str(len((np.where(np.isfinite(clr)))[0])) + ' stars have valid R_' + EpointS + ' values')
+    ff.write(str(len((np.where(np.isfinite(clr)))[0])) + ' stars have valid R_' + EpointS + ' values \n')
 
     clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
     clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
@@ -784,6 +791,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # combined FFD for a couple months, then for all the months of 1 star
     # combined FFD for all of a couple stars in same mass range
 
+    ff.close() # close the output stats file
 
     return
 
