@@ -700,7 +700,7 @@ def MultiFind(time, flux, error, flags, mode=3,
         dt = np.nanmedian(time[1:] - time[0:-1])
         ftime = np.arange(0, 2, dt)
         modelfilter = aflare1(ftime, 1, signalfwhm, 1)
-        flux_diff = signal.correlate(flux - flux_model, mode='same')
+        flux_diff = signal.correlate(flux - flux_model, modelfilter, mode='same')
 
     # run final flare-find on DATA - MODEL
     isflare = FINDflare(flux_diff, error, N1=1, N3=2,
