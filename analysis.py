@@ -19,6 +19,7 @@ from os.path import expanduser
 import os
 import appaloosa
 import pandas as pd
+import datetime
 # import pickle
 
 
@@ -432,7 +433,8 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 
 def paper1_plots(condorfile='condorout.dat.gz',
-                 kicfile='kic.txt.gz', statsfile='stats.txt'):
+                 kicfile='kic.txt.gz', statsfile='stats.txt',
+                 rerun=False):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
@@ -446,6 +448,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # http://archive.stsci.edu/pub/kepler/catalogs/ <- data source
     # http://archive.stsci.edu/kepler/kic10/help/quickcol.html <- info
 
+    print(datetime.datetime.now())
     kicdata = pd.read_csv(kicfile, delimiter='|')
     # need KICnumber, gmag, imag, logg (for cutting out crap only)
     # kicnum_k = kicdata['kic_kepler_id']
@@ -457,7 +460,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # need KICnumber, Flare Freq data in units of ED
     kicnum_c = fdata.iloc[:,0].unique()
 
-
+    print(datetime.datetime.now())
     # total # flares in dataset!
     print('total # flares found: ', fdata.loc[:,4].sum())
 
@@ -485,7 +488,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     ff = open(statsfile, 'w')
     ff.write('This is the stats file for appaloosa.analysis.paper1_plots() \n')
     ff.write('N stars with 25 or more flares: ' + str(len(np.where((num_fl_tot.values >= 25))[0])) + '\n')
-
+    ff.write('Total num flares on stars with 25 or more flares: ' +
+             str(np.sum((num_fl_tot.values)[np.where((num_fl_tot.values >= 25))])) + '\n')
 
     # match two dataframes on KIC number
     # bigdata = pd.merge(kicdata, kicnum_c, how='outer',
@@ -513,7 +517,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     #      Explanatory Figures
     # including detrending examples, sample LC portions, etc
     # put early in script so can remamke quickly
-
+    print(datetime.datetime.now())
 
 
 
@@ -602,53 +606,80 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # For every star: compute flare rate at some arbitrary energy
     Epoint = 35
     EpointS = str(Epoint)
-    rate_E = np.zeros(len(kicnum_c)) - 99.
-    fit_E = np.zeros(len(kicnum_c)) - 99.
 
-    # Also, compute FFD for every star
-    ffd_ab = np.zeros((2,len(kicnum_c)))
+    ##### THIS IS THE BIG BAD LOOP #####
+    ap_loop_file = 'ap_analysis_loop.npz'
+    print(datetime.datetime.now())
+    if rerun is True:
+        Nflare = np.zeros(len(kicnum_c)) # total num flares per star, same as before but slower...
+        rate_E = np.zeros(len(kicnum_c)) - 99.
+        fit_E = np.zeros(len(kicnum_c)) - 99.
 
-    gr_all = np.zeros(len(kicnum_c)) - 99.
+        # Also, compute FFD for every star
+        ffd_ab = np.zeros((2,len(kicnum_c)))
 
-    meanE = []
+        gr_all = np.zeros(len(kicnum_c)) - 99.
 
-    for k in range(len(kicnum_c)):
-        # find the k'th star in the KIC list in the Flare outputs
-        star = np.where((fdata[0].values == kicnum_c[k]))[0]
-        # find this star in the KIC data
-        mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[k]))
-        if len(mtch[0])>0:
-            gr_all[k] = bigdata['kic_gmag'].values[mtch][0] - \
-                        bigdata['kic_rmag'].values[mtch][0]
+        meanE = []
 
-            Lkp_i = Lkp_uniq[mtch][0]
+        for k in range(len(kicnum_c)):
+            # find the k'th star in the KIC list in the Flare outputs
+            star = np.where((fdata[0].values == kicnum_c[k]))[0]
 
-            for i in range(0,len(star)):
-                ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
-                if len(ok) > 0:
-                    fnorm[ok] = fnorm[ok] + 1
-                    fsum[ok] = fsum[ok] + fdata.loc[star[i],6:].values[ok]
+            Nflare[k] = np.sum(fdata.loc[star,4].values)
 
-            # the important arrays for the averaged FFD
-            ffd_x = edbins[1:][::-1] + Lkp_i
-            ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
+            # find this star in the KIC data
+            mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[k]))
+            if len(mtch[0])>0:
+                gr_all[k] = bigdata['kic_gmag'].values[mtch][0] - \
+                            bigdata['kic_rmag'].values[mtch][0]
 
-            # Fit the FFD w/ a line, save the coefficeints
-            ffd_ok = np.where((ffd_y > 0))
-            fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
-            ffd_ab[:,k] = fit
-            fit_E[k] = np.polyval(fit, Epoint)
+                Lkp_i = Lkp_uniq[mtch][0]
 
-            if len(ffd_ok[0])>2:
-                meanE = np.append(meanE, np.nanmedian(ffd_x[ffd_ok]))
+                for i in range(0,len(star)):
+                    ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
+                    if len(ok) > 0:
+                        fnorm[ok] = fnorm[ok] + 1
+                        fsum[ok] = fsum[ok] + fdata.loc[star[i],6:].values[ok]
 
-            # determine the value of the FFD at the Energy point
-            if (sum(ffd_x >= Epoint) > 0):
-                rate_E[k] = max(ffd_y[ffd_x >= Epoint])
+                # the important arrays for the averaged FFD
+                ffd_x = edbins[1:][::-1] + Lkp_i
+                ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
 
-        rotmtch = np.where(rotdata.iloc[:,0].values == kicnum_c[k])
-        if len(rotmtch[0])>0:
-            Prot_all[k] = rotdata.iloc[:,4].values[rotmtch]
+                # Fit the FFD w/ a line, save the coefficeints
+                ffd_ok = np.where((ffd_y > 0))
+                fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
+                ffd_ab[:,k] = fit
+                fit_E[k] = np.polyval(fit, Epoint)
+
+                if len(ffd_ok[0])>2:
+                    meanE = np.append(meanE, np.nanmedian(ffd_x[ffd_ok]))
+
+                # determine the value of the FFD at the Energy point
+                if (sum(ffd_x >= Epoint) > 0):
+                    rate_E[k] = max(ffd_y[ffd_x >= Epoint])
+
+            rotmtch = np.where(rotdata.iloc[:,0].values == kicnum_c[k])
+            if len(rotmtch[0])>0:
+                Prot_all[k] = rotdata.iloc[:,4].values[rotmtch]
+
+        # save results for faster reuse
+        np.savez(ap_loop_file,
+                 Nflare=Nflare, rate_E=rate_E, fit_E=fit_E,
+                 ffd_ab=ffd_ab, gr_all=gr_all, meanE=meanE)
+
+        ##### END OF THE BIG BAD LOOP #####
+
+    else:
+        # pull arrays back in via load!
+        npz = np.load(ap_loop_file)
+        Nflare = npz['Nflare']
+        rate_E = npz['rate_E']
+        fit_E = npz['fit_E']
+        ffd_ab = npz['ffd_ab']
+        gr_all = npz['gr_all']
+        meanE = npz['meanE']
+    print(datetime.datetime.now())
 
     #### a histogram of the average flare energy per star
     # plt.figure()
@@ -693,7 +724,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
      # add contours for the entire field
     plt.hist2d(gr_all, fit_E, bins=100, range=[[0,1.7], [-0.01,0.04]], alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
 
-   # plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), rate_oc)
+    # plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), rate_oc)
     plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), fit_oc)
 
     plt.xlabel('g-r (mag)')
@@ -726,12 +757,16 @@ def paper1_plots(condorfile='condorout.dat.gz',
     clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
     clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
 
+
+    # set the limit on numbers of flares per star required
+    Nflare_limit = 25
+
     # redefine acceptable range again
     okclr = np.where((clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
-                     np.isfinite(clr))
+                     np.isfinite(clr) & (Nflare >= Nflare_limit))
 
-
-
+    print('okclr len is ' + str(len(okclr[0])))
+    print(datetime.datetime.now())
     ##### try it first as a scatter plot
     plt.figure()
     plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr], alpha=0.7, lw=0, cmap=cm.afmhot_r, s=50)
