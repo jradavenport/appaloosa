@@ -20,7 +20,6 @@ import os
 import appaloosa
 import pandas as pd
 import datetime
-# import pickle
 
 
 def _ABmag2flux(mag, zeropt=48.60,
@@ -505,7 +504,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     # ingest Amy McQuillans rotation period catalog
-    rotfile = 'Table_Periodic.txt'
+    rotfile = 'comparison_datasets/Table_Periodic.txt'
 
     rotdata = pd.read_table(rotfile, delimiter=',', comment='#', header=None)
     # KID,Teff,logg,Mass,Prot,Prot_err,Rper,LPH,w,DC,Flag
@@ -666,7 +665,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         # save results for faster reuse
         np.savez(ap_loop_file,
                  Nflare=Nflare, rate_E=rate_E, fit_E=fit_E,
-                 ffd_ab=ffd_ab, gr_all=gr_all, meanE=meanE)
+                 ffd_ab=ffd_ab, gr_all=gr_all, meanE=meanE, Prot_all=Prot_all)
 
         ##### END OF THE BIG BAD LOOP #####
 
@@ -679,6 +678,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         ffd_ab = npz['ffd_ab']
         gr_all = npz['gr_all']
         meanE = npz['meanE']
+        Prot_all = npz['Prot_all']
     print(datetime.datetime.now())
 
     #### a histogram of the average flare energy per star
@@ -688,54 +688,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
 
-    #########################################
-    #      NGC 6811 plots
-
-    ocfile='meibom2011_tbl1.txt'
-
-    # Remake the gyrochronology plot from Meibom et al (2011) for NGC 6811 (color vs Prot),
-    #  and add another panel of (color vs flare rate) or something similar
-
-    ocdata = pd.read_table(ocfile, header=None, comment='#', delim_whitespace=True)
-    # col's I care about:
-    # KIC=0, g=7, r=8, Per=9
-
-
-    plt.figure()
-    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9])
-    plt.xlabel('g-r (mag)')
-    plt.ylabel('P$_{rot}$ (days)')
-    plt.savefig('ngc6811_gyro.png', dpi=300)
-    # plt.show()
-    plt.close()
-
-    rate_oc = np.zeros(ocdata.shape[0]) - 99.
-    fit_oc = np.zeros(ocdata.shape[0]) - 99.
-
-    for k in range(ocdata.shape[0]):
-        mtch = np.where((kicnum_c == ocdata.iloc[:,0].values[k]))
-        if len(mtch[0])>0:
-            rate_oc[k] = rate_E[mtch]
-            fit_oc[k] = np.polyval(ffd_ab[:,mtch], Epoint)
-
-
-
-    plt.figure()
-     # add contours for the entire field
-    plt.hist2d(gr_all, fit_E, bins=100, range=[[0,1.7], [-0.01,0.04]], alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
-
-    # plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), rate_oc)
-    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), fit_oc)
-
-    plt.xlabel('g-r (mag)')
-    plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('ngc6811_flare_all.png', dpi=300)
-    plt.close()
-
-
-
-    ##################
+    ############################
     #  # now the big master plot, style taken from the K2 meeting plot...
+
     clr = np.log10(fit_E)
     isF = np.where(np.isfinite(clr))
 
@@ -767,9 +722,31 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     print('okclr len is ' + str(len(okclr[0])))
     print(datetime.datetime.now())
-    ##### try it first as a scatter plot
+
+
+
+    # first, a basic plot of flare rate versus color
+
+    rate_range = [[0,1.7], [0,0.03]]
+
     plt.figure()
-    plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr], alpha=0.7, lw=0, cmap=cm.afmhot_r, s=50)
+     # add contours for the entire field
+    plt.hist2d(gr_all[okclr], fit_E[okclr], bins=100, range=rate_range,
+               alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
+
+    plt.xlabel('g-r (mag)')
+    plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
+    plt.savefig('flarerate_all.png', dpi=300)
+    plt.close()
+
+
+
+
+    ##### The science plot! #####
+    ##### try it as a scatter plot
+    plt.figure()
+    plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr],
+                alpha=0.7, lw=0, cmap=cm.afmhot_r, s=50)
     plt.xlabel('g-r (mag)')
     plt.ylabel('P$_{rot}$ (days)')
     plt.yscale('log')
@@ -781,6 +758,81 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.close()
 
 
+
+    ##### now as a pixelated plot
+    # bin2d, xx, yy, _ = binned_statistic_2d(gr_all[okclr], np.log10(Prot_all[okclr]), clr[okclr],
+    #                                        statistic='median', range=[[-1,4],[-1,2]], bins=75)
+    #
+    # plt.figure()
+    #
+    # plt.imshow(bin2d.T, interpolation='nearest', aspect='auto', origin='lower',
+    #            extent=(xx.min(),xx.max(),yy.min(),yy.max()),
+    #            cmap=plt.cm.afmhot_r)
+    #
+    # plt.xlabel('g-r (mag)')
+    # plt.ylabel('log P$_{rot}$ (days)')
+    # plt.xlim((0,1.7))
+    # plt.ylim(-1,2)
+    # cb = plt.colorbar()
+    # cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
+    # plt.savefig('masterplot_pixel.png', dpi=300)
+    # plt.close()
+
+
+
+
+
+
+    #########################################
+    #      NGC 6811 plots
+
+    ocfile='comparison_datasets/meibom2011_tbl1.txt'
+
+    # Remake the gyrochronology plot from Meibom et al (2011) for NGC 6811 (color vs Prot),
+    #  and add another panel of (color vs flare rate) or something similar
+
+    ocdata = pd.read_table(ocfile, header=None, comment='#', delim_whitespace=True)
+    # col's I care about:
+    # KIC=0, g=7, r=8, Per=9
+
+
+    ##### simple rotation period plot remake from paper
+    plt.figure()
+    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9])
+    plt.xlabel('g-r (mag)')
+    plt.ylabel('P$_{rot}$ (days)')
+    plt.savefig('ngc6811_gyro.png', dpi=300)
+    # plt.show()
+    plt.close()
+
+    rate_oc = np.zeros(ocdata.shape[0]) - 99.
+    fit_oc = np.zeros(ocdata.shape[0]) - 99.
+
+    for k in range(ocdata.shape[0]):
+        mtch = np.where((kicnum_c == ocdata.iloc[:,0].values[k]))
+        if len(mtch[0])>0:
+            rate_oc[k] = rate_E[mtch]
+            fit_oc[k] = np.polyval(ffd_ab[:,mtch], Epoint)
+
+
+
+    #####
+    plt.figure()
+     # add contours for the entire field
+    plt.hist2d(gr_all[okclr], fit_E[okclr], bins=100, range=rate_range,
+               alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
+
+    # plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), rate_oc)
+    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), fit_oc)
+
+    plt.xlabel('g-r (mag)')
+    plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
+    plt.savefig('ngc6811_flare_all.png', dpi=300)
+    plt.close()
+
+
+
+    #####
     plt.figure()
     plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr], alpha=0.7, lw=0, cmap=cm.afmhot_r, s=50)
     cb = plt.colorbar()
@@ -797,37 +849,20 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # plt.show()
 
 
+    #      /NGC 6811 plots
+    #########################################
 
-    ##### now as a pixelated plot
-    bin2d, xx, yy, _ = binned_statistic_2d(gr_all[okclr], np.log10(Prot_all[okclr]), clr[okclr],
-                                           statistic='median', range=[[-1,4],[-1,2]], bins=75)
-
-    plt.figure()
-
-    plt.imshow(bin2d.T, interpolation='nearest', aspect='auto', origin='lower',
-               extent=(xx.min(),xx.max(),yy.min(),yy.max()),
-               cmap=plt.cm.afmhot_r)
-
-    plt.xlabel('g-r (mag)')
-    plt.ylabel('log P$_{rot}$ (days)')
-    plt.xlim((0,1.7))
-    plt.ylim(-1,2)
-    cb = plt.colorbar()
-    cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('masterplot_pixel.png', dpi=300)
-    plt.close()
 
 
 
 
 
     # goal plots:
-    # color vs flare rate
     # combined FFD for a couple months, then for all the months of 1 star
     # combined FFD for all of a couple stars in same mass range
+    # R_35 parameter versus rotation period for a band of color (G stars, for example)
 
     ff.close() # close the output stats file
-
     return
 
 
