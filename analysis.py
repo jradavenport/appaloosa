@@ -49,6 +49,37 @@ def _ABmag2flux(mag, zeropt=48.60,
     return flux
 
 
+def _Perror(n, full=False):
+    '''
+    Calculate the asymmetric Poisson error, using Eqn 7
+    and Eqn 12 in Gehrels 1986 ApJ, 3030, 336
+
+    Parameters
+    ----------
+    n
+    full
+
+    Returns
+    -------
+
+    '''
+
+    ### need to do this check for numpy arrays
+
+    # if n > 0:
+
+    err_dn = n*(1.-1./(9.*n)-1./(3.*np.sqrt(n)))**3.-n
+    err_up = n+np.sqrt(n+0.75)+1.0-n
+
+    # else:
+    #     err_up = err_dn = np.nan
+
+    if full is True:
+        return np.abs(err_dn), err_up
+    else:
+        return err_up
+
+
 def _DistModulus(m_app, M_abs):
     '''
     Trivial wrapper to invert the classic equation:
@@ -433,7 +464,7 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=False):
+                 rerun=True):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
@@ -543,70 +574,21 @@ def paper1_plots(condorfile='condorout.dat.gz',
     fnorm = np.zeros_like(edbins[1:])
     fsum = np.zeros_like(edbins[1:])
 
-    # vars for L_fl/L_kp (Lurie 2015)
-    # ED_tot = 0.
-    # dur_tot = 0.
-
 
     # make FFD plot for specific star, in this case GJ 1243
-    s_num = 9726699
-    star = np.where((fdata[0].values == s_num))[0]
-
-    plt.figure()
+    s_num = [9726699]
 
     # the "master FFD" from the GJ 1243 work (short cadence only)
     # mx,my = np.loadtxt('gj1243_ffd_master_xy.dat', unpack=True, skiprows=1)
     # plt.scatter(mx, my, c='k', alpha=0.35)
 
-    Lkp_i = Lkp_uniq[np.where((bigdata['kic_kepler_id'].values == s_num))][0]
-    for i in range(0,len(star)):
-        ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
-        if len(ok) > 0:
-            if fdata.loc[star[i],1] == 1:
-                clr = 'red'
-            else:
-                clr = 'blue'
-            plt.plot(edbins[1:][ok][::-1] + Lkp_i,
-                     np.cumsum(fdata.loc[star[i],6:].values[ok][::-1]),
-                     alpha=0.5, color=clr)
+    # ff.write('FFD fit parameters for GJ 1243: ' + str(fit) + '\n')
 
-            fnorm[ok] = fnorm[ok] + 1
-            fsum[ok] = fsum[ok] + fdata.loc[star[i],6:].values[ok]
-
-            # ED_tot = ED_tot + sum(fdata.loc[star[i],5:].values[ok] *
-            #                       fdata.loc[star[i],2] *
-            #                       edbins[1:][ok])
-        #
-        # dur_tot = dur_tot + fdata.loc[star[i],2]
-    # Lfl_Lkp = ED_tot / dur_tot
-
-    # the important arrays
-    ffd_x = edbins[1:][::-1] + Lkp_i
-    ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
-
-    ffd_ok = np.where((ffd_y > 0))
-    fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
-
-    ff.write('FFD fit parameters for GJ 1243: ' + str(fit) + '\n')
-
-
-    plt.plot(ffd_x, ffd_y, linewidth=4, color='black')
-
-    #plt.plot(edbins[1:][::-1]+30.6, np.cumsum(fdata.loc[star,5:][::-1]).sum(axis=0)/len(star),c='red')
-    plt.yscale('log')
-    plt.xlabel('log Energy (erg)')
-    plt.ylabel('Cumulative Flare Freq (#/day)')
-    plt.xlim(31, 34.5)
-    plt.ylim(1e-3, 3e0)
-    plt.savefig('gj1243_example.png', dpi=300)
-    # plt.show()
-    plt.close()
 
 
     # For every star: compute flare rate at some arbitrary energy
     Epoint = 35
     EpointS = str(Epoint)
-
 
 
 
@@ -620,6 +602,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         rate_E = np.zeros(len(kicnum_c)) - 99.
         fit_E = np.zeros(len(kicnum_c)) - 99.
 
+        # vars for L_fl/L_kp (e.g. Lurie 2015)
         dur_all = np.zeros(len(kicnum_c)) - 99. # total duration of the star's LC
         ED_all = np.zeros(len(kicnum_c)) - 99. # sum of all Equiv Dur's for the star
 
@@ -632,6 +615,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         meanE = []
 
         for k in range(len(kicnum_c)):
+        # for k in range(199836,199938):
             # find the k'th star in the KIC list in the Flare outputs
             star = np.where((fdata[0].values == kicnum_c[k]))[0]
 
@@ -652,15 +636,36 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
                 Lkp_i = Lkp_uniq[mtch][0]
 
+                # for stars listed in the "to plot list", make a FFD figure
+                if kicnum_c[k] in s_num:
+                    doplot = True
+                    plt.figure()
+                else:
+                    doplot = False
+
                 for i in range(0,len(star)):
                     ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
                     if len(ok) > 0:
                         fnorm[ok] = fnorm[ok] + 1
                         fsum[ok] = fsum[ok] + fdata.loc[star[i],6:].values[ok]
 
+                        if fdata.loc[star[i],1] == 1:
+                            pclr = 'red' # long cadence data
+                        else:
+                            pclr = 'blue' # short cadence data
+
+                        if doplot is True:
+                            plt.plot(edbins[1:][ok][::-1] + Lkp_i,
+                                     np.cumsum(fdata.loc[star[i],6:].values[ok][::-1]),
+                                     alpha=0.35, color=pclr)
+
                 # the important arrays for the averaged FFD
                 ffd_x = edbins[1:][::-1] + Lkp_i
                 ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
+
+                # very basic estimate of uncertainty on the FFD y values, goes as sqrt(N)
+                # a better way is to calc N flares for each bin, then add together for the mean...
+                ffd_yerr = np.sqrt(ffd_y) / _Perror(fnorm)
 
                 # Fit the FFD w/ a line, save the coefficeints
                 ffd_ok = np.where((ffd_y > 0))
@@ -671,14 +676,44 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     meanE = np.append(meanE, np.nanmedian(ffd_x[ffd_ok]))
 
                     # fit the FFD w/ a line
-                    fit = np.polyfit(ffd_x[ffd_ok], ffd_y[ffd_ok], 1) # <<<<<<<<<<
+                    fit = np.polyfit(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), 1,
+                                     w=1./np.abs(ffd_yerr[ffd_ok]/(ffd_y[ffd_ok] * np.log(10)))) # fit using weights
                     ffd_ab[:,k] = fit
-                    fit_E[k] = np.polyval(fit, Epoint)
 
-                    # determine the value of the FFD at the Energy point using the fit
+                    # evaluate the FFD fit at the Energy point
+                    fit_E[k] = 10.**(np.polyval(fit, Epoint))
+
+                    # determine the actual value of the FFD at the Energy point using the fit
                     if (sum(ffd_x >= Epoint) > 0):
                         rate_E[k] = max(ffd_y[ffd_x >= Epoint])
 
+                if doplot is True:
+                    plt.plot(ffd_x, ffd_y, linewidth=2, color='black', alpha=0.7)
+                    plt.errorbar(ffd_x, ffd_y, ffd_yerr, fmt='k,')
+                    if len(ffd_ok[0])>2:
+                        plt.plot(ffd_x[ffd_ok], 10.0**(np.polyval(fit, ffd_x[ffd_ok])),
+                                 color='orange', linewidth=4, alpha=0.5)
+
+                    plt.title('KIC' + str(kicnum_c[k]) + ': ' +
+                              'log R$_{'+EpointS+'}$ = ' + str(np.log10(fit_E[k])))
+                    plt.yscale('log')
+                    plt.xlabel('log Flare Energy (erg)')
+                    plt.ylabel('Cumulative Flare Freq (#/day)')
+
+                    plt.xlim(np.nanmin(ffd_x[ffd_ok])-0.5, np.nanmax(ffd_x[ffd_ok])+0.5)
+                    # plt.ylim(1e-3, 3e0)
+
+                    plt.savefig(str(kicnum_c[k]) + '_ffd.png', dpi=300)
+                    plt.close()
+
+                    # print('ffd_ok:', ffd_ok)
+                    # print('ffd_x:', ffd_x)
+                    # print('ffd_y:', ffd_y)
+                    # print('ffd_yerr:', ffd_yerr)
+                    # print('meanE:', meanE)
+
+
+            # now match this star to the rotation period data
             rotmtch = np.where(rotdata.iloc[:,0].values == kicnum_c[k])
             if len(rotmtch[0])>0:
                 Prot_all[k] = rotdata.iloc[:,4].values[rotmtch]
@@ -704,11 +739,14 @@ def paper1_plots(condorfile='condorout.dat.gz',
         Prot_all = npz['Prot_all']
     print(datetime.datetime.now())
 
-    #### a histogram of the average flare energy per star
-    # plt.figure()
-    # htmp = plt.hist(meanE[np.where(np.isfinite(meanE))], bins=50)
-    # plt.show()
 
+    #### a histogram of the average flare energy per star
+    plt.figure()
+    _htmp = plt.hist(meanE[np.where(np.isfinite(meanE))], bins=50)
+    plt.xlabel('mean energy (log E)')
+    plt.ylabel('# stars')
+    plt.savefig('mean_energy.png',dpi=100)
+    plt.close()
 
 
 
@@ -716,6 +754,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     #  # now the big master plot, style taken from the K2 meeting plot...
 
     clr = np.log10(fit_E)
+    ff.write(str(len((np.where(np.isfinite(clr)))[0])) + ' stars have valid R_' + EpointS + ' values \n')
+
     isF = np.where(np.isfinite(clr))
 
     clr_rng = np.array([-2., 2.] )* np.nanstd(clr) + np.nanmedian(clr)
@@ -727,10 +767,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylabel('# Stars')
     plt.savefig('R_' + EpointS + '_hist.png', dpi=300)
     plt.close()
-    # plt.show()
 
-    ff.write(str(len((np.where(np.isfinite(clr)))[0])) + ' stars have valid R_' + EpointS + ' values \n')
-
+    ## clip data at max/min range to show
     clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
     # clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
 
@@ -830,7 +868,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     ################
-    # pick target star color range
+    # pick target star color range, look at evolution of Rate vs Rotation
+    '''
     ts = np.where((gi_all[okclr]  >= 0.8) & (gi_all[okclr] <= 1.0))
     ts0 = np.where((gi_all[okclr0]  >= 0.8) & (gi_all[okclr0] <= 1.0))
 
@@ -844,26 +883,29 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlim(0.1,100)
     plt.savefig('rot_rate.png', dpi=300)
     plt.close()
+    '''
 
 
-    ##### now as a pixelated plot
-    # bin2d, xx, yy, _ = binned_statistic_2d(gr_all[okclr], np.log10(Prot_all[okclr]), clr[okclr],
-    #                                        statistic='median', range=[[-1,4],[-1,2]], bins=75)
-    #
-    # plt.figure()
-    #
-    # plt.imshow(bin2d.T, interpolation='nearest', aspect='auto', origin='lower',
-    #            extent=(xx.min(),xx.max(),yy.min(),yy.max()),
-    #            cmap=plt.cm.afmhot_r)
-    #
-    # plt.xlabel('g-r (mag)')
-    # plt.ylabel('log P$_{rot}$ (days)')
-    # plt.xlim((0,1.7))
-    # plt.ylim(-1,2)
-    # cb = plt.colorbar()
-    # cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    # plt.savefig('masterplot_pixel.png', dpi=300)
-    # plt.close()
+    ##### make master (color,rot,rate) figure as a pixelated plot
+    '''
+    bin2d, xx, yy, _ = binned_statistic_2d(gr_all[okclr], np.log10(Prot_all[okclr]), clr[okclr],
+                                           statistic='median', range=[[-1,4],[-1,2]], bins=75)
+
+    plt.figure()
+
+    plt.imshow(bin2d.T, interpolation='nearest', aspect='auto', origin='lower',
+               extent=(xx.min(),xx.max(),yy.min(),yy.max()),
+               cmap=plt.cm.afmhot_r)
+
+    plt.xlabel('g-r (mag)')
+    plt.ylabel('log P$_{rot}$ (days)')
+    plt.xlim((0,1.7))
+    plt.ylim(-1,2)
+    cb = plt.colorbar()
+    cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
+    plt.savefig('masterplot_pixel.png', dpi=300)
+    plt.close()
+    '''
 
 
 
