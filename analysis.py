@@ -464,7 +464,7 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=True):
+                 rerun=False):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
@@ -575,8 +575,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
     fsum = np.zeros_like(edbins[1:])
 
 
-    # make FFD plot for specific star, in this case GJ 1243
-    s_num = [9726699]
+    # make FFD plot for specific stars:
+    #        GJ 1243, [ R. Clarke     ], J. Cornet,[  A. Boeck      ]
+    s_num = [9726699, 10387822, 10452709, 6224062, 4171937, 12314646]
 
     # the "master FFD" from the GJ 1243 work (short cadence only)
     # mx,my = np.loadtxt('gj1243_ffd_master_xy.dat', unpack=True, skiprows=1)
@@ -616,6 +617,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
         for k in range(len(kicnum_c)):
         # for k in range(199836,199938):
+
             # find the k'th star in the KIC list in the Flare outputs
             star = np.where((fdata[0].values == kicnum_c[k]))[0]
 
@@ -688,29 +690,31 @@ def paper1_plots(condorfile='condorout.dat.gz',
                         rate_E[k] = max(ffd_y[ffd_x >= Epoint])
 
                 if doplot is True:
+                    print(kicnum_c[k])
+                    print('ffd_ok:', ffd_ok)
+                    print('ffd_x:', ffd_x)
+                    print('ffd_y:', ffd_y)
+                    print('ffd_yerr:', ffd_yerr)
+                    print('meanE:', meanE)
+
                     plt.plot(ffd_x, ffd_y, linewidth=2, color='black', alpha=0.7)
                     plt.errorbar(ffd_x, ffd_y, ffd_yerr, fmt='k,')
                     if len(ffd_ok[0])>2:
                         plt.plot(ffd_x[ffd_ok], 10.0**(np.polyval(fit, ffd_x[ffd_ok])),
                                  color='orange', linewidth=4, alpha=0.5)
 
+                        plt.yscale('log')
+                        plt.xlim(np.nanmin(ffd_x[ffd_ok])-0.5, np.nanmax(ffd_x[ffd_ok])+0.5)
+                        # plt.ylim(1e-3, 3e0)
+
                     plt.title('KIC' + str(kicnum_c[k]) + ': ' +
                               'log R$_{'+EpointS+'}$ = ' + str(np.log10(fit_E[k])))
-                    plt.yscale('log')
                     plt.xlabel('log Flare Energy (erg)')
                     plt.ylabel('Cumulative Flare Freq (#/day)')
-
-                    plt.xlim(np.nanmin(ffd_x[ffd_ok])-0.5, np.nanmax(ffd_x[ffd_ok])+0.5)
-                    # plt.ylim(1e-3, 3e0)
 
                     plt.savefig(str(kicnum_c[k]) + '_ffd.png', dpi=300)
                     plt.close()
 
-                    # print('ffd_ok:', ffd_ok)
-                    # print('ffd_x:', ffd_x)
-                    # print('ffd_y:', ffd_y)
-                    # print('ffd_yerr:', ffd_yerr)
-                    # print('meanE:', meanE)
 
 
             # now match this star to the rotation period data
