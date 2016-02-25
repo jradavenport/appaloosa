@@ -49,7 +49,7 @@ def _ABmag2flux(mag, zeropt=48.60,
     return flux
 
 
-def _Perror(n, full=False):
+def _Perror(n, full=False, down=False):
     '''
     Calculate the asymmetric Poisson error, using Eqn 7
     and Eqn 12 in Gehrels 1986 ApJ, 3030, 336
@@ -77,7 +77,10 @@ def _Perror(n, full=False):
     if full is True:
         return np.abs(err_dn), err_up
     else:
-        return err_up
+        if down is True:
+            return err_dn
+        else:
+            return err_up
 
 
 def _DistModulus(m_app, M_abs):
@@ -464,7 +467,7 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=False):
+                 rerun=True):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
@@ -570,27 +573,15 @@ def paper1_plots(condorfile='condorout.dat.gz',
     edbins = np.append(-10, edbins)
     edbins = np.append(edbins, 10)
 
-    # arrays for FFD
-    fnorm = np.zeros_like(edbins[1:])
-    fsum = np.zeros_like(edbins[1:])
-
 
     # make FFD plot for specific stars:
     #        GJ 1243, [ R. Clarke     ], J. Cornet,[  A. Boeck     ],  "Pearl"
     s_num = [9726699, 10387822, 10452709, 6224062, 4171937, 12314646, 11551430]
 
-    # the "master FFD" from the GJ 1243 work (short cadence only)
-    # mx,my = np.loadtxt('gj1243_ffd_master_xy.dat', unpack=True, skiprows=1)
-    # plt.scatter(mx, my, c='k', alpha=0.35)
-
-    # ff.write('FFD fit parameters for GJ 1243: ' + str(fit) + '\n')
-
-
 
     # For every star: compute flare rate at some arbitrary energy
     Epoint = 35
     EpointS = str(Epoint)
-
 
 
     ##########      THIS IS THE BIG BAD LOOP      ##########
@@ -622,7 +613,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
             # find the k'th star in the KIC list in the Flare outputs
             star = np.where((fdata[0].values == kicnum_c[k]))[0]
 
-            Nflare[k] = np.sum(fdata.loc[star,4].values)
+            Nflare[k] = np.sum(fdata.loc[star,4].values) # total Num of flares
+            dur_all[k] = np.sum(fdata.loc[star,2].values) # total duration (units: days)
+            ED_all[k] = np.sum(fdata.loc[star,5].values) # total flare energy in Equiv Dur (units: seconds)
 
             # arrays for FFD
             fnorm = np.zeros_like(edbins[1:])
@@ -646,11 +639,20 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 else:
                     doplot = False
 
+                # tmp array to hold the total number of flares in each FFD bin
+                flare_tot = np.zeros_like(fnorm)
+
                 for i in range(0,len(star)):
                     ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
                     if len(ok) > 0:
-                        fnorm[ok] = fnorm[ok] + 1
+                        # add the rates together for a straight mean
                         fsum[ok] = fsum[ok] + fdata.loc[star[i],6:].values[ok]
+
+                        # count the number for the straight mean
+                        fnorm[ok] = fnorm[ok] + 1
+
+                        # add the actual number of flares for this data portion: rate * duration
+                        flare_tot = flare_tot + (fdata.loc[star[i],6:].values * fdata.loc[star[i],5])
 
                         if fdata.loc[star[i],1] == 1:
                             pclr = 'red' # long cadence data
@@ -666,9 +668,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 ffd_x = edbins[1:][::-1] + Lkp_i
                 ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
 
-                # very basic estimate of uncertainty on the FFD y values, goes as sqrt(N)
-                # a better way is to calc N flares for each bin, then add together for the mean...
-                ffd_yerr = np.sqrt(ffd_y) / _Perror(fnorm)
+                # the "error" is the Poisson err from the total # flares per bin
+                ffd_yerr = _Perror(flare_tot, down=True) / dur_all[k]
 
                 # Fit the FFD w/ a line, save the coefficeints
                 ffd_ok = np.where((ffd_y > 0))
@@ -678,9 +679,13 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     # compute the mean flare energy for this star
                     meanE = np.append(meanE, np.nanmedian(ffd_x[ffd_ok]))
 
+                    # the weights, in log rate units
+                    ffd_weights = 1. / np.abs(ffd_yerr[ffd_ok]/(ffd_y[ffd_ok] * np.log(10)))
+
                     # fit the FFD w/ a line
                     fit, cov = np.polyfit(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), 1, cov=True,
-                                     w=1./np.abs(ffd_yerr[ffd_ok]/(ffd_y[ffd_ok] * np.log(10)))) # fit using weights
+                                          w=ffd_weights) # fit using weights
+
                     ffd_ab[:,k] = fit
 
                     # evaluate the FFD fit at the Energy point
