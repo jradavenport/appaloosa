@@ -576,8 +576,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     # make FFD plot for specific stars:
-    #        GJ 1243, [ R. Clarke     ], J. Cornet,[  A. Boeck      ]
-    s_num = [9726699, 10387822, 10452709, 6224062, 4171937, 12314646]
+    #        GJ 1243, [ R. Clarke     ], J. Cornet,[  A. Boeck     ],  "Pearl"
+    s_num = [9726699, 10387822, 10452709, 6224062, 4171937, 12314646, 11551430]
 
     # the "master FFD" from the GJ 1243 work (short cadence only)
     # mx,my = np.loadtxt('gj1243_ffd_master_xy.dat', unpack=True, skiprows=1)
@@ -602,6 +602,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         Nflare = np.zeros(len(kicnum_c)) # total num flares per star, same as before but slower...
         rate_E = np.zeros(len(kicnum_c)) - 99.
         fit_E = np.zeros(len(kicnum_c)) - 99.
+        fit_Eerr = np.zeros(len(kicnum_c)) - 99.
 
         # vars for L_fl/L_kp (e.g. Lurie 2015)
         dur_all = np.zeros(len(kicnum_c)) - 99. # total duration of the star's LC
@@ -678,12 +679,20 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     meanE = np.append(meanE, np.nanmedian(ffd_x[ffd_ok]))
 
                     # fit the FFD w/ a line
-                    fit = np.polyfit(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), 1,
+                    fit, cov = np.polyfit(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), 1, cov=True,
                                      w=1./np.abs(ffd_yerr[ffd_ok]/(ffd_y[ffd_ok] * np.log(10)))) # fit using weights
                     ffd_ab[:,k] = fit
 
                     # evaluate the FFD fit at the Energy point
                     fit_E[k] = 10.**(np.polyval(fit, Epoint))
+
+                    # determine uncertainty on the fit evaluation point, with help from:
+                    # http://stackoverflow.com/questions/28505008/numpy-polyfit-how-to-get-1-sigma-uncertainty-around-the-estimated-curve
+                    TT = np.vstack([Epoint**(1-i) for i in range(2)]).T
+                    # yi = np.dot(TT, fit)  # matrix multiplication calculates the polynomial values
+                    C_yi = np.dot(TT, np.dot(cov, TT.T)) # C_y = TT*C_z*TT.T
+                    fit_Eerr[k] = np.sqrt(np.diag(C_yi))  # Standard deviations are sqrt of diagonal
+
 
                     # determine the actual value of the FFD at the Energy point using the fit
                     if (sum(ffd_x >= Epoint) > 0):
@@ -724,7 +733,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
         # save results for faster reuse
         np.savez(ap_loop_file,
-                 Nflare=Nflare, rate_E=rate_E, fit_E=fit_E,
+                 Nflare=Nflare, rate_E=rate_E, fit_E=fit_E, fit_Eerr=fit_Eerr,
                  ffd_ab=ffd_ab, gr_all=gr_all, gi_all=gi_all, meanE=meanE,
                  Prot_all=Prot_all)
 
@@ -736,6 +745,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         Nflare = npz['Nflare']
         rate_E = npz['rate_E']
         fit_E = npz['fit_E']
+        fit_Eerr = npz['fit_Eerr']
         ffd_ab = npz['ffd_ab']
         gr_all = npz['gr_all']
         gi_all = npz['gi_all']
@@ -758,6 +768,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
     #  # now the big master plot, style taken from the K2 meeting plot...
 
     clr = np.log10(fit_E)
+    clr_raw = np.log10(fit_E)
+
+    clr_raw_err = np.abs(fit_Eerr / (fit_E * np.log(10)))
+
     ff.write(str(len((np.where(np.isfinite(clr)))[0])) + ' stars have valid R_' + EpointS + ' values \n')
 
     isF = np.where(np.isfinite(clr))
@@ -769,45 +783,73 @@ def paper1_plots(condorfile='condorout.dat.gz',
     hh = plt.hist(clr[isF], bins=100, histtype='step', color='k')
     plt.xlabel('log R$_{'+EpointS+'}$ (#/day)')
     plt.ylabel('# Stars')
+    plt.yscale('log')
     plt.savefig('R_' + EpointS + '_hist.png', dpi=300)
     plt.close()
 
-    ## clip data at max/min range to show
+
+
+    ## clip data at max/min range
     clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
-    # clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
+    clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
+
 
 
     # set the limit on numbers of flares per star required
-    Nflare_limit = 25
+    Nflare_limit = 100
 
-    # redefine acceptable range again
+    ff.write('Nflare_limit = ' + str(Nflare_limit) + '\n')
+    ff.write('# flares on stars that pass this limit: ' +
+             str(np.sum(Nflare[np.where((Nflare >= Nflare_limit))])) + '\n')
+
+    # lets breifly revisit Nflares, look at where to pick a limit
+    plt.figure()
+    _ = plt.hist(np.log10(Nflare + 0.01), bins=100, cumulative=True, normed=True,
+                 histtype='step', color='k')
+    plt.xlim(-1,3)
+
+    plt.axvline(x=np.log10(Nflare_limit), linewidth=3, color='red', alpha=0.5)
+    plt.xlabel('log # Flares per Star')
+    plt.ylabel('Cumulative Fraction of Stars')
+    plt.savefig('cumulative_hist.png', dpi=300)
+    plt.close()
+
+
+    # stars that have enough flares and have valid rates
     okclr = np.where((clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
                      np.isfinite(clr) & (Nflare >= Nflare_limit))
 
+    # stars that just have valid rates
     okclr0 = np.where((clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
-                      np.isfinite(clr) & (Nflare >= 1))
+                      np.isfinite(clr) & (Nflare >= 0))
 
     ff.write('okclr len is ' + str(len(okclr[0])) + '\n')
+    ff.write('okclr0 len is ' + str(len(okclr0[0])) + '\n')
+
+    ff.write('# stars that pass Nflare_limit and have valid rotation periods: '+
+             str( len(np.where((Nflare >= Nflare_limit) & (Prot_all > 0.1))[0]) ) + '\n')
     print(datetime.datetime.now())
 
 
 
     # first, a basic plot of flare rate versus color
 
-    rate_range = [[0,1.7], [10.**clr_rng[0], 10.**clr_rng[1]]]
+    rate_range = [[0,3], [10.**clr_rng[0], 10.**clr_rng[1]]]
 
     plt.figure()
-    plt.hist2d(gr_all[okclr], fit_E[okclr], bins=100, range=rate_range,
+    plt.hist2d(gi_all[okclr], fit_E[okclr], bins=100, range=rate_range,
                alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
-    plt.xlabel('g-r (mag)')
+    plt.xlabel('g-i (mag)')
+    plt.yscale('log')
     plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
     plt.savefig('flarerate_okclr.png', dpi=300)
     plt.close()
 
     plt.figure()
-    plt.hist2d(gr_all[okclr0], fit_E[okclr0], bins=100, range=rate_range,
+    plt.hist2d(gi_all[okclr0], fit_E[okclr0], bins=100, range=rate_range,
                alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
-    plt.xlabel('g-r (mag)')
+    plt.xlabel('g-i (mag)')
+    plt.yscale('log')
     plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
     plt.savefig('flarerate_okclr0.png', dpi=300)
     plt.close()
@@ -849,7 +891,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('g-i (mag)')
     plt.ylabel('P$_{rot}$ (days)')
     plt.yscale('log')
-    plt.xlim((0,2.75))
+    plt.xlim((0,3))
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
@@ -863,7 +905,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('g-i (mag)')
     plt.ylabel('P$_{rot}$ (days)')
     plt.yscale('log')
-    plt.xlim((0,2.75))
+    plt.xlim((0,3))
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
@@ -873,21 +915,67 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     ################
     # pick target star color range, look at evolution of Rate vs Rotation
-    '''
-    ts = np.where((gi_all[okclr]  >= 0.8) & (gi_all[okclr] <= 1.0))
-    ts0 = np.where((gi_all[okclr0]  >= 0.8) & (gi_all[okclr0] <= 1.0))
+
+    crng = [0.75, 1.]
+    ts = np.where((gi_all[okclr]  >= crng[0]) & (gi_all[okclr] <= crng[1]) & (Prot_all[okclr] > 0.1))
+    # ts0 = np.where((gi_all[okclr0]  >= crng[0]) & (gi_all[okclr0] <= crng[1]))
+
+    ff.write('# that pass color1 cut: '+str(len(ts[0])) + '\n')
 
     plt.figure()
-    plt.scatter(Prot_all[okclr0][ts0], clr[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
-    plt.scatter(Prot_all[okclr][ts], clr[okclr][ts], s=50, alpha=0.7,lw=0.5)
+    # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
+    plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
+    plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
     plt.xlabel('P$_{rot}$ (days)')
     plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
-    plt.title('0.8 < (g-i) < 1.0')
+    plt.title(str(crng[0])+' < (g-i) < '+str(crng[1]))
     plt.xscale('log')
+    plt.ylim(-7,1)
     plt.xlim(0.1,100)
-    plt.savefig('rot_rate.png', dpi=300)
+    plt.savefig('rot_rate1.png', dpi=300)
     plt.close()
-    '''
+
+
+    crng = [1.5, 2.]
+    ts = np.where((gi_all[okclr]  >= crng[0]) & (gi_all[okclr] <= crng[1]) & (Prot_all[okclr] > 0.1))
+    # ts0 = np.where((gi_all[okclr0]  >= crng[0]) & (gi_all[okclr0] <= crng[1]))
+
+    ff.write('# that pass color2 cut: '+str(len(ts[0])) + '\n')
+
+    plt.figure()
+    # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
+    plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
+    plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
+    plt.xlabel('P$_{rot}$ (days)')
+    plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
+    plt.title(str(crng[0])+' < (g-i) < '+str(crng[1]))
+    plt.xscale('log')
+    plt.ylim(-7,1)
+    plt.xlim(0.1,100)
+    plt.savefig('rot_rate2.png', dpi=300)
+    plt.close()
+
+
+    crng = [2.25, 2.75]
+    ts = np.where((gi_all[okclr]  >= crng[0]) & (gi_all[okclr] <= crng[1]) & (Prot_all[okclr] > 0.1))
+    # ts0 = np.where((gi_all[okclr0]  >= crng[0]) & (gi_all[okclr0] <= crng[1]))
+
+    ff.write('# that pass color3 cut: '+str(len(ts[0])) + '\n')
+
+    plt.figure()
+    # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
+    plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
+    plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
+    plt.xlabel('P$_{rot}$ (days)')
+    plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
+    plt.title(str(crng[0])+' < (g-i) < '+str(crng[1]))
+    plt.xscale('log')
+    plt.ylim(-7,1)
+    plt.xlim(0.1,100)
+    plt.savefig('rot_rate3.png', dpi=300)
+    plt.close()
+
+
 
 
     ##### make master (color,rot,rate) figure as a pixelated plot
@@ -956,7 +1044,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     #            alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
     plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), fit_oc)
     plt.xlabel('g-r (mag)')
-    plt.xlim(0,1.7)
+    plt.xlim(0.2, 0.9)
+    plt.ylim(-3.5, -2)
     plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
     plt.savefig('ngc6811_flare_all.png', dpi=300)
     plt.close()
@@ -964,6 +1053,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     #####
+    '''
     plt.figure()
     plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr], alpha=0.7, lw=0, cmap=cm.afmhot_r, s=50)
     cb = plt.colorbar()
@@ -978,6 +1068,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.savefig('masterplot_cluster.png', dpi=300)
     plt.close()
     # plt.show()
+    '''
 
 
     #      /NGC 6811 plots
