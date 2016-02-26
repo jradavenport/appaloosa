@@ -64,18 +64,16 @@ def _Perror(n, full=False, down=False):
 
     '''
 
-    ### need to do this check for numpy arrays
-
     # if n > 0:
 
-    err_dn = n*(1.-1./(9.*n)-1./(3.*np.sqrt(n)))**3.-n
+    err_dn = np.abs(n*(1.-1./(9.*n)-1./(3.*np.sqrt(n)))**3.-n)
     err_up = n+np.sqrt(n+0.75)+1.0-n
 
     # else:
     #     err_up = err_dn = np.nan
 
     if full is True:
-        return np.abs(err_dn), err_up
+        return err_dn, err_up
     else:
         if down is True:
             return err_dn
@@ -669,7 +667,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
 
                 # the "error" is the Poisson err from the total # flares per bin
-                ffd_yerr = _Perror(flare_tot, down=True) / dur_all[k]
+                ffd_yerr = _Perror(flare_tot[::-1], down=True) / dur_all[k]
 
                 # Fit the FFD w/ a line, save the coefficeints
                 ffd_ok = np.where((ffd_y > 0))
@@ -768,12 +766,15 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.close()
 
 
+    # total fractional energy (in seconds) / total duration (in seconds)
+    Lfl_Lbol = ED_all/(dur_all * 60. * 60. * 24.)
+
 
     ############################
     #  # now the big master plot, style taken from the K2 meeting plot...
 
     clr = np.log10(fit_E)
-    clr_raw = np.log10(fit_E)
+    clr_raw = clr
 
     clr_raw_err = np.abs(fit_Eerr / (fit_E * np.log(10)))
 
