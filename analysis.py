@@ -681,8 +681,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     ffd_weights = 1. / np.abs(ffd_yerr[ffd_ok]/(ffd_y[ffd_ok] * np.log(10)))
 
                     # fit the FFD w/ a line
-                    fit, cov = np.polyfit(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), 1, cov=True,
-                                          w=ffd_weights) # fit using weights
+                    fit, cov = np.polyfit(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), 1, cov=True, w=ffd_weights) # fit using weights
 
                     ffd_ab[:,k] = fit
 
@@ -738,7 +737,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         np.savez(ap_loop_file,
                  Nflare=Nflare, rate_E=rate_E, fit_E=fit_E, fit_Eerr=fit_Eerr,
                  ffd_ab=ffd_ab, gr_all=gr_all, gi_all=gi_all, meanE=meanE,
-                 Prot_all=Prot_all)
+                 Prot_all=Prot_all, ED_all=ED_all, dur_all=dur_all)
 
         ##### END OF THE BIG BAD LOOP #####
 
@@ -754,6 +753,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
         gi_all = npz['gi_all']
         meanE = npz['meanE']
         Prot_all = npz['Prot_all']
+        dur_all = npz['dur_all']
+        ED_all = npz['ED_all']
     print(datetime.datetime.now())
 
 
@@ -863,6 +864,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     ##### The science plot! #####
     ##### try it as a scatter plot
+
+    # get rid of (g-r) versions
+    '''
     plt.figure()
     plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr],
                 alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=50)
@@ -889,6 +893,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
     plt.savefig('masterplot_okclr0_gr.png', dpi=300)
     plt.close()
+    '''
 
     ####    do it again, but now with (g-i) color   ###
     plt.figure()
@@ -1006,12 +1011,57 @@ def paper1_plots(condorfile='condorout.dat.gz',
     '''
 
 
+    #########################################
+    #    plots as a function of Lfl_Lbol
+
+    clr = np.log10(Lfl_Lbol)
+    clr_raw = clr
+    isF = np.where(np.isfinite(clr))
+
+    clr_rng = np.array([-2., 2.] )* np.nanstd(clr) + np.nanmedian(clr)
+
+    ## clip data at max/min range
+    clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
+    clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
+
+    okclr = np.where((clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
+                     np.isfinite(clr))
+
+    plt.figure()
+    plt.scatter(gi_all[okclr], Prot_all[okclr], c=clr[okclr],
+                alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=50)
+    plt.xlabel('g-i (mag)')
+    plt.ylabel('P$_{rot}$ (days)')
+    plt.yscale('log')
+    plt.xlim((0,3))
+    plt.ylim((0.1,100))
+    cb = plt.colorbar()
+    cb.set_label('Lfl / Lbol')
+    plt.savefig('masterplot_lfl_lbol.png', dpi=300)
+    plt.close()
 
 
+    plt.figure()
+    plt.scatter(gi_all, Prot_all, c=clr_raw,
+                alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=25)
+    plt.xlabel('g-i (mag)')
+    plt.ylabel('P$_{rot}$ (days)')
+    plt.yscale('log')
+    plt.xlim((0,3))
+    plt.ylim((0.1,100))
+    cb = plt.colorbar()
+    cb.set_label('Lfl / Lbol')
+    plt.savefig('masterplot_lfl_lbol_raw.png', dpi=300)
+    plt.close()
+    #    / plots as a function of Lfl_Lbol
+    #########################################
 
 
     #########################################
     #      NGC 6811 plots
+
+    # turn these off for now
+    '''
 
     ocfile='comparison_datasets/meibom2011_tbl1.txt'
 
@@ -1059,7 +1109,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     #####
-    '''
+
     plt.figure()
     plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr], alpha=0.7, lw=0, cmap=cm.afmhot_r, s=50)
     cb = plt.colorbar()
