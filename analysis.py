@@ -465,7 +465,7 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=True):
+                 rerun=False):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
@@ -927,64 +927,27 @@ def paper1_plots(condorfile='condorout.dat.gz',
     ################
     # pick target star color range, look at evolution of Rate vs Rotation
 
-    crng = [0.75, 1.]
-    ts = np.where((gi_all[okclr]  >= crng[0]) & (gi_all[okclr] <= crng[1]) & (Prot_all[okclr] > 0.1))
-    # ts0 = np.where((gi_all[okclr0]  >= crng[0]) & (gi_all[okclr0] <= crng[1]))
+    crng = np.array([[0.5, 0.75],[0.75, 1.],[1.50, 2.],[2.25, 2.75]])
 
-    ff.write('# that pass color1 cut: '+str(len(ts[0])) + '\n')
+    for k in range(crng.shape[0]):
+        ts = np.where((gi_all[okclr]  >= crng[k,0]) &
+                      (gi_all[okclr] <= crng[k,1]) &
+                      (Prot_all[okclr] > 0.1))
 
-    plt.figure()
-    # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
-    plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
-    plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
-    plt.xlabel('P$_{rot}$ (days)')
-    plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
-    plt.title(str(crng[0])+' < (g-i) < '+str(crng[1]))
-    plt.xscale('log')
-    plt.ylim(-7,1)
-    plt.xlim(0.1,100)
-    plt.savefig('rot_rate1.png', dpi=300)
-    plt.close()
+        ff.write('# that pass color cut: '+str(len(ts[0])) + '\n')
 
-
-    crng = [1.5, 2.]
-    ts = np.where((gi_all[okclr]  >= crng[0]) & (gi_all[okclr] <= crng[1]) & (Prot_all[okclr] > 0.1))
-    # ts0 = np.where((gi_all[okclr0]  >= crng[0]) & (gi_all[okclr0] <= crng[1]))
-
-    ff.write('# that pass color2 cut: '+str(len(ts[0])) + '\n')
-
-    plt.figure()
-    # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
-    plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
-    plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
-    plt.xlabel('P$_{rot}$ (days)')
-    plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
-    plt.title(str(crng[0])+' < (g-i) < '+str(crng[1]))
-    plt.xscale('log')
-    plt.ylim(-7,1)
-    plt.xlim(0.1,100)
-    plt.savefig('rot_rate2.png', dpi=300)
-    plt.close()
-
-
-    crng = [2.25, 2.75]
-    ts = np.where((gi_all[okclr]  >= crng[0]) & (gi_all[okclr] <= crng[1]) & (Prot_all[okclr] > 0.1))
-    # ts0 = np.where((gi_all[okclr0]  >= crng[0]) & (gi_all[okclr0] <= crng[1]))
-
-    ff.write('# that pass color3 cut: '+str(len(ts[0])) + '\n')
-
-    plt.figure()
-    # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
-    plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
-    plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
-    plt.xlabel('P$_{rot}$ (days)')
-    plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
-    plt.title(str(crng[0])+' < (g-i) < '+str(crng[1]))
-    plt.xscale('log')
-    plt.ylim(-7,1)
-    plt.xlim(0.1,100)
-    plt.savefig('rot_rate3.png', dpi=300)
-    plt.close()
+        plt.figure()
+        # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
+        plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
+        plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
+        plt.xlabel('P$_{rot}$ (days)')
+        plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
+        plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
+        plt.xscale('log')
+        plt.ylim(-7,1)
+        plt.xlim(0.1,100)
+        plt.savefig('rot_rate'+str(k)+'.png', dpi=300)
+        plt.close()
 
 
 
@@ -1014,18 +977,36 @@ def paper1_plots(condorfile='condorout.dat.gz',
     #########################################
     #    plots as a function of Lfl_Lbol
 
+    Nflare_limit = 20
+
     clr = np.log10(Lfl_Lbol)
     clr_raw = clr
     isF = np.where(np.isfinite(clr))
 
-    clr_rng = np.array([-2., 2.] )* np.nanstd(clr) + np.nanmedian(clr)
+    clr_rng = np.array([-3., 3.] )* np.nanstd(clr[isF]) + np.nanmedian(clr[isF])
+
 
     ## clip data at max/min range
     clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
     clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
 
     okclr = np.where((clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
-                     np.isfinite(clr))
+                     np.isfinite(clr) & (Nflare >= Nflare_limit))
+
+
+    plt.figure()
+    plt.scatter(gi_all, Prot_all, c=clr_raw,
+                alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=25)
+    plt.xlabel('g-i (mag)')
+    plt.ylabel('P$_{rot}$ (days)')
+    plt.yscale('log')
+    plt.xlim((0,3))
+    plt.ylim((0.1,100))
+    cb = plt.colorbar()
+    cb.set_label('Lfl / Lbol')
+    plt.savefig('masterplot_lfl_lbol_raw.png', dpi=300)
+    plt.close()
+
 
     plt.figure()
     plt.scatter(gi_all[okclr], Prot_all[okclr], c=clr[okclr],
@@ -1041,18 +1022,29 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.close()
 
 
-    plt.figure()
-    plt.scatter(gi_all, Prot_all, c=clr_raw,
-                alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=25)
-    plt.xlabel('g-i (mag)')
-    plt.ylabel('P$_{rot}$ (days)')
-    plt.yscale('log')
-    plt.xlim((0,3))
-    plt.ylim((0.1,100))
-    cb = plt.colorbar()
-    cb.set_label('Lfl / Lbol')
-    plt.savefig('masterplot_lfl_lbol_raw.png', dpi=300)
-    plt.close()
+    crng = np.array([[0.5, 0.75],[0.75, 1.],[1.50, 2.],[2.25, 2.75]])
+
+    for k in range(crng.shape[0]):
+        ts = np.where((gi_all[okclr]  >= crng[k,0]) &
+                      (gi_all[okclr] <= crng[k,1]) &
+                      (Prot_all[okclr] > 0.1))
+
+        ff.write('# that pass color cut: '+str(len(ts[0])) + '\n')
+
+        plt.figure()
+        # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
+        plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
+        plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
+        plt.xlabel('P$_{rot}$ (days)')
+        plt.ylabel('Lfl/Lbol')
+        plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
+        plt.xscale('log')
+        plt.ylim(-7,1)
+        plt.xlim(0.1,100)
+        plt.savefig('rot_lfllbol'+str(k)+'.png', dpi=300)
+        plt.close()
+
+
     #    / plots as a function of Lfl_Lbol
     #########################################
 
