@@ -977,6 +977,13 @@ def paper1_plots(condorfile='condorout.dat.gz',
     #########################################
     #    plots as a function of Lfl_Lbol
 
+    # spit out table of KID, color (g-i), Lfl/Lbol
+    dfout = pd.DataFrame(data={'kicnum':kicnum_c,
+                               'giclr':gi_all,
+                               'LflLbol':Lfl_Lbol})
+    dfout.to_csv('kic_lflare.csv')
+
+
     Nflare_limit = 20
 
     clr = np.log10(Lfl_Lbol)
