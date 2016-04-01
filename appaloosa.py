@@ -378,7 +378,7 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
     else:
         # take the average of the rolling stddev in the window.
         # better for windows w/ significant starspots being removed
-        sig_i = np.nanmedian(rolling_std(flux, std_window))
+        sig_i = np.nanmedian(rolling_std(flux, std_window, center=True))
 
     if debug is True:
         print("DEBUG: sig_i = " + str(sig_i))
@@ -687,23 +687,22 @@ def MultiFind(time, flux, error, flags, mode=3,
         # do iterative rejection and spline fit - like FBEYE did
         # also like DFM & Hogg suggest w/ BART
         box1 = detrend.MultiBoxcar(time, flux, error, kernel=2.0, numpass=2)
-        sin1 = detrend.FitSin(time, box1, error, maxnum=2, maxper=(max(time)-min(time)))
+        sin1 = detrend.FitSin(time, box1, error, maxnum=5, maxper=(max(time)-min(time)))
 
         box3 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.3)
-        # sin2 = detrend.FitSin(time, box2 + sin1, error, maxper=(max(time)-min(time)))
-        #
-        # box3 = detrend.MultiBoxcar(time, flux - sin2, error, kernel=0.2)
+
+        dt = np.nanmedian(time[1:] - time[0:-1])
 
         flux_model = detrend.IRLSSpline(time, box3, error, numpass=10) + sin1
 
-        signalfwhm=0.01
-        dt = np.nanmedian(time[1:] - time[0:-1])
+        signalfwhm = dt * 2
         ftime = np.arange(0, 2, dt)
         modelfilter = aflare1(ftime, 1, signalfwhm, 1)
         flux_diff = signal.correlate(flux - flux_model, modelfilter, mode='same')
 
+
     # run final flare-find on DATA - MODEL
-    isflare = FINDflare(flux_diff, error, N1=1, N3=2,
+    isflare = FINDflare(flux_diff, error, N1=3, N3=2,
                         returnbinary=True, avg_std=True)
 
 
@@ -723,6 +722,11 @@ def MultiFind(time, flux, error, flags, mode=3,
         # find start and stop index, combine neighboring candidates in to same events
         istart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
         istop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
+
+    # if start & stop times are the same, add 1 more datum on the end
+    to1 = np.where((istart-istop == 0))
+    if len(to1[0])>0:
+        istop[to1] += 1
 
     if debug is True:
         plt.figure()
@@ -756,7 +760,7 @@ def MatchedFilterFind(time, flux, signalfwhm=0.01):
 def FakeFlares(time, flux, error, flags, tstart, tstop,
                nfake=100, npass=1, ampl=(0.1,100), dur=(0.5,60),
                outfile='', savefile=False, gapwindow=0.1,
-               verboseout=False):
+               verboseout=False, display=False):
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
@@ -893,6 +897,14 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         ff = open(outfile, 'a+')
         ff.write(outstring)
         ff.close()
+
+    # if display is True:
+    #     plt.figure()
+    #     plt.plot(ed_bin_center, rec_bin)
+    #     plt.xlabel('ED bin center')
+    #     plt.ylabel('Fraction of recovered events')
+    #     plt.title('FakeFlares')
+    #     plt.show()
 
     return ed_bin_center, rec_bin
 
@@ -1036,7 +1048,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
                                            error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
                                            time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i],
                                            savefile=True, verboseout=verbosefake, gapwindow=gapwindow,
-                                           outfile=outfile + '.fake')
+                                           outfile=outfile + '.fake', display=display)
 
             rl = np.isfinite(frac_rec)
             frac_rec_sm = wiener(frac_rec[rl], 3)
@@ -1054,6 +1066,16 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
             else:
                 ed90_i = -99
 
+            if display is True:
+                # print(np.shape(ed_fake), np.shape(frac_rec), np.shape(rl), np.shape(frac_rec_sm))
+                plt.figure()
+                plt.plot(ed_fake, frac_rec, c='k')
+                plt.plot(ed_fake[rl], frac_rec_sm, c='red', linestyle='dashed', lw=2)
+                plt.vlines([ed68_i, ed90_i], ymin=0, ymax=1, colors='b',alpha=0.75, lw=5)
+                plt.xlabel('Flare Equivalent Width (seconds)')
+                plt.ylabel('Fraction of Recovered Flares')
+                # plt.xlim((-1,35))
+                plt.show()
         else:
             # for speed you can skip the fake-flare tests
             ed68_i = -199
@@ -1103,8 +1125,10 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         for g in dl:
             plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
 
-        plt.scatter(time[istart], flux_gap[istart], color='red', marker='o',s=40)
-        plt.scatter(time[istop], flux_gap[istop], color='orange', marker='p',s=60)
+        plt.scatter(time[istart], flux_gap[istart], color='red', marker='*',s=90)
+        plt.scatter(time[istop], flux_gap[istop], color='orange', marker='p',s=60, alpha=0.5)
+        plt.xlabel('Time (Days)')
+        plt.ylabel('Flux (counts)')
         plt.show()
 
     '''
@@ -1174,5 +1198,5 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 # $python appaloosa.py 12345678
 if __name__ == "__main__":
     import sys
-    RunLC(file=str(sys.argv[1]), dbmode='fits')
+    RunLC(file=str(sys.argv[1]), dbmode='fits', display=True)
 
