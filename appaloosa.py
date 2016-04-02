@@ -1198,5 +1198,5 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 # $python appaloosa.py 12345678
 if __name__ == "__main__":
     import sys
-    RunLC(file=str(sys.argv[1]), dbmode='fits', display=True)
+    RunLC(file=str(sys.argv[1]), dbmode='fits', display=False)
 
