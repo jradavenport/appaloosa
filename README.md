@@ -8,3 +8,13 @@ Finding every flare in every *Kepler* light curve.
 
     Q: Why "appaloosa"?
     A: I ran out of better ideas for names
+    
+
+## How to appaloosa:
+1. Download and have all *Kepler* data ready on cluster
+2. Run `condor.py` to prep Condor scheduling scripts
+3. Run Condor scripts on cluster
+4. Bundle outputs (`aprun` directory) in to .tar.gz file, move to workstation, unpackage
+5. Generate a list of .fake output files, run `postprocess.py`
+6. gzip the output table
+7. Do analysis and create plots for paper by running `analysis.py`, specifically `paper1_plots()`

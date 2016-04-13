@@ -12,6 +12,9 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
     This code goes thru every .flare file and computes basic stats,
     which are returned in a new big file for plotting, comparing to the KIC, etc.
 
+    the list of "fakes" is generated on the WWU iMac like so:
+    find 0x56ff1094_aprun/* -name "*.fake" > 0x56ff1094_fakes.lis
+
     '''
 
     # the fixed ED bins to sum the N flares over
