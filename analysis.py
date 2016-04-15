@@ -980,7 +980,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # total fractional energy (in seconds) / total duration (in seconds)
     Lfl_Lbol = ED_all / (dur_all * 60. * 60. * 24.)
 
-    Lfl_Lbol_label = 'log ($L_{fl} L_{kep}^{-1}$)'
+    Lfl_Lbol_label = 'log ($L_{fl}$ $L_{kep}^{-1}$)'
 
     # spit out table of KID, color (g-i), Lfl/Lbol
     dfout = pd.DataFrame(data={'kicnum':kicnum_c,
