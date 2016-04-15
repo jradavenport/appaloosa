@@ -465,7 +465,7 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=False):
+                 rerun=False, figdir='figures/', figtype='.png'):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
@@ -511,7 +511,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.yscale('log')
     plt.xlabel('# Flares')
     plt.ylabel('# Stars')
-    plt.savefig('Nflares_hist.png', dpi=300)
+    plt.savefig(figdir + 'Nflares_hist' + figtype, dpi=300)
     # plt.show()
     plt.close()
 
@@ -723,7 +723,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     plt.xlabel('log Flare Energy (erg)')
                     plt.ylabel('Cumulative Flare Freq (#/day)')
 
-                    plt.savefig(str(kicnum_c[k]) + '_ffd.png', dpi=300)
+                    plt.savefig(figdir + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300)
                     plt.close()
 
 
@@ -763,7 +763,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     _htmp = plt.hist(meanE[np.where(np.isfinite(meanE))], bins=50)
     plt.xlabel('mean energy (log E)')
     plt.ylabel('# stars')
-    plt.savefig('mean_energy.png',dpi=100)
+    plt.savefig(figdir + 'mean_energy' + figtype,dpi=100)
     plt.close()
 
 
@@ -791,14 +791,14 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('log R$_{'+EpointS+'}$ (#/day)')
     plt.ylabel('# Stars')
     plt.yscale('log')
-    plt.savefig('R_' + EpointS + '_hist.png', dpi=300)
+    plt.savefig(figdir + 'R_' + EpointS + '_hist' + figtype, dpi=300)
     plt.close()
 
 
 
     ## clip data at max/min range
-    clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
-    clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
+    # clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
+    # clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
 
 
 
@@ -818,7 +818,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.axvline(x=np.log10(Nflare_limit), linewidth=3, color='red', alpha=0.5)
     plt.xlabel('log # Flares per Star')
     plt.ylabel('Cumulative Fraction of Stars')
-    plt.savefig('cumulative_hist.png', dpi=300)
+    plt.savefig(figdir + 'cumulative_hist' + figtype, dpi=300)
     plt.close()
 
 
@@ -849,7 +849,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('g-i (mag)')
     plt.yscale('log')
     plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('flarerate_okclr.png', dpi=300)
+    plt.savefig(figdir + 'flarerate_okclr' + figtype, dpi=300)
     plt.close()
 
     plt.figure()
@@ -858,7 +858,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('g-i (mag)')
     plt.yscale('log')
     plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('flarerate_okclr0.png', dpi=300)
+    plt.savefig(figdir + 'flarerate_okclr0' + figtype, dpi=300)
     plt.close()
 
 
@@ -906,7 +906,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('masterplot_okclr_gi.png', dpi=300)
+    plt.savefig(figdir + 'masterplot_okclr_gi' + figtype, dpi=300)
     plt.close()
 
     ####
@@ -920,7 +920,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('masterplot_okclr0_gi.png', dpi=300)
+    plt.savefig(figdir + 'masterplot_okclr0_gi' + figtype, dpi=300)
     plt.close()
 
 
@@ -939,14 +939,14 @@ def paper1_plots(condorfile='condorout.dat.gz',
         plt.figure()
         # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
         plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
-        plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
+        # plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
         plt.xlabel('P$_{rot}$ (days)')
         plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
         plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
         plt.xscale('log')
         plt.ylim(-7,1)
         plt.xlim(0.1,100)
-        plt.savefig('rot_rate'+str(k)+'.png', dpi=300)
+        plt.savefig(figdir + 'rot_rate'+str(k) + figtype, dpi=300)
         plt.close()
 
 
@@ -977,6 +977,11 @@ def paper1_plots(condorfile='condorout.dat.gz',
     #########################################
     #    plots as a function of Lfl_Lbol
 
+    # total fractional energy (in seconds) / total duration (in seconds)
+    Lfl_Lbol = ED_all / (dur_all * 60. * 60. * 24.)
+
+    Lfl_Lbol_label = 'log ($L_{fl} L_{kep}^{-1}$)'
+
     # spit out table of KID, color (g-i), Lfl/Lbol
     dfout = pd.DataFrame(data={'kicnum':kicnum_c,
                                'giclr':gi_all,
@@ -994,10 +999,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     ## clip data at max/min range
-    clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
-    clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
+    # clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
+    # clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
 
-    okclr = np.where((clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
+    okclr = np.where(#(clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
                      np.isfinite(clr) & (Nflare >= Nflare_limit))
 
 
@@ -1010,8 +1015,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlim((0,3))
     plt.ylim((0.1,100))
     cb = plt.colorbar()
-    cb.set_label('Lfl / Lbol')
-    plt.savefig('masterplot_lfl_lbol_raw.png', dpi=300)
+    cb.set_label(Lfl_Lbol_label)
+    plt.savefig(figdir + 'masterplot_lfl_lbol_raw' + figtype, dpi=300)
     plt.close()
 
 
@@ -1024,8 +1029,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlim((0,3))
     plt.ylim((0.1,100))
     cb = plt.colorbar()
-    cb.set_label('Lfl / Lbol')
-    plt.savefig('masterplot_lfl_lbol.png', dpi=300)
+    cb.set_label(Lfl_Lbol_label)
+    plt.savefig(figdir + 'masterplot_lfl_lbol' + figtype, dpi=300)
     plt.close()
 
 
@@ -1041,14 +1046,14 @@ def paper1_plots(condorfile='condorout.dat.gz',
         plt.figure()
         # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
         plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
-        plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
+        # plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
         plt.xlabel('P$_{rot}$ (days)')
-        plt.ylabel('Lfl/Lbol')
+        plt.ylabel(Lfl_Lbol_label)
         plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
         plt.xscale('log')
         plt.ylim(-7,1)
         plt.xlim(0.1,100)
-        plt.savefig('rot_lfllbol'+str(k)+'.png', dpi=300)
+        plt.savefig(figdir + 'rot_lfllbol'+str(k) + figtype, dpi=300)
         plt.close()
 
 
