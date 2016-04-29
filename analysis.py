@@ -14,12 +14,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
+import matplotlib
 from scipy.stats import binned_statistic_2d
 from os.path import expanduser
 import os
 import appaloosa
 import pandas as pd
 import datetime
+
+
+matplotlib.rcParams.update({'font.size':18})
+matplotlib.rcParams.update({'font.family':'serif'})
 
 
 def _ABmag2flux(mag, zeropt=48.60,
@@ -493,14 +498,14 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     print(datetime.datetime.now())
     # total # flares in dataset!
-    print('total # flares found: ', fdata.loc[:,4].sum())
+    print('total # flare candidates found: ', fdata.loc[:,4].sum())
 
     # plt.figure()
     # plt.hist(fdata.loc[:,4].values, bins=100)
     # plt.yscale('log')
     # plt.xlabel('# Flares')
     # plt.ylabel('# Data Segments')
-    # plt.savefig('Nflares_file_hist.png', dpi=300)
+    # plt.savefig('Nflares_file_hist.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
     # plt.show()
 
 
@@ -509,9 +514,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.figure()
     plt.hist(num_fl_tot.values, bins=100, range=(0,1000), histtype='step', color='k')
     plt.yscale('log')
-    plt.xlabel('# Flares')
+    plt.xlabel('# Flares per Star')
     plt.ylabel('# Stars')
-    plt.savefig(figdir + 'Nflares_hist' + figtype, dpi=300)
+    plt.savefig(figdir + 'Nflares_hist' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     # plt.show()
     plt.close()
 
@@ -603,6 +608,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
         gr_all = np.zeros(len(kicnum_c)) - 99. # color used in prev work
         gi_all = np.zeros(len(kicnum_c)) - 99. # my preferred color
 
+        logg_all = np.zeros(len(kicnum_c)) - 99. # use log g from KIC, with some level of trust
+
         meanE = []
 
         for k in range(len(kicnum_c)):
@@ -627,6 +634,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
                 gi_all[k] = bigdata['kic_gmag'].values[mtch][0] - \
                             bigdata['kic_imag'].values[mtch][0]
+
+                logg_all[k] = bigdata['kic_logg'].values[mtch][0]
 
                 Lkp_i = Lkp_uniq[mtch][0]
 
@@ -723,7 +732,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     plt.xlabel('log Flare Energy (erg)')
                     plt.ylabel('Cumulative Flare Freq (#/day)')
 
-                    plt.savefig(figdir + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300)
+                    plt.savefig(figdir + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
                     plt.close()
 
 
@@ -737,7 +746,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         np.savez(ap_loop_file,
                  Nflare=Nflare, rate_E=rate_E, fit_E=fit_E, fit_Eerr=fit_Eerr,
                  ffd_ab=ffd_ab, gr_all=gr_all, gi_all=gi_all, meanE=meanE,
-                 Prot_all=Prot_all, ED_all=ED_all, dur_all=dur_all)
+                 Prot_all=Prot_all, ED_all=ED_all, dur_all=dur_all, logg_all=logg_all)
 
         ##### END OF THE BIG BAD LOOP #####
 
@@ -755,6 +764,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         Prot_all = npz['Prot_all']
         dur_all = npz['dur_all']
         ED_all = npz['ED_all']
+        logg_all = npz['logg_all']
     print(datetime.datetime.now())
 
 
@@ -785,13 +795,29 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     clr_rng = np.array([-2., 2.] )* np.nanstd(clr) + np.nanmedian(clr)
 
+    # set the limit on numbers of flares per star required
+    Nflare_limit = 100
+
+    ff.write('Nflare_limit = ' + str(Nflare_limit) + '\n')
+    ff.write('# flares on stars that pass this limit: ' +
+             str(np.sum(Nflare[np.where((Nflare >= Nflare_limit))])) + '\n')
+
+    # stars that have enough flares and have valid rates
+    okclr = np.where(#(logg_all >= 3.8) &
+                     np.isfinite(clr) & (Nflare >= Nflare_limit))
+
+    # stars that just have valid rates
+    okclr0 = np.where(  # (clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
+        np.isfinite(clr) & (Nflare >= 0))
+
+
 
     plt.figure()
     hh = plt.hist(clr[isF], bins=100, histtype='step', color='k')
     plt.xlabel('log R$_{'+EpointS+'}$ (#/day)')
     plt.ylabel('# Stars')
     plt.yscale('log')
-    plt.savefig(figdir + 'R_' + EpointS + '_hist' + figtype, dpi=300)
+    plt.savefig(figdir + 'R_' + EpointS + '_hist' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
@@ -802,12 +828,6 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
 
-    # set the limit on numbers of flares per star required
-    Nflare_limit = 100
-
-    ff.write('Nflare_limit = ' + str(Nflare_limit) + '\n')
-    ff.write('# flares on stars that pass this limit: ' +
-             str(np.sum(Nflare[np.where((Nflare >= Nflare_limit))])) + '\n')
 
     # lets breifly revisit Nflares, look at where to pick a limit
     plt.figure()
@@ -818,17 +838,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.axvline(x=np.log10(Nflare_limit), linewidth=3, color='red', alpha=0.5)
     plt.xlabel('log # Flares per Star')
     plt.ylabel('Cumulative Fraction of Stars')
-    plt.savefig(figdir + 'cumulative_hist' + figtype, dpi=300)
+    plt.savefig(figdir + 'cumulative_hist' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
-    # stars that have enough flares and have valid rates
-    okclr = np.where((clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
-                     np.isfinite(clr) & (Nflare >= Nflare_limit))
-
-    # stars that just have valid rates
-    okclr0 = np.where((clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
-                      np.isfinite(clr) & (Nflare >= 0))
 
     ff.write('okclr len is ' + str(len(okclr[0])) + '\n')
     ff.write('okclr0 len is ' + str(len(okclr0[0])) + '\n')
@@ -849,7 +862,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('g-i (mag)')
     plt.yscale('log')
     plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig(figdir + 'flarerate_okclr' + figtype, dpi=300)
+    plt.savefig(figdir + 'flarerate_okclr' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
     plt.figure()
@@ -858,7 +871,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('g-i (mag)')
     plt.yscale('log')
     plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig(figdir + 'flarerate_okclr0' + figtype, dpi=300)
+    plt.savefig(figdir + 'flarerate_okclr0' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
@@ -877,7 +890,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('masterplot_okclr_gr.png', dpi=300)
+    plt.savefig('masterplot_okclr_gr.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
     ####
@@ -891,7 +904,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('masterplot_okclr0_gr.png', dpi=300)
+    plt.savefig('masterplot_okclr0_gr.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
     '''
 
@@ -906,7 +919,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig(figdir + 'masterplot_okclr_gi' + figtype, dpi=300)
+    plt.savefig(figdir + 'masterplot_okclr_gi' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
     ####
@@ -920,7 +933,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig(figdir + 'masterplot_okclr0_gi' + figtype, dpi=300)
+    plt.savefig(figdir + 'masterplot_okclr0_gi' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
@@ -944,9 +957,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
         plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
         plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
         plt.xscale('log')
-        plt.ylim(-7,1)
+        plt.ylim(-4,0)
         plt.xlim(0.1,100)
-        plt.savefig(figdir + 'rot_rate'+str(k) + figtype, dpi=300)
+        plt.savefig(figdir + 'rot_rate'+str(k) + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.close()
 
 
@@ -969,7 +982,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylim(-1,2)
     cb = plt.colorbar()
     cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('masterplot_pixel.png', dpi=300)
+    plt.savefig('masterplot_pixel.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
     '''
 
@@ -989,7 +1002,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
     dfout.to_csv('kic_lflare.csv')
 
 
-    Nflare_limit = 20
+
+    # Nflare_limit = 100
+
+    # ff.write('Nflare_limit = ' + str(Nflare_limit) + '\n')
+    # ff.write('# flares on stars that pass this limit: ' +
+    #          str(np.sum(Nflare[np.where((Nflare >= Nflare_limit))])) + '\n')
 
     clr = np.log10(Lfl_Lbol)
     clr_raw = clr
@@ -1016,7 +1034,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label(Lfl_Lbol_label)
-    plt.savefig(figdir + 'masterplot_lfl_lbol_raw' + figtype, dpi=300)
+    plt.savefig(figdir + 'masterplot_lfl_lbol_raw' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
@@ -1030,7 +1048,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.ylim((0.1,100))
     cb = plt.colorbar()
     cb.set_label(Lfl_Lbol_label)
-    plt.savefig(figdir + 'masterplot_lfl_lbol' + figtype, dpi=300)
+    plt.savefig(figdir + 'masterplot_lfl_lbol' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
@@ -1051,9 +1069,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
         plt.ylabel(Lfl_Lbol_label)
         plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
         plt.xscale('log')
-        plt.ylim(-7,1)
+        plt.ylim(-6,-1)
         plt.xlim(0.1,100)
-        plt.savefig(figdir + 'rot_lfllbol'+str(k) + figtype, dpi=300)
+        plt.savefig(figdir + 'rot_lfllbol'+str(k) + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.close()
 
 
@@ -1064,8 +1082,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     #########################################
     #      NGC 6811 plots
 
-    # turn these off for now
-    '''
+
 
     ocfile='comparison_datasets/meibom2011_tbl1.txt'
 
@@ -1082,21 +1099,23 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9])
     plt.xlabel('g-r (mag)')
     plt.ylabel('P$_{rot}$ (days)')
-    plt.savefig('ngc6811_gyro.png', dpi=300)
+    plt.savefig(figdir + 'ngc6811_gyro.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
     # plt.show()
     plt.close()
 
     rate_oc = np.zeros(ocdata.shape[0]) - 99.
     fit_oc = np.zeros(ocdata.shape[0]) - 99.
+    Lfl_Lbol_oc = np.zeros(ocdata.shape[0]) - 99.
 
     for k in range(ocdata.shape[0]):
         mtch = np.where((kicnum_c == ocdata.iloc[:,0].values[k]))
         if len(mtch[0])>0:
             rate_oc[k] = rate_E[mtch]
             fit_oc[k] = np.polyval(ffd_ab[:,mtch], Epoint)
+            Lfl_Lbol_oc[k] = clr_raw[mtch]
 
 
-
+    '''
     #####
     plt.figure()
      # add contours for the entire field
@@ -1107,7 +1126,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlim(0.2, 0.9)
     plt.ylim(-3.5, -2)
     plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('ngc6811_flare_all.png', dpi=300)
+    plt.savefig('ngc6811_flare_all.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
@@ -1125,10 +1144,20 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlim((0,1.7))
     plt.ylim((0.1,100))
     cb2 = plt.colorbar()
-    plt.savefig('masterplot_cluster.png', dpi=300)
+    plt.savefig('masterplot_cluster.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
     # plt.show()
     '''
+
+    ####
+    plt.figure()
+    plt.scatter((ocdata.iloc[:, 7] - ocdata.iloc[:, 8]), Lfl_Lbol_oc, s=50)
+    plt.xlabel('g-r (mag)')
+    plt.ylabel(Lfl_Lbol_label)
+    plt.ylim(-7, 1)
+    # plt.xlim(0, 1.7)
+    plt.savefig(figdir + 'ngc6811_Lfl.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
 
 
     #      /NGC 6811 plots
