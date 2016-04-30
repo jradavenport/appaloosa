@@ -21,6 +21,8 @@ import os
 import appaloosa
 import pandas as pd
 import datetime
+import warnings
+from scipy.optimize import curve_fit
 
 
 matplotlib.rcParams.update({'font.size':18})
@@ -105,6 +107,18 @@ def _DistModulus(m_app, M_abs):
     mu = m_app - M_abs
     dist = 10.0**(mu/5.0 + 1.0)
     return dist
+
+
+def _linfunc(x, m, b):
+    '''
+    A simple linear function to fit with curve_fit
+    '''
+    return m * x + b
+
+
+def _plaw(x, m, b):
+    x2 = 10.**x
+    return b * (x2**m)
 
 
 def fbeye_compare(apfile='9726699.flare', fbeyefile='gj1243_master_flares.tbl'):
@@ -593,6 +607,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
     print(datetime.datetime.now())
 
     if rerun is True:
+        # silence some fit errors
+        warnings.simplefilter('ignore', np.RankWarning)
+
         Nflare = np.zeros(len(kicnum_c)) # total num flares per star, same as before but slower...
         rate_E = np.zeros(len(kicnum_c)) - 99.
         fit_E = np.zeros(len(kicnum_c)) - 99.
@@ -679,23 +696,37 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 ffd_yerr = _Perror(flare_tot[::-1], down=True) / dur_all[k]
 
                 # Fit the FFD w/ a line, save the coefficeints
-                ffd_ok = np.where((ffd_y > 0))
+                ffd_ok = np.where((ffd_y > 0) & np.isfinite(ffd_y) & np.isfinite(ffd_x))
 
                 # if there are at least 2 energy bins w/ valid flares...
-                if len(ffd_ok[0])>2:
+                if len(ffd_ok[0])>1:
                     # compute the mean flare energy for this star
                     meanE = np.append(meanE, np.nanmedian(ffd_x[ffd_ok]))
 
+                    '''
                     # the weights, in log rate units
                     ffd_weights = 1. / np.abs(ffd_yerr[ffd_ok]/(ffd_y[ffd_ok] * np.log(10)))
 
                     # fit the FFD w/ a line
                     fit, cov = np.polyfit(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), 1, cov=True, w=ffd_weights) # fit using weights
 
-                    ffd_ab[:,k] = fit
-
                     # evaluate the FFD fit at the Energy point
                     fit_E[k] = 10.**(np.polyval(fit, Epoint))
+                    '''
+
+                    p0 = [-1.8, np.log10(np.nanmax(ffd_y))]
+                    # fit, cov = curve_fit(_plaw, ffd_x[ffd_ok], ffd_y[ffd_ok], sigma=ffd_yerr[ffd_ok],
+                    #                      absolute_sigma=False, p0=p0)
+                    # fit_E[k] = _plaw(Epoint, *fit)
+
+
+                    fit, cov = curve_fit(_linfunc, ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), p0=p0,
+                                         sigma=np.abs(ffd_yerr[ffd_ok]/(ffd_y[ffd_ok] * np.log(10))) )
+
+                    fit_E[k] = 10.0**_linfunc(Epoint, *fit)
+
+                    ffd_ab[:,k] = fit
+
 
                     # determine uncertainty on the fit evaluation point, with help from:
                     # http://stackoverflow.com/questions/28505008/numpy-polyfit-how-to-get-1-sigma-uncertainty-around-the-estimated-curve
@@ -705,9 +736,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     fit_Eerr[k] = np.sqrt(np.diag(C_yi))  # Standard deviations are sqrt of diagonal
 
 
-                    # determine the actual value of the FFD at the Energy point using the fit
-                    if (sum(ffd_x >= Epoint) > 0):
-                        rate_E[k] = max(ffd_y[ffd_x >= Epoint])
+                # determine the actual value of the FFD at the Energy point using the fit
+                # if (sum(ffd_x >= Epoint) > 0):
+                #     rate_E[k] = max(ffd_y[ffd_x >= Epoint])
 
                 if doplot is True:
                     print(kicnum_c[k])
@@ -715,20 +746,29 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     print('ffd_x:', ffd_x)
                     print('ffd_y:', ffd_y)
                     print('ffd_yerr:', ffd_yerr)
-                    print('meanE:', meanE)
+                    # print('meanE:', meanE)
 
                     plt.plot(ffd_x, ffd_y, linewidth=2, color='black', alpha=0.7)
                     plt.errorbar(ffd_x, ffd_y, ffd_yerr, fmt='k,')
-                    if len(ffd_ok[0])>2:
-                        plt.plot(ffd_x[ffd_ok], 10.0**(np.polyval(fit, ffd_x[ffd_ok])),
+                    if len(ffd_ok[0])>1:
+                        print('FIT: ', fit)
+
+                        # plt.plot(ffd_x[ffd_ok], 10.0**(np.polyval(fit, ffd_x[ffd_ok])),
+                        #          color='orange', linewidth=4, alpha=0.5)
+
+                        # plt.plot(ffd_x[ffd_ok], _plaw(ffd_x[ffd_ok], *fit),
+                        #          color='orange', linewidth=4, alpha=0.5)
+
+                        plt.plot(ffd_x[ffd_ok], 10.0**_linfunc(ffd_x[ffd_ok], *fit),
                                  color='orange', linewidth=4, alpha=0.5)
+
 
                         plt.yscale('log')
                         plt.xlim(np.nanmin(ffd_x[ffd_ok])-0.5, np.nanmax(ffd_x[ffd_ok])+0.5)
                         # plt.ylim(1e-3, 3e0)
 
-                    plt.title('KIC' + str(kicnum_c[k]) + ': ' +
-                              'log R$_{'+EpointS+'}$ = ' + str(np.log10(fit_E[k])))
+                    # plt.title('KIC' + str(kicnum_c[k]) + ': ' +
+                    #           'log R$_{'+EpointS+'}$ = ' + str(np.log10(fit_E[k])))
                     plt.xlabel('log Flare Energy (erg)')
                     plt.ylabel('Cumulative Flare Freq (#/day)')
 
