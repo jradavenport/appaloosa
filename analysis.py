@@ -840,12 +840,14 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     ### plot of maxE vs color
-    Eok = np.where(np.isfinite(meanE) & (maxE > 0))
+    Eok = np.where((maxE > 0))
 
     plt.figure()
-    plt.scatter(gi_all[Eok], maxE[Eok])
+    plt.scatter(gi_all[Eok], maxE[Eok], alpha=0.5, linewidths=0)
     plt.xlabel('g-i (mag)')
     plt.ylabel('Max log Flare Energy (erg)')
+    plt.xlim(-1,3)
+    plt.ylim(28,40)
     plt.savefig(figdir + 'maxE_vs_gi' + figtype, dpi=100)
     plt.close()
 
@@ -1145,18 +1147,22 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     ### plot of Nflares vs color
     plt.figure()
-    plt.scatter(gi_all[okclr], Nflare[okclr])
+    plt.scatter(gi_all[okclr], Nflare[okclr], alpha=0.5, linewidths=0, c='k')
     plt.xlabel('g-i (mag)')
     plt.ylabel('Number of Flares')
     plt.yscale('log')
+    plt.ylim(1e2,1e5)
+    plt.xlim(-1,3)
     plt.savefig(figdir + 'Nflare_vs_gi' + figtype, dpi=100)
     plt.close()
 
     plt.figure()
-    plt.scatter(gi_all[isF], Nflare[isF])
+    plt.scatter(gi_all[isF], Nflare[isF], alpha=0.5, linewidths=0, c='k')
     plt.xlabel('g-i (mag)')
     plt.ylabel('Number of Flares')
     plt.yscale('log')
+    plt.ylim(1e2,1e5)
+    plt.xlim(-1,3)
     plt.savefig(figdir + 'Nflare_vs_gi_raw' + figtype, dpi=100)
     plt.close()
 
@@ -1278,9 +1284,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
     ### stars with 50 largest E flares
     Esort = np.argsort(maxE)[::-1]
 
+    Efair = np.where((maxE[Esort] < 40))
+
     ff.write('__ top 50 energy flare stars __' + '\n')
     for k in range(0, 50):
-        ff.write(str(kicnum_c[Esort][k]) + ', ' + str(maxE[Esort][k]) + '\n')
+        ff.write(str(kicnum_c[Esort][Efair][k]) +
+                 ', ' + str(maxE[Esort][Efair][k]) + '\n')
 
 
     ff.close() # close the output stats file
