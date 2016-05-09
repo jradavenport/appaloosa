@@ -593,7 +593,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     # make FFD plot for specific stars:
     #        GJ 1243, [ R. Clarke     ], J. Cornet,[  A. Boeck     ],  "Pearl"
-    s_num = [9726699, 10387822, 10452709, 6224062, 4171937, 12314646, 11551430]
+    s_num = [9726699, 10387822, 10452709, 6224062, 4171937, 12314646, 11551430,
+             9349698, 6928206, 5516671, 3222610] # random stars from Walkowicz (2011)
 
 
     # For every star: compute flare rate at some arbitrary energy
@@ -611,6 +612,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
         warnings.simplefilter('ignore', np.RankWarning)
 
         Nflare = np.zeros(len(kicnum_c)) # total num flares per star, same as before but slower...
+        Nflare68 = np.zeros(len(kicnum_c))
+
         rate_E = np.zeros(len(kicnum_c)) - 99.
         fit_E = np.zeros(len(kicnum_c)) - 99.
         fit_Eerr = np.zeros(len(kicnum_c)) - 99.
@@ -626,6 +629,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
         gi_all = np.zeros(len(kicnum_c)) - 99. # my preferred color
 
         logg_all = np.zeros(len(kicnum_c)) - 99. # use log g from KIC, with some level of trust
+
+        maxE = np.zeros(len(kicnum_c)) - 99
 
         meanE = []
 
@@ -666,8 +671,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 # tmp array to hold the total number of flares in each FFD bin
                 flare_tot = np.zeros_like(fnorm)
 
+                Nflare68tmp = 0 # count number of flares above threshold
+
                 for i in range(0,len(star)):
+                    # Find the portion of the FFD that is above the 68% cutoff
                     ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
+
                     if len(ok) > 0:
                         # add the rates together for a straight mean
                         fsum[ok] = fsum[ok] + fdata.loc[star[i],6:].values[ok]
@@ -677,6 +686,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
                         # add the actual number of flares for this data portion: rate * duration
                         flare_tot = flare_tot + (fdata.loc[star[i],6:].values * fdata.loc[star[i],5])
+
+                        # save the number of flares above E68 for this portion
+                        Nflare68tmp = Nflare68tmp + sum((fdata.loc[star[i], 6:].values * fdata.loc[star[i], 5]))
 
                         if fdata.loc[star[i],1] == 1:
                             pclr = 'red' # long cadence data
@@ -688,6 +700,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
                                      np.cumsum(fdata.loc[star[i],6:].values[ok][::-1]),
                                      alpha=0.35, color=pclr)
 
+                Nflare68[k] = Nflare68tmp
+
                 # the important arrays for the averaged FFD
                 ffd_x = edbins[1:][::-1] + Lkp_i
                 ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
@@ -696,11 +710,16 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 ffd_yerr = _Perror(flare_tot[::-1], down=True) / dur_all[k]
 
                 # Fit the FFD w/ a line, save the coefficeints
-                ffd_ok = np.where((ffd_y > 0) & np.isfinite(ffd_y) & np.isfinite(ffd_x))
+                ffd_ok = np.where((ffd_y > 0) & np.isfinite(ffd_y) &
+                                  np.isfinite(ffd_x) & np.isfinite(ffd_yerr))
+
+                # if there are any valid bins, find the max energy (bin)
+                if len(ffd_ok[0])>0:
+                    maxE[k] = np.nanmax(ffd_x[ffd_ok])
 
                 # if there are at least 2 energy bins w/ valid flares...
                 if len(ffd_ok[0])>1:
-                    # compute the mean flare energy for this star
+                    # compute the mean flare energy (bin) for this star
                     meanE = np.append(meanE, np.nanmedian(ffd_x[ffd_ok]))
 
                     '''
@@ -714,7 +733,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     fit_E[k] = 10.**(np.polyval(fit, Epoint))
                     '''
 
-                    p0 = [-1.8, np.log10(np.nanmax(ffd_y))]
+                    p0 = [-0.5, np.log10(np.nanmax(ffd_y[ffd_ok]))]
                     # fit, cov = curve_fit(_plaw, ffd_x[ffd_ok], ffd_y[ffd_ok], sigma=ffd_yerr[ffd_ok],
                     #                      absolute_sigma=False, p0=p0)
                     # fit_E[k] = _plaw(Epoint, *fit)
@@ -784,8 +803,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
         # save results for faster reuse
         np.savez(ap_loop_file,
-                 Nflare=Nflare, rate_E=rate_E, fit_E=fit_E, fit_Eerr=fit_Eerr,
-                 ffd_ab=ffd_ab, gr_all=gr_all, gi_all=gi_all, meanE=meanE,
+                 Nflare=Nflare, Nflare68=Nflare68, rate_E=rate_E, fit_E=fit_E, fit_Eerr=fit_Eerr,
+                 ffd_ab=ffd_ab, gr_all=gr_all, gi_all=gi_all, meanE=meanE, maxE=maxE,
                  Prot_all=Prot_all, ED_all=ED_all, dur_all=dur_all, logg_all=logg_all)
 
         ##### END OF THE BIG BAD LOOP #####
@@ -801,10 +820,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
         gr_all = npz['gr_all']
         gi_all = npz['gi_all']
         meanE = npz['meanE']
+        maxE = npz['maxE']
         Prot_all = npz['Prot_all']
         dur_all = npz['dur_all']
         ED_all = npz['ED_all']
         logg_all = npz['logg_all']
+        Nflare68 = npz['Nflare68']
     print(datetime.datetime.now())
 
 
@@ -817,12 +838,29 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.close()
 
 
-    # total fractional energy (in seconds) / total duration (in seconds)
-    Lfl_Lbol = ED_all/(dur_all * 60. * 60. * 24.)
+
+    ### plot of maxE vs color
+    Eok = np.where(np.isfinite(meanE) & (maxE > 0))
+
+    plt.figure()
+    plt.scatter(gi_all[Eok], maxE[Eok])
+    plt.xlabel('g-i (mag)')
+    plt.ylabel('Max log Flare Energy (erg)')
+    plt.savefig(figdir + 'maxE_vs_gi' + figtype, dpi=100)
+    plt.close()
+
+    ### histogram of maxE
+    plt.figure()
+    _ = plt.hist(maxE[Eok], bins=50)
+    plt.xlabel('Max log Flare Energy (erg)')
+    plt.ylabel('# stars')
+    plt.savefig(figdir + 'logE_hist' + figtype, dpi=100)
+    plt.close()
+
 
 
     ############################
-    #  # now the big master plot, style taken from the K2 meeting plot...
+    # the big master plot, style taken from the K2 meeting plot...
 
     clr = np.log10(fit_E)
     clr_raw = clr
@@ -837,13 +875,23 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     # set the limit on numbers of flares per star required
     Nflare_limit = 100
+    Nflare68_cut = 10
 
     ff.write('Nflare_limit = ' + str(Nflare_limit) + '\n')
     ff.write('# flares on stars that pass this limit: ' +
              str(np.sum(Nflare[np.where((Nflare >= Nflare_limit))])) + '\n')
+    ff.write('# stars that pass this limit: ' +
+             str(len(np.where((Nflare >= Nflare_limit))[0])) + '\n')
+
+    ff.write('Nflare68_limit = ' + str(Nflare68_cut) + '\n')
+    ff.write('# flares on stars that pass this limit: ' +
+             str(np.sum(Nflare[np.where((Nflare68 >= Nflare68_cut))])) + '\n')
+    ff.write('# stars that pass this limit: ' +
+             str(len(np.where((Nflare68 >= Nflare68_cut))[0])) + '\n')
+
 
     # stars that have enough flares and have valid rates
-    okclr = np.where(#(logg_all >= 3.8) &
+    okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.8) &
                      np.isfinite(clr) & (Nflare >= Nflare_limit))
 
     # stars that just have valid rates
@@ -881,6 +929,13 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.savefig(figdir + 'cumulative_hist' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
+
+    plt.figure()
+    _ = plt.hist(Nflare68, bins=100, histtype='step', color='k')
+    plt.xlabel('Number of Flares per Star (E > E$_{68}$')
+    plt.ylabel('Number of Stars')
+    plt.savefig(figdir + 'Nflare68' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
 
 
     ff.write('okclr len is ' + str(len(okclr[0])) + '\n')
@@ -987,7 +1042,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                       (gi_all[okclr] <= crng[k,1]) &
                       (Prot_all[okclr] > 0.1))
 
-        ff.write('# that pass color cut: '+str(len(ts[0])) + '\n')
+        ff.write('# that pass TS color cut: '+str(len(ts[0])) + '\n')
 
         plt.figure()
         # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
@@ -1028,6 +1083,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     #########################################
+    #########################################
     #    plots as a function of Lfl_Lbol
 
     # total fractional energy (in seconds) / total duration (in seconds)
@@ -1043,26 +1099,21 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
 
-    # Nflare_limit = 100
-
-    # ff.write('Nflare_limit = ' + str(Nflare_limit) + '\n')
-    # ff.write('# flares on stars that pass this limit: ' +
-    #          str(np.sum(Nflare[np.where((Nflare >= Nflare_limit))])) + '\n')
-
     clr = np.log10(Lfl_Lbol)
     clr_raw = clr
     isF = np.where(np.isfinite(clr))
 
-    clr_rng = np.array([-3., 3.] )* np.nanstd(clr[isF]) + np.nanmedian(clr[isF])
+    # clr_rng = np.array([-3., 3.] )* np.nanstd(clr[isF]) + np.nanmedian(clr[isF])
 
 
     ## clip data at max/min range
     # clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
     # clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
 
-    okclr = np.where(#(clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
+    okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.5) &
                      np.isfinite(clr) & (Nflare >= Nflare_limit))
 
+    ff.write('# stars that pass final "OKCLR" cuts: ' + str(len(okclr[0])) + '\n')
 
     plt.figure()
     plt.scatter(gi_all, Prot_all, c=clr_raw,
@@ -1089,6 +1140,24 @@ def paper1_plots(condorfile='condorout.dat.gz',
     cb = plt.colorbar()
     cb.set_label(Lfl_Lbol_label)
     plt.savefig(figdir + 'masterplot_lfl_lbol' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+
+    ### plot of Nflares vs color
+    plt.figure()
+    plt.scatter(gi_all[okclr], Nflare[okclr])
+    plt.xlabel('g-i (mag)')
+    plt.ylabel('Number of Flares')
+    plt.yscale('log')
+    plt.savefig(figdir + 'Nflare_vs_gi' + figtype, dpi=100)
+    plt.close()
+
+    plt.figure()
+    plt.scatter(gi_all[isF], Nflare[isF])
+    plt.xlabel('g-i (mag)')
+    plt.ylabel('Number of Flares')
+    plt.yscale('log')
+    plt.savefig(figdir + 'Nflare_vs_gi_raw' + figtype, dpi=100)
     plt.close()
 
 
@@ -1206,12 +1275,13 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
 
+    ### stars with 50 largest E flares
+    Esort = np.argsort(maxE)[::-1]
 
+    ff.write('__ top 50 energy flare stars __' + '\n')
+    for k in range(0, 50):
+        ff.write(str(kicnum_c[Esort][k]) + ', ' + str(maxE[Esort][k]) + '\n')
 
-    # goal plots:
-    # combined FFD for a couple months, then for all the months of 1 star
-    # combined FFD for all of a couple stars in same mass range
-    # R_35 parameter versus rotation period for a band of color (G stars, for example)
 
     ff.close() # close the output stats file
     return
