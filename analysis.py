@@ -579,7 +579,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     EpointS = str(Epoint)
 
     # set the limit on numbers of flares per star required
-    Nflare_limit = 50
+    Nflare_limit = 100
     Nflare68_cut = 10
 
     ##########      THIS IS THE BIG BAD LOOP      ##########
@@ -810,12 +810,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     #### a histogram of the average flare energy per star
-    plt.figure()
-    _htmp = plt.hist(meanE[np.where(np.isfinite(meanE))], bins=50)
-    plt.xlabel('mean energy (log E)')
-    plt.ylabel('# stars')
-    plt.savefig(figdir + 'mean_energy' + figtype,dpi=100)
-    plt.close()
+    # plt.figure()
+    # _htmp = plt.hist(meanE[np.where(np.isfinite(meanE))], bins=50)
+    # plt.xlabel('mean energy (log E)')
+    # plt.ylabel('# stars')
+    # plt.savefig(figdir + 'mean_energy' + figtype,dpi=100)
+    # plt.close()
 
 
 
@@ -1028,7 +1028,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # spit out table of KID, color (g-i), Lfl/Lbol
     dfout = pd.DataFrame(data={'kicnum':kicnum_c,
                                'giclr':gi_all,
-                               'LflLbol':Lfl_Lbol})
+                               'LflLkep':Lfl_Lbol})
     dfout.to_csv('kic_lflare.csv')
 
 
@@ -1037,12 +1037,6 @@ def paper1_plots(condorfile='condorout.dat.gz',
     clr_raw = clr
     isF = np.where(np.isfinite(clr))
 
-    # clr_rng = np.array([-3., 3.] )* np.nanstd(clr[isF]) + np.nanmedian(clr[isF])
-
-
-    ## clip data at max/min range
-    # clr[np.where((clr < clr_rng[0]) & np.isfinite(clr))] = clr_rng[0]
-    # clr[np.where((clr > clr_rng[1]) & np.isfinite(clr))] = clr_rng[1]
 
     okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.5) &
                      np.isfinite(clr) & (Nflare >= Nflare_limit))
@@ -1051,7 +1045,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     ff.write('# stars that pass final "OKCLR" cuts: ' + str(len(okclr[0])) + '\n')
     ff.write('# flares on stars that pass final OKCLR cut: ' + str(np.sum(Nflare[okclr])) + '\n')
     ff.write('# stars that pass OKCLR cut, and have Prot>0.1: ' +
-             str(len(np.where(Prot_all[okclr] > 0.1)[0]))+'\n')
+             str(len(np.where((Prot_all[okclr] > 0.1))[0]))+'\n')
 
     plt.figure()
     plt.scatter(gi_all, Prot_all, c=clr_raw,
@@ -1130,17 +1124,16 @@ def paper1_plots(condorfile='condorout.dat.gz',
     for k in range(crng.shape[0]):
         ts = np.where((gi_all[okclr]  > crng[k,0]) &
                       (gi_all[okclr] <= crng[k,1]) &
-                      Prot_all[okclr] > 0.1)
+                      (Prot_all[okclr] > 0.1))
 
         ff.write('# that pass color cut: '+str(len(ts[0])) + '\n')
 
         plt.figure()
         # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
         plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
-        # plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
         plt.xlabel('P$_{rot}$ (days)')
         plt.ylabel(Lfl_Lbol_label)
-        plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
+        plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]) + ', N='+str(len(ts[0])))
         plt.xscale('log')
         plt.ylim(-6,-1)
         plt.xlim(0.1,100)
