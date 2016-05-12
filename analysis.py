@@ -492,6 +492,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     Run on WWU workstation in dir: ~/research/kepler-flares/
 
+    set rerun=True to go through all the flare files again, takes about 40min to run
+    use rerun=False for quicker results using save file
+
     '''
 
     # read in KIC file
@@ -612,6 +615,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
         maxE = np.zeros(len(kicnum_c)) - 99
 
+        ra = np.zeros_like(kicnum_c) - 99.
+        dec = np.zeros_like(kicnum_c) - 99.
+
         meanE = []
 
         for k in range(len(kicnum_c)):
@@ -638,6 +644,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
                             bigdata['kic_imag'].values[mtch][0]
 
                 logg_all[k] = bigdata['kic_logg'].values[mtch][0]
+
+                ra[k] = bigdata['kic_degree_ra'].values[mtch][0]
+                dec[k] = bigdata['kic_dec'].values[mtch][0]
 
                 Lkp_i = Lkp_uniq[mtch][0]
 
@@ -785,7 +794,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
         np.savez(ap_loop_file,
                  Nflare=Nflare, Nflare68=Nflare68, rate_E=rate_E, fit_E=fit_E, fit_Eerr=fit_Eerr,
                  ffd_ab=ffd_ab, gr_all=gr_all, gi_all=gi_all, meanE=meanE, maxE=maxE,
-                 Prot_all=Prot_all, ED_all=ED_all, dur_all=dur_all, logg_all=logg_all)
+                 Prot_all=Prot_all, ED_all=ED_all, dur_all=dur_all, logg_all=logg_all,
+                 ra=ra, dec=dec)
 
         ##### END OF THE BIG BAD LOOP #####
 
@@ -806,6 +816,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
         ED_all = npz['ED_all']
         logg_all = npz['logg_all']
         Nflare68 = npz['Nflare68']
+        ra = npz['ra']
+        dec = npz['dec']
     print(datetime.datetime.now())
 
 
@@ -1028,7 +1040,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # spit out table of KID, color (g-i), Lfl/Lbol
     dfout = pd.DataFrame(data={'kicnum':kicnum_c,
                                'giclr':gi_all,
-                               'LflLkep':Lfl_Lbol})
+                               'LflLkep':Lfl_Lbol,
+                               'ra':ra, 'dec':dec})
     dfout.to_csv('kic_lflare.csv')
 
 
