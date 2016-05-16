@@ -532,7 +532,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     ff = open(statsfile, 'w')
     ff.write('This is the stats file for appaloosa.analysis.paper1_plots() \n')
-
+    ff.write('Total # flares found in entire sample: ' + str(fdata.loc[:,4].sum()) + '\n')
     ff.write('N stars with 25 or more flares: ' + str(len(np.where((num_fl_tot.values >= 25))[0])) + '\n')
     ff.write('Total num flares on stars with 25 or more flares: ' +
              str(np.sum((num_fl_tot.values)[np.where((num_fl_tot.values >= 25))])) + '\n')
@@ -674,10 +674,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
                         fnorm[ok] = fnorm[ok] + 1
 
                         # add the actual number of flares for this data portion: rate * duration
-                        flare_tot = flare_tot + (fdata.loc[star[i],6:].values * fdata.loc[star[i],5])
+                        flare_tot = flare_tot + (fdata.loc[star[i],6:].values * fdata.loc[star[i],2])
 
                         # save the number of flares above E68 for this portion
-                        Nflare68tmp = Nflare68tmp + sum((fdata.loc[star[i], 6:].values * fdata.loc[star[i], 5]))
+                        Nflare68tmp = Nflare68tmp + sum((fdata.loc[star[i], 6:].values[ok] * fdata.loc[star[i], 2]))
 
                         if fdata.loc[star[i],1] == 1:
                             pclr = 'red' # long cadence data
@@ -1057,6 +1057,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     ff.write('OKCLR rules: Lfl/Lkp>0, Nflare>'+str(Nflare_limit)+', Nflare68>'+str(Nflare68_cut)+'\n')
     ff.write('# stars that pass final "OKCLR" cuts: ' + str(len(okclr[0])) + '\n')
     ff.write('# flares on stars that pass final OKCLR cut: ' + str(np.sum(Nflare[okclr])) + '\n')
+    ff.write('# flares over E68 on stars that pass final OKCLR cut: ' + str(np.sum(Nflare68[okclr])) + '\n')
     ff.write('# stars that pass OKCLR cut, and have Prot>0.1: ' +
              str(len(np.where((Prot_all[okclr] > 0.1))[0]))+'\n')
 
@@ -1087,6 +1088,27 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.savefig(figdir + 'masterplot_lfl_lkep' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
+
+    # a diagnostic plot
+    plt.figure()
+    plt.scatter(Nflare+1, Nflare68+1, alpha=0.25, linewidths=0, c='k')
+    plt.scatter(Nflare[okclr]+1, Nflare68[okclr]+1, alpha=0.5, linewidths=0)
+    plt.xlabel('Nflare')
+    plt.ylabel('Nflare68')
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.savefig(figdir + 'Nflare_vs_Nflare68' + figtype, dpi=100)
+    plt.close()
+
+    # Eok = np.where((maxE > 0))
+    plt.figure()
+    plt.scatter(gi_all[okclr], maxE[okclr], alpha=0.5, linewidths=0, c='k')
+    plt.xlabel('g-i (mag)')
+    plt.ylabel('Max log Flare Energy (erg)')
+    plt.xlim(-1, 3)
+    plt.ylim(32, 40)
+    plt.savefig(figdir + 'maxE_vs_gi_okclr' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
 
     ### plot of Nflares vs color
     plt.figure()
