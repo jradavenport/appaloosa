@@ -23,6 +23,7 @@ import pandas as pd
 import datetime
 import warnings
 from scipy.optimize import curve_fit
+from astropy.stats import funcs
 
 
 matplotlib.rcParams.update({'font.size':18})
@@ -829,7 +830,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
     # plt.savefig(figdir + 'mean_energy' + figtype,dpi=100)
     # plt.close()
 
+    ff.write('total # of stars ' + str(len(kicnum_c)) + '\n')
 
+    ff.write('mean flare energy: ' + str(np.nanmean(meanE[np.where(np.isfinite(meanE))])) + '\n')
 
     ### plot of maxE vs color
     Eok = np.where((maxE > 0))
@@ -1116,9 +1119,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('g-i (mag)')
     plt.ylabel('Number of Flares')
     plt.yscale('log')
-    plt.ylim(0.9e2,1e5)
+    plt.ylim(0.8e2,1e4)
     plt.xlim(-1,3)
-    plt.savefig(figdir + 'Nflare_vs_gi' + figtype, dpi=100)
+    plt.savefig(figdir + 'Nflare_vs_gi' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
     plt.figure()
@@ -1126,9 +1129,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.xlabel('g-i (mag)')
     plt.ylabel('Number of Flares (E > E$_{68}$)')
     plt.yscale('log')
-    plt.ylim(0.9e2,1e5)
+    plt.ylim(0.8e2,1e4)
     plt.xlim(-1,3)
-    plt.savefig(figdir + 'Nflare_vs_gi' + figtype, dpi=100)
+    plt.savefig(figdir + 'Nflare68_vs_gi' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
@@ -1139,7 +1142,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.yscale('log')
     plt.ylim(0.9e2,1e5)
     plt.xlim(-1,3)
-    plt.savefig(figdir + 'Nflare_vs_gi_raw' + figtype, dpi=100)
+    plt.savefig(figdir + 'Nflare_vs_gi_raw' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
     plt.figure()
@@ -1150,11 +1153,17 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.savefig(figdir + 'Nflare68' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
-    crng = np.array([[0.5, 1.0],
+    crng = np.array([[0.5, 0.75],
+                     [0.75, 1.0],
                      [1., 1.5],
                      [1.5, 2.],
                      [2., 2.5],
                      [2.5, 3.]])
+                     # [0.0, 0.5]]) # a bin I don't expect to understand. Should be F stars
+
+    frac_flaring = np.zeros(crng.shape[0])
+    frac_flaring_err = np.zeros_like(crng)
+    # frac_flaring_perr = np.zeros_like(crng)
 
     for k in range(crng.shape[0]):
         ts = np.where((gi_all[okclr]  > crng[k,0]) &
@@ -1174,6 +1183,30 @@ def paper1_plots(condorfile='condorout.dat.gz',
         plt.xlim(0.1,100)
         plt.savefig(figdir + 'rot_lfllkp'+str(k) + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.close()
+
+
+        # compute the fraction of stars within each color bin that pass our flare cuts
+        doflare = np.where((gi_all[okclr]  > crng[k,0]) & (gi_all[okclr] <= crng[k,1]))
+        allstars = np.where((gi_all > crng[k,0]) & (gi_all <= crng[k,1]))
+
+        frac_flaring[k] = np.float(len(doflare[0])) / np.float(len(allstars[0]))
+        frac_flaring_err[k,:] = funcs.binom_conf_interval(np.float(len(doflare[0])), np.float(len(allstars[0])), interval='wald')
+        # frac_flaring_perr[k, :] = _Perror(len(doflare[0]), full=True)
+
+        print(len(doflare[0]), len(allstars[0]), frac_flaring[k], frac_flaring_err[k,:])
+
+
+    plt.figure()
+    plt.errorbar((crng[:,0] + crng[:,1])/2., frac_flaring, xerr=(crng[:,1] - crng[:,0])/2.,
+                 ecolor='k', capsize=0, fmt='none', yerr=frac_flaring_err.T)
+
+    plt.xlabel('g-i (mag)')
+    plt.xlim(0,3)
+    plt.ylabel('Fraction of Flaring Stars')
+    plt.ylim(0, 0.1)
+    plt.savefig(figdir + 'frac_flaring' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
 
 
     #    / plots as a function of Lfl_Lbol
