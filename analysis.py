@@ -57,6 +57,28 @@ def _ABmag2flux(mag, zeropt=48.60,
     return flux
 
 
+def _tau(mass):
+    '''
+    Write up the Eqn 11 from Wright (2011) that gives the
+    convective turnover timescale, used in Rossby number calculation
+
+    (Ro = Prot / tau)
+
+    Parameters
+    ----------
+    mass : float
+        relative to solar
+
+    Returns
+    -------
+    tau (in days)
+
+    '''
+
+    log_tau = 1.16 - 1.49 * np.log10(mass) - 0.54 * np.log10(mass)**2.
+    return  10.**log_tau
+
+
 def _Perror(n, full=False, down=False):
     '''
     Calculate the asymmetric Poisson error, using Eqn 7
@@ -485,7 +507,7 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=False, figdir='figures/', figtype='.png'):
+                 rerun=True, figdir='figures/', figtype='.png'):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
@@ -509,7 +531,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     fdata = pd.read_table(condorfile, delimiter=',', skiprows=1, header=None)
-    ''' KICnumber, lsflag (0=llc,1=slc), dur [days], log(ed68), tot Nflares, sum ED, [ Flares/Day (logEDbin) ] '''
+    ''' KICnumber, lsflag (0=llc,1=slc), dur [days], log(ed68), tot Nflares, sum ED, sum ED err, [ Flares/Day (logEDbin) ] '''
 
     # need KICnumber, Flare Freq data in units of ED
     kicnum_c = fdata.iloc[:,0].unique()
@@ -546,8 +568,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     # compute the distances and luminosities of all stars
-    Lkp_uniq, dist_uniq = energies(bigdata['kic_gmag'],
-                                   bigdata['kic_kmag'], return_dist=True)
+    Lkp_uniq, dist_uniq, mass_uniq = energies(bigdata['kic_gmag'],
+                                              bigdata['kic_kmag'],
+                                              return_all=True)
 
 
 
@@ -605,6 +628,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         # vars for L_fl/L_kp (e.g. Lurie 2015)
         dur_all = np.zeros(len(kicnum_c)) - 99. # total duration of the star's LC
         ED_all = np.zeros(len(kicnum_c)) - 99. # sum of all Equiv Dur's for the star
+        ED_all_err = np.zeros(len(kicnum_c)) - 99.
 
         # Also, compute FFD for every star
         ffd_ab = np.zeros((2,len(kicnum_c)))
@@ -618,6 +642,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
         ra = np.zeros_like(kicnum_c) - 99.
         dec = np.zeros_like(kicnum_c) - 99.
+        mass = np.zeros_like(kicnum_c) - 99.
 
         meanE = []
 
@@ -630,6 +655,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
             Nflare[k] = np.sum(fdata.loc[star,4].values) # total Num of flares
             dur_all[k] = np.sum(fdata.loc[star,2].values) # total duration (units: days)
             ED_all[k] = np.sum(fdata.loc[star,5].values) # total flare energy in Equiv Dur (units: seconds)
+            ED_all_err[k] = np.sqrt(np.sum((fdata.loc[star,6].values)**2.))
 
             # arrays for FFD
             fnorm = np.zeros_like(edbins[1:])
@@ -649,6 +675,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 ra[k] = bigdata['kic_degree_ra'].values[mtch][0]
                 dec[k] = bigdata['kic_dec'].values[mtch][0]
 
+                mass[k] = mass_uniq[mtch][0]
                 Lkp_i = Lkp_uniq[mtch][0]
 
                 # for stars listed in the "to plot list", make a FFD figure
@@ -669,16 +696,16 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
                     if len(ok) > 0:
                         # add the rates together for a straight mean
-                        fsum[ok] = fsum[ok] + fdata.loc[star[i],6:].values[ok]
+                        fsum[ok] = fsum[ok] + fdata.loc[star[i],7:].values[ok]
 
                         # count the number for the straight mean
                         fnorm[ok] = fnorm[ok] + 1
 
                         # add the actual number of flares for this data portion: rate * duration
-                        flare_tot = flare_tot + (fdata.loc[star[i],6:].values * fdata.loc[star[i],2])
+                        flare_tot = flare_tot + (fdata.loc[star[i],7:].values * fdata.loc[star[i],2])
 
                         # save the number of flares above E68 for this portion
-                        Nflare68tmp = Nflare68tmp + sum((fdata.loc[star[i], 6:].values[ok] * fdata.loc[star[i], 2]))
+                        Nflare68tmp = Nflare68tmp + sum((fdata.loc[star[i], 7:].values[ok] * fdata.loc[star[i], 2]))
 
                         if fdata.loc[star[i],1] == 1:
                             pclr = 'red' # long cadence data
@@ -687,7 +714,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
                         if doplot is True:
                             plt.plot(edbins[1:][ok][::-1] + Lkp_i,
-                                     np.cumsum(fdata.loc[star[i],6:].values[ok][::-1]),
+                                     np.cumsum(fdata.loc[star[i],7:].values[ok][::-1]),
                                      alpha=0.35, color=pclr)
 
                 Nflare68[k] = Nflare68tmp
@@ -795,8 +822,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
         np.savez(ap_loop_file,
                  Nflare=Nflare, Nflare68=Nflare68, rate_E=rate_E, fit_E=fit_E, fit_Eerr=fit_Eerr,
                  ffd_ab=ffd_ab, gr_all=gr_all, gi_all=gi_all, meanE=meanE, maxE=maxE,
-                 Prot_all=Prot_all, ED_all=ED_all, dur_all=dur_all, logg_all=logg_all,
-                 ra=ra, dec=dec)
+                 Prot_all=Prot_all, ED_all=ED_all, ED_all_err=ED_all_err, dur_all=dur_all, logg_all=logg_all,
+                 ra=ra, dec=dec, mass=mass)
 
         ##### END OF THE BIG BAD LOOP #####
 
@@ -815,10 +842,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
         Prot_all = npz['Prot_all']
         dur_all = npz['dur_all']
         ED_all = npz['ED_all']
+        ED_all_err = npz['ED_all_err']
         logg_all = npz['logg_all']
         Nflare68 = npz['Nflare68']
         ra = npz['ra']
         dec = npz['dec']
+        mass = npz['mass']
     print(datetime.datetime.now())
 
 
@@ -856,9 +885,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     ############################
-    # the big master plot, style taken from the K2 meeting plot...
-    # plots vs R35
+    # TURN THESE R35 PLOTS OFF FOR NOW
     if False:
+        # the big master plot, style taken from the K2 meeting plot...
+        # plots vs R35
         clr = np.log10(fit_E)
         clr_raw = clr
 
@@ -1037,6 +1067,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     # total fractional energy (in seconds) / total duration (in seconds)
     Lfl_Lbol = ED_all / (dur_all * 60. * 60. * 24.)
+    Lfl_Lbol_err = ED_all_err / (dur_all * 60. * 60. * 24.)
 
     Lfl_Lbol_label = 'log ($L_{fl}$ $L_{Kp}^{-1}$)'
 
@@ -1050,9 +1081,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
 
     clr = np.log10(Lfl_Lbol)
+    clr_err = np.abs(Lfl_Lbol_err/ (Lfl_Lbol * np.log(10.)))
     clr_raw = clr
     isF = np.where(np.isfinite(clr))
 
+    tau = _tau(mass)
+    Rossby = Prot_all / tau
 
     okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.5) &
                      np.isfinite(clr) & (Nflare >= Nflare_limit))
@@ -1175,6 +1209,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         plt.figure()
         # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
         plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
+        plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_err[okclr][ts], fmt='none', ecolor='k', capsize=0)
         plt.xlabel('P$_{rot}$ (days)')
         plt.ylabel(Lfl_Lbol_label)
         plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]) + ', N='+str(len(ts[0])))
@@ -1196,6 +1231,19 @@ def paper1_plots(condorfile='condorout.dat.gz',
         print(len(doflare[0]), len(allstars[0]), frac_flaring[k], frac_flaring_err[k,:])
 
 
+
+    plt.figure()
+    plt.scatter(Rossby[okclr], clr_raw[okclr], s=50, lw=0, c='k')
+    plt.errorbar(Rossby[okclr], clr_raw[okclr], yerr=clr_err[okclr], fmt='none', ecolor='k', capsize=0)
+    plt.ylabel(Lfl_Lbol_label)
+    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
+    plt.xscale('log')
+    plt.ylim(-6, -1)
+    plt.savefig(figdir + 'Rossby_lfllkp' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+
+    ###
     plt.figure()
     plt.errorbar((crng[:,0] + crng[:,1])/2., frac_flaring, xerr=(crng[:,1] - crng[:,0])/2.,
                  ecolor='k', capsize=0, fmt='none', yerr=frac_flaring_err.T)
@@ -1211,6 +1259,22 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     #    / plots as a function of Lfl_Lbol
     #########################################
+
+    plt.figure()
+    plt.scatter(gi_all[okclr], ffd_ab[0,okclr], alpha=0.5, lw=0)
+    plt.xlabel('g-i (mag)')
+    plt.xlim(0, 3)
+    plt.ylabel('ffd_ab[0,okclr]')
+    plt.savefig(figdir + 'ffd_a' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+    plt.figure()
+    plt.scatter(gi_all[okclr], ffd_ab[1, okclr], alpha=0.5, lw=0)
+    plt.xlabel('g-i (mag)')
+    plt.xlim(0, 3)
+    plt.ylabel('ffd_ab[1,okclr]')
+    plt.savefig(figdir + 'ffd_b' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
 
 
     #########################################
@@ -1315,8 +1379,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     return
 
 
-# def energies(gmag, rmag, imag, isochrone='1.0gyr.dat', return_dist=False):
-def energies(gmag, kmag, isochrone='1.0gyr.dat', return_dist=False):
+def energies(gmag, kmag, isochrone='1.0gyr.dat', return_all=False):
     '''
     Compute the quiescent energy for every star. Use the KIC (g-i) color,
     with an isochrone, get the absolute Kepler mag for each star, and thus
@@ -1380,13 +1443,14 @@ def energies(gmag, kmag, isochrone='1.0gyr.dat', return_dist=False):
     '''
 
 
-    Mkp, Mg, Mk = np.loadtxt(dir + isochrone, comments='#',
-                             unpack=True, usecols=(8,9,18))
+    mass, Mkp, Mg, Mk = np.loadtxt(dir + isochrone, comments='#',
+                                   unpack=True, usecols=(2,8,9,18))
 
     Mgk = (Mg-Mk)
     ss = np.argsort(Mgk) # needs to be sorted for interpolation
     Mkp_o = np.interp((gmag-kmag), Mgk[ss], Mkp[ss])
     Mk_o = np.interp((gmag-kmag), Mgk[ss], Mk[ss])
+    mass_o = np.interp((gmag-kmag), Mgk[ss], mass[ss])
 
     dist = np.array(_DistModulus(kmag, Mk_o), dtype='float')
     dm = (kmag - Mk_o)
@@ -1406,8 +1470,8 @@ def energies(gmag, kmag, isochrone='1.0gyr.dat', return_dist=False):
     # !! Should have some confidence about the interpolation,
     #    e.g. if beyond g-i isochrone range !!
 
-    if return_dist is True:
-        return np.log10(L_kp), dist
+    if return_all is True:
+        return np.log10(L_kp), dist, np.array(mass_o, dtype='float')
     else:
         return np.log10(L_kp)
 

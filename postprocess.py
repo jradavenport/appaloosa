@@ -28,7 +28,7 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
     files = np.loadtxt(flares, dtype='str')
 
     fout = open(outfile, 'w')
-    fout.write('# KICnumber, lsflag (0=llc,1=slc), dur [days], log(ed68), tot Nflares, sum ED, [ Flares/Day (logEDbin) ] \n')
+    fout.write('# KICnumber, lsflag (0=llc,1=slc), dur [days], log(ed68), tot Nflares, sum ED, sum ED err, [ Flares/Day (logEDbin) ] \n')
 
     for k in range(len(files)):
         # read in flare and fake results
@@ -52,7 +52,7 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
                                delimiter=',', dtype='float',comments='#', ndmin=2)
             '''
             t_start, t_stop, t_peak, amplitude, FWHM,
-            duration, t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
+            duration (days), t_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1,
             flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur,
             ed68_i, ed90_i
             '''
@@ -66,6 +66,17 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
 
             ed_hist, _ = np.histogram(np.log10(fdata[ok_fl,14]), bins=edbins)
 
+            # the errors (from chi sq) are approximately:
+            # sigma_ED ~ sqrt( ED^2 / N / chisq )
+            if (files[k].find('slc') == -1):
+                expt = 1./60./24.
+            else:
+                expt = 30./60./24.
+            npts = fdata[ok_fl,5] / expt # this is approximate... but faster than a total re-run
+
+            ed_errors_n = np.sqrt(fdata[ok_fl,14]**2. / (fdata[ok_fl,9] * npts))
+
+            sum_ed_err = str(np.sqrt(np.sum((ed_errors_n**2.))))
             sum_ed = str(np.sum(fdata[ok_fl, 14]))
 
         else:
@@ -73,6 +84,7 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
             Nflares = 0
             ed_hist = np.zeros(len(edbins) - 1)
             sum_ed = '0'
+            sum_ed_err = '0'
 
 
         ed_freq = ed_hist / dur
@@ -104,7 +116,8 @@ def PostCondor(flares='fakes.lis', outfile='condorout.dat'):
         else:
             lsflag = '0'
 
-        outstring = kicnum + ', ' + lsflag + ', ' + dur_out + ', ' + edcut_out + ', ' + Nflares_out + ', ' + sum_ed
+        outstring = kicnum + ', ' + lsflag + ', ' + dur_out + ', ' + edcut_out + ', ' + \
+                    Nflares_out + ', ' + sum_ed + ', ' + sum_ed_err
         for i in range(len(ed_freq)):
             outstring = outstring + ', ' + str(ed_freq[i])
 
