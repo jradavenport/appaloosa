@@ -79,6 +79,26 @@ def _tau(mass):
     return  10.**log_tau
 
 
+def RoFlare(r,a,b,s):
+    '''
+
+    Parameters
+    ----------
+    r : the log Ro value
+    a : the amplitude
+    b : the break Ro
+    s : the slope
+
+    Returns
+    -------
+
+    '''
+    f = np.piecewise(r, [(r <= b), (r > b)],
+                     [a, # before the break, it is flat
+                      lambda x: (s * (x-b) + a)])
+
+    return f
+
 def _Perror(n, full=False, down=False):
     '''
     Calculate the asymmetric Poisson error, using Eqn 7
@@ -507,7 +527,7 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=True, figdir='figures/', figtype='.png'):
+                 rerun=False, figdir='figures/', figtype='.png'):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
@@ -571,7 +591,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
     Lkp_uniq, dist_uniq, mass_uniq = energies(bigdata['kic_gmag'],
                                               bigdata['kic_kmag'],
                                               return_all=True)
-
+    # plt.figure()
+    # plt.scatter(bigdata['kic_gmag'] - bigdata['kic_kmag'], mass_uniq, alpha=0.2)
+    # plt.show()
 
 
     # ingest Amy McQuillans rotation period catalog
@@ -643,6 +665,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         ra = np.zeros_like(kicnum_c) - 99.
         dec = np.zeros_like(kicnum_c) - 99.
         mass = np.zeros_like(kicnum_c) - 99.
+        Lkp_all = np.zeros_like(kicnum_c) - 99.
 
         meanE = []
 
@@ -676,6 +699,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 dec[k] = bigdata['kic_dec'].values[mtch][0]
 
                 mass[k] = mass_uniq[mtch][0]
+                Lkp_all[k] = Lkp_uniq[mtch][0]
                 Lkp_i = Lkp_uniq[mtch][0]
 
                 # for stars listed in the "to plot list", make a FFD figure
@@ -823,7 +847,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                  Nflare=Nflare, Nflare68=Nflare68, rate_E=rate_E, fit_E=fit_E, fit_Eerr=fit_Eerr,
                  ffd_ab=ffd_ab, gr_all=gr_all, gi_all=gi_all, meanE=meanE, maxE=maxE,
                  Prot_all=Prot_all, ED_all=ED_all, ED_all_err=ED_all_err, dur_all=dur_all, logg_all=logg_all,
-                 ra=ra, dec=dec, mass=mass)
+                 ra=ra, dec=dec, mass=mass, Lkp_all=Lkp_all)
 
         ##### END OF THE BIG BAD LOOP #####
 
@@ -848,6 +872,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         ra = npz['ra']
         dec = npz['dec']
         mass = npz['mass']
+        Lkp_all = npz['Lkp_all']
     print(datetime.datetime.now())
 
 
@@ -1071,13 +1096,6 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     Lfl_Lbol_label = 'log ($L_{fl}$ $L_{Kp}^{-1}$)'
 
-    # spit out table of KID, color (g-i), Lfl/Lbol
-    dfout = pd.DataFrame(data={'kicnum':kicnum_c,
-                               'giclr':gi_all,
-                               'LflLkep':Lfl_Lbol,
-                               'ra':ra, 'dec':dec})
-    dfout.to_csv('kic_lflare.csv')
-
 
 
     clr = np.log10(Lfl_Lbol)
@@ -1085,11 +1103,46 @@ def paper1_plots(condorfile='condorout.dat.gz',
     clr_raw = clr
     isF = np.where(np.isfinite(clr))
 
-    tau = _tau(mass)
-    Rossby = Prot_all / tau
-
+    #### THIS IS WHERE I MAKE MY PRIMARY GOOD SAMPLE CUT
+    #      down to ~4k stars
     okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.5) &
                      np.isfinite(clr) & (Nflare >= Nflare_limit))
+
+
+    # spit out table of KID, color (g-i), Lfl/Lbol
+    dfout = pd.DataFrame(data={'kicnum': kicnum_c[okclr],
+                               'giclr': gi_all[okclr],
+                               'mass': mass[okclr],
+                               'Prot':Prot_all[okclr],
+                               'LflLkep': Lfl_Lbol[okclr],
+                               'LflLkep_err': Lfl_Lbol_err[okclr],
+                               'Nflares':Nflare[okclr],
+                               'Nflare68':Nflare68[okclr],
+                               'R35':rate_E[okclr]
+                               })
+                               # 'ra': ra, 'dec': dec})
+    # dfout.to_csv('kic_lflare.csv')
+    dfout.to_csv('kepler_flare_output.csv')
+
+    tau_all = _tau(mass)
+    Rossby = Prot_all / tau_all
+
+    # lets check to make sure the Rossby number calculations are put together right
+    plt.figure()
+    plt.scatter(gi_all[okclr], tau_all[okclr])
+    plt.xlabel('g-i')
+    plt.ylabel(r'$\tau$')
+    plt.savefig(figdir + 'gi_vs_tau' + figtype)
+    plt.close()
+
+    plt.figure()
+    plt.scatter(Rossby[okclr], tau_all[okclr])
+    plt.xlabel('Ro')
+    plt.ylabel(r'$\tau$')
+    plt.savefig(figdir + 'Ro_vs_tau' + figtype)
+    plt.close()
+
+
 
     ff.write('OKCLR rules: Lfl/Lkp>0, Nflare>'+str(Nflare_limit)+', Nflare68>'+str(Nflare68_cut)+'\n')
     ff.write('# stars that pass final "OKCLR" cuts: ' + str(len(okclr[0])) + '\n')
@@ -1231,14 +1284,28 @@ def paper1_plots(condorfile='condorout.dat.gz',
         print(len(doflare[0]), len(allstars[0]), frac_flaring[k], frac_flaring_err[k,:])
 
 
+    pok = np.where((Prot_all[okclr] > 0.1) &
+                   (gi_all[okclr] > 0.75)) # manually throw out the bluest stars
+
+    p0 = (-3., -0.8, -1.)
+    popt1, pcov = curve_fit(RoFlare, np.log10(Rossby[okclr][pok]),
+                            clr[okclr][pok], p0=p0)
+    perr1 = np.sqrt(np.diag(pcov))
+    print('Rossby numbers:', popt1, perr1)
+    ff.write('Rossby Parameters: ' + str(popt1) + str(perr1) + '\n')
 
     plt.figure()
-    plt.scatter(Rossby[okclr], clr_raw[okclr], s=50, lw=0, c='k')
-    plt.errorbar(Rossby[okclr], clr_raw[okclr], yerr=clr_err[okclr], fmt='none', ecolor='k', capsize=0)
+    plt.scatter(Rossby[okclr][pok], clr[okclr][pok], s=50, lw=0, c='k', alpha=0.5)
+    # plt.errorbar(Rossby[okclr], clr[okclr], yerr=clr_err[okclr], fmt='none', ecolor='k', capsize=0)
+
+    plt.plot(10.**np.arange(-3, 1,.01), RoFlare(np.arange(-3, 1,.01), *popt1),
+             c='red', lw=3, alpha=0.75)
+
     plt.ylabel(Lfl_Lbol_label)
     plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
     plt.xscale('log')
-    plt.ylim(-6, -1)
+    plt.xlim(0.8e-2, 4e0)
+    plt.ylim(-5, -1.5)
     plt.savefig(figdir + 'Rossby_lfllkp' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
@@ -1264,7 +1331,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.scatter(gi_all[okclr], ffd_ab[0,okclr], alpha=0.5, lw=0)
     plt.xlabel('g-i (mag)')
     plt.xlim(0, 3)
-    plt.ylabel('ffd_ab[0,okclr]')
+    plt.ylabel(r'$\beta$ (log rate per energy)')
+    plt.ylim(-2, 0.1)
     plt.savefig(figdir + 'ffd_a' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
@@ -1272,7 +1340,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.scatter(gi_all[okclr], ffd_ab[1, okclr], alpha=0.5, lw=0)
     plt.xlabel('g-i (mag)')
     plt.xlim(0, 3)
-    plt.ylabel('ffd_ab[1,okclr]')
+    plt.ylabel(r'$\alpha$ (log # flares per day)')
     plt.savefig(figdir + 'ffd_b' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
@@ -1296,7 +1364,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.figure()
     plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9])
     plt.xlabel('g-r (mag)')
-    plt.ylabel('P$_{rot}$ (days)')
+    plt.ylabel(r'P$_{rot}$ (days)')
     plt.savefig(figdir + 'ngc6811_gyro.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
     # plt.show()
     plt.close()
