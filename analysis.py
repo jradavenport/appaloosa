@@ -1298,8 +1298,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.scatter(Rossby[okclr][pok], clr[okclr][pok], s=50, lw=0, c='k', alpha=0.5)
     # plt.errorbar(Rossby[okclr], clr[okclr], yerr=clr_err[okclr], fmt='none', ecolor='k', capsize=0)
 
-    plt.plot(10.**np.arange(-3, 1,.01), RoFlare(np.arange(-3, 1,.01), *popt1),
-             c='red', lw=3, alpha=0.75)
+    # plt.plot(10.**np.arange(-3, 1,.01), RoFlare(np.arange(-3, 1,.01), *popt1),
+    #          c='red', lw=3, alpha=0.75)
 
     plt.ylabel(Lfl_Lbol_label)
     plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
