@@ -1298,6 +1298,14 @@ def paper1_plots(condorfile='condorout.dat.gz',
     pok = np.where((Prot_all[okclr] > 0.1) &
                    (gi_all[okclr] > 0.75)) # manually throw out the bluest stars
 
+    pok_e = np.where((Prot_all[okclr] > 0.1) &
+                     (gi_all[okclr] > 0.75) &
+                     (gi_all[okclr] <= 1.5))
+
+    pok_l = np.where((Prot_all[okclr] > 0.1) &
+                     (gi_all[okclr] >= 1.5) &
+                     (gi_all[okclr] <= 3.))
+
     p0 = (-3., -0.8, -1.)
     popt1, pcov = curve_fit(RoFlare, np.log10(Rossby[okclr][pok]),
                             clr[okclr][pok], p0=p0)
@@ -1308,16 +1316,51 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.figure()
     plt.scatter(Rossby[okclr][pok], clr[okclr][pok], s=50, lw=0, c='k', alpha=0.5)
     # plt.errorbar(Rossby[okclr], clr[okclr], yerr=clr_err[okclr], fmt='none', ecolor='k', capsize=0)
-
     # plt.plot(10.**np.arange(-3, 1,.01), RoFlare(np.arange(-3, 1,.01), *popt1),
     #          c='red', lw=3, alpha=0.75)
-
     plt.ylabel(Lfl_Lbol_label)
     plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
     plt.xscale('log')
     plt.xlim(0.8e-2, 4e0)
     plt.ylim(-5, -1.5)
     plt.savefig(figdir + 'Rossby_lfllkp' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+    # try the rossby figure colored by mass
+    plt.figure()
+    plt.scatter(Rossby[okclr][pok], clr[okclr][pok],
+                s=50, lw=0, alpha=0.75, c=mass[okclr][pok])
+    cbar = plt.colorbar()
+    cbar.set_label('Mass')
+    plt.ylabel(Lfl_Lbol_label)
+    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
+    plt.xscale('log')
+    plt.xlim(0.8e-2, 4e0)
+    plt.ylim(-5, -1.5)
+    plt.savefig(figdir + 'Rossby_lfllkp_color' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+    # now 2 more versions of the Rossby figure using 2 bigger mass bins
+    plt.figure()
+    plt.scatter(Rossby[okclr][pok_e], clr[okclr][pok_e],
+                s=50, lw=0, alpha=0.5, c='k')
+    plt.ylabel(Lfl_Lbol_label)
+    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
+    plt.xscale('log')
+    plt.xlim(0.8e-2, 4e0)
+    plt.ylim(-5, -1.5)
+    plt.savefig(figdir + 'Rossby_lfllkp_e' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+    plt.figure()
+    plt.scatter(Rossby[okclr][pok_l], clr[okclr][pok_l],
+                s=50, lw=0, alpha=0.5, c='k')
+    plt.ylabel(Lfl_Lbol_label)
+    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
+    plt.xscale('log')
+    plt.xlim(0.8e-2, 4e0)
+    plt.ylim(-5, -1.5)
+    plt.savefig(figdir + 'Rossby_lfllkp_l' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
