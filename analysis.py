@@ -1252,6 +1252,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
     frac_flaring_err = np.zeros_like(crng)
     # frac_flaring_perr = np.zeros_like(crng)
 
+    Ro_peakL = np.zeros(crng.shape[0])
+    Ro_slope = np.zeros(crng.shape[0])
+    Ro_break = np.zeros(crng.shape[0])
+
     for k in range(crng.shape[0]):
         ts = np.where((gi_all[okclr]  > crng[k,0]) &
                       (gi_all[okclr] <= crng[k,1]) &
@@ -1283,8 +1287,23 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
         print(len(doflare[0]), len(allstars[0]), frac_flaring[k], frac_flaring_err[k,:])
 
+
+        # the rossby number figure (incl fit)
+        p0 = (-3., -1.2, -1.) # saturation level, Ro break, slope
+        popt1, pcov = curve_fit(RoFlare, np.log10(Rossby[okclr][ts]),
+                                clr_raw[okclr][ts], p0=p0)
+        perr1 = np.sqrt(np.diag(pcov))
+        ff.write('Rossby Parameters ' + str(k) + ': ' + str(popt1) + str(perr1) + '\n')
+
+        Ro_peakL[k], Ro_break[k], Ro_slope[k] = popt1
+
         plt.figure()
         plt.scatter(Rossby[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1, lw=0.5, c='k')
+        plt.plot(10.**np.arange(-3, 1, .01), RoFlare(np.arange(-3, 1, .01), *popt1), c='red', lw=3, alpha=0.75)
+
+        # lfit, lcov = np.polyfit(np.log10(Rossby[okclr][ts]), clr_raw[okclr][ts], 1, cov=True)
+        # plt.plot(10.**np.arange(-3, 1, .01), np.polyval(lfit, np.arange(-3, 1, .01)), c='blue')
+
         plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
         plt.ylabel(Lfl_Lbol_label)
         plt.title(str(crng[k, 0]) + ' < (g-i) < ' + str(crng[k, 1]) + ', N=' + str(len(ts[0])))
@@ -1297,6 +1316,9 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     pok = np.where((Prot_all[okclr] > 0.1) &
                    (gi_all[okclr] > 0.75)) # manually throw out the bluest stars
+
+    pokF = np.where((Prot_all[isF] > 0.1) &
+                    (gi_all[isF] > 0.75))
 
     pok_e = np.where((Prot_all[okclr] > 0.1) &
                      (gi_all[okclr] > 0.75) &
@@ -1340,6 +1362,19 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.savefig(figdir + 'Rossby_lfllkp_color' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
+    plt.figure()
+    plt.scatter(Rossby[isF][pokF], clr[isF][pokF],
+                lw=0, alpha=0.35, c=mass[isF][pokF], s=5)
+    cbar = plt.colorbar()
+    cbar.set_label('Mass')
+    plt.ylabel(Lfl_Lbol_label)
+    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
+    plt.xscale('log')
+    plt.xlim(1e-3, 1e1)
+    plt.ylim(-8, -1.5)
+    plt.savefig(figdir + 'Rossby_lfllkp_color_all' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
     # now 2 more versions of the Rossby figure using 2 bigger mass bins
     plt.figure()
     plt.scatter(Rossby[okclr][pok_e], clr[okclr][pok_e],
@@ -1377,6 +1412,24 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.close()
 
 
+    ### plot of Rossby parameters vs color
+    plt.figure()
+    plt.scatter((crng[:,0] + crng[:,1])/2., Ro_break)
+    plt.xlim(0,3)
+    plt.savefig(figdir + 'Ro_break' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+    plt.figure()
+    plt.scatter((crng[:, 0] + crng[:, 1]) / 2., Ro_peakL)
+    plt.xlim(0, 3)
+    plt.savefig(figdir + 'Ro_peakL' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+    plt.figure()
+    plt.scatter((crng[:, 0] + crng[:, 1]) / 2., Ro_slope)
+    plt.xlim(0, 3)
+    plt.savefig(figdir + 'Ro_slope' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
 
     #    / plots as a function of Lfl_Lbol
     #########################################
