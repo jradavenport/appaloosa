@@ -527,7 +527,8 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=False, figdir='figures/', figtype='.png'):
+                 rerun=False, rerun_all=False,
+                 figdir='figures/', figtype='.pdf'):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
 
@@ -709,6 +710,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 else:
                     doplot = False
 
+                if rerun_all is True:
+                    doplot = True
+                    plt.figure()
+
                 # tmp array to hold the total number of flares in each FFD bin
                 flare_tot = np.zeros_like(fnorm)
 
@@ -820,7 +825,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                         #          color='orange', linewidth=4, alpha=0.5)
 
                         plt.plot(ffd_x[ffd_ok], 10.0**_linfunc(ffd_x[ffd_ok], *fit),
-                                 color='orange', linewidth=4, alpha=0.5)
+                                 color='orange', linewidth=4, alpha=0.75)
 
 
                         plt.yscale('log')
@@ -832,7 +837,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     plt.xlabel('log Flare Energy (erg)')
                     plt.ylabel('Cumulative Flare Freq (#/day)')
 
-                    plt.savefig(figdir + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+                    if rerun_all is True:
+                        plt.title('KIC ' + str(kicnum_c[k]))
+                        plt.text(r'$\alpha$='+str(fit[0]) + '$\beta$='+str(fit[1]))
+                        plt.savefig(figdir + 'all_ffd/' + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+                    else:
+                        plt.savefig(figdir + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
                     plt.close()
 
 
@@ -1118,6 +1128,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                                'LflLkep_err': Lfl_Lbol_err[okclr],
                                'Nflares':Nflare[okclr],
                                'Nflare68':Nflare68[okclr],
+                               # add alpha,beta values!
                                'R35':rate_E[okclr]
                                })
                                # 'ra': ra, 'dec': dec})
