@@ -527,7 +527,7 @@ def benchmark(objectid='gj1243_master', fbeyefile='gj1243_master_flares.tbl'):
 
 def paper1_plots(condorfile='condorout.dat.gz',
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=False, rerun_all=False,
+                 rerun=False,
                  figdir='figures/', figtype='.pdf'):
     '''
     Make plots for the first paper, which describes the Kepler flare sample.
@@ -623,6 +623,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     s_num = [9726699, 10387822, 10452709, 6224062, 4171937, 12314646, 11551430,
              9349698, 6928206, 5516671, 3222610] # random stars from Walkowicz (2011)
 
+    s_num_all = np.loadtxt('kic4041.txt', skiprows=1)
 
     # For every star: compute flare rate at some arbitrary energy
     Epoint = 35
@@ -710,9 +711,10 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 else:
                     doplot = False
 
-                if rerun_all is True:
+                if kicnum_c[k] in s_num_all:
                     doplot = True
-                    plt.figure()
+                    ffig = plt.figure()
+                    ax = ffig.add_subplot(111)
 
                 # tmp array to hold the total number of flares in each FFD bin
                 flare_tot = np.zeros_like(fnorm)
@@ -806,17 +808,17 @@ def paper1_plots(condorfile='condorout.dat.gz',
                 #     rate_E[k] = max(ffd_y[ffd_x >= Epoint])
 
                 if doplot is True:
-                    print(kicnum_c[k])
-                    print('ffd_ok:', ffd_ok)
-                    print('ffd_x:', ffd_x)
-                    print('ffd_y:', ffd_y)
-                    print('ffd_yerr:', ffd_yerr)
+                    # print(kicnum_c[k])
+                    # print('ffd_ok:', ffd_ok)
+                    # print('ffd_x:', ffd_x)
+                    # print('ffd_y:', ffd_y)
+                    # print('ffd_yerr:', ffd_yerr)
                     # print('meanE:', meanE)
 
                     plt.plot(ffd_x, ffd_y, linewidth=2, color='black', alpha=0.7)
                     plt.errorbar(ffd_x, ffd_y, ffd_yerr, fmt='k,')
                     if len(ffd_ok[0])>1:
-                        print('FIT: ', fit)
+                        # print('FIT: ', fit)
 
                         # plt.plot(ffd_x[ffd_ok], 10.0**(np.polyval(fit, ffd_x[ffd_ok])),
                         #          color='orange', linewidth=4, alpha=0.5)
@@ -825,7 +827,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
                         #          color='orange', linewidth=4, alpha=0.5)
 
                         plt.plot(ffd_x[ffd_ok], 10.0**_linfunc(ffd_x[ffd_ok], *fit),
-                                 color='orange', linewidth=4, alpha=0.75)
+                                 color='navy', linewidth=4, alpha=0.75)
 
 
                         plt.yscale('log')
@@ -837,10 +839,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
                     plt.xlabel('log Flare Energy (erg)')
                     plt.ylabel('Cumulative Flare Freq (#/day)')
 
-                    if rerun_all is True:
+                    if kicnum_c[k] in s_num_all:
                         plt.title('KIC ' + str(kicnum_c[k]))
-                        plt.text(r'$\alpha$='+str(fit[0]) + '$\beta$='+str(fit[1]))
-                        plt.savefig(figdir + 'all_ffd/' + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+                        plt.text(0.025, 0.025,
+                                 r'$\alpha$=' + format(fit[0], '.2F') + r', $\beta$=' + format(fit[1], '.2F'),
+                                 fontsize=10, transform=ax.transAxes)
+                        plt.savefig('allFFDs/' + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
                     else:
                         plt.savefig(figdir + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
                     plt.close()
@@ -1118,6 +1122,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.5) &
                      np.isfinite(clr) & (Nflare >= Nflare_limit))
 
+    print('eee:', np.shape(mass[okclr]), np.shape(ffd_ab[1,okclr]), np.shape(rate_E[okclr]))
 
     # spit out table of KID, color (g-i), Lfl/Lbol
     dfout = pd.DataFrame(data={'kicnum': kicnum_c[okclr],
@@ -1128,10 +1133,11 @@ def paper1_plots(condorfile='condorout.dat.gz',
                                'LflLkep_err': Lfl_Lbol_err[okclr],
                                'Nflares':Nflare[okclr],
                                'Nflare68':Nflare68[okclr],
-                               # add alpha,beta values!
-                               'R35':rate_E[okclr]
+                               'R35':rate_E[okclr],
+                               'alpha':np.squeeze(ffd_ab[1, okclr]),
+                               'beta':np.squeeze(ffd_ab[0, okclr])
                                })
-                               # 'ra': ra, 'dec': dec})
+
     # dfout.to_csv('kic_lflare.csv')
     dfout.to_csv('kepler_flare_output.csv')
 
