@@ -20,6 +20,10 @@ from scipy.optimize import curve_fit
 from scipy.signal import wiener
 from scipy import signal
 from astropy.io import fits
+import matplotlib
+matplotlib.rcParams.update({'font.size':18})
+matplotlib.rcParams.update({'font.family':'serif'})
+
 
 # from rayleigh import RayleighPowerSpectrum
 try:
@@ -1048,7 +1052,8 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
                                            error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
                                            time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i],
                                            savefile=True, verboseout=verbosefake, gapwindow=gapwindow,
-                                           outfile=outfile + '.fake', display=display)
+                                           outfile=outfile + '.fake', display=display,
+                                           nfake=100)
 
             rl = np.isfinite(frac_rec)
             frac_rec_sm = wiener(frac_rec[rl], 3)
@@ -1072,9 +1077,11 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
                 plt.plot(ed_fake, frac_rec, c='k')
                 plt.plot(ed_fake[rl], frac_rec_sm, c='red', linestyle='dashed', lw=2)
                 plt.vlines([ed68_i, ed90_i], ymin=0, ymax=1, colors='b',alpha=0.75, lw=5)
-                plt.xlabel('Flare Equivalent Width (seconds)')
+                plt.xlabel('Flare Equivalent Duration (seconds)')
                 plt.ylabel('Fraction of Recovered Flares')
-                # plt.xlim((-1,35))
+
+                plt.xlim((0,np.nanmax(ed_fake)))
+                plt.savefig(file + '_fake_recovered.pdf',dpi=300, bbox_inches='tight', pad_inches=0.5)
                 plt.show()
         else:
             # for speed you can skip the fake-flare tests
@@ -1119,16 +1126,32 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         print(str(len(istart))+' flare candidates found')
 
         plt.figure()
-        plt.plot(time, flux_gap, 'k')
-        plt.plot(time, flux_model, 'green')
+        plt.plot(time, flux_gap, 'k', alpha=0.7, lw=0.8)
 
-        for g in dl:
-            plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
+        # for g in dl:
+        #     plt.scatter(time[g], flux_gap[g], color='blue', marker='v',s=40)
 
-        plt.scatter(time[istart], flux_gap[istart], color='red', marker='*',s=90)
-        plt.scatter(time[istop], flux_gap[istop], color='orange', marker='p',s=60, alpha=0.5)
-        plt.xlabel('Time (Days)')
-        plt.ylabel('Flux (counts)')
+        # plt.scatter(time[istart], flux_gap[istart], color='red', marker='*',s=90)
+        # plt.scatter(time[istop], flux_gap[istop], color='orange', marker='p',s=60, alpha=0.5)
+        for g in range(len(istart)):
+            plt.plot(time[istart[g]:istop[g]+1],
+                     flux_gap[istart[g]:istop[g]+1],color='red', lw=1)
+
+        plt.plot(time, flux_model, 'blue', lw=3)
+
+
+        plt.xlabel('Time (BJD - 2454833 days)')
+        plt.ylabel(r'Flux (e- sec$^{-1}$)')
+
+        xdur = np.nanmax(time) - np.nanmin(time)
+        xdur0 = np.nanmin(time) + xdur/2.
+        xdur1 = np.nanmin(time) + xdur/2. + 2.6
+        plt.xlim(xdur0, xdur1) # only plot a chunk of the data
+
+        xdurok = np.where((time >= xdur0) & (time <= xdur1))
+        plt.ylim(np.nanmin(flux_gap[xdurok]), np.nanmax(flux_gap[xdurok]))
+
+        plt.savefig(file + '_lightcurve.pdf', dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.show()
 
     '''
@@ -1198,5 +1221,5 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 # $python appaloosa.py 12345678
 if __name__ == "__main__":
     import sys
-    RunLC(file=str(sys.argv[1]), dbmode='fits', display=False)
+    RunLC(file=str(sys.argv[1]), dbmode='fits', display=True)
 
