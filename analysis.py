@@ -757,7 +757,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.5) &
                      np.isfinite(clr) & (Nflare >= Nflare_limit))
 
-    print('eee:', np.shape(mass[okclr]), np.shape(ffd_ab[1,okclr]), np.shape(rate_E[okclr]))
+    # print('eee:', np.shape(mass[okclr]), np.shape(ffd_ab[1,okclr]), np.shape(rate_E[okclr]))
 
     # spit out table of KID, color (g-i), Lfl/Lbol
     dfout = pd.DataFrame(data={'kicnum': kicnum_c[okclr],
@@ -816,17 +816,39 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.savefig(figdir + 'masterplot_lfl_lkep_raw' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
+    # get isochrone data to convert g-i to mass for second axis label
+    try:
+        __file__
+    except NameError:
+        __file__ = os.getenv("HOME") +  '/python/appaloosa/analysis.py'
 
-    plt.figure()
+    isodir = os.path.dirname(os.path.realpath(__file__)) + '/misc/'
+    isochrone = '1.0gyr.dat'
+    massi, Mkp, Mg, Mi, Mk = np.loadtxt(isodir + isochrone, comments='#', unpack=True, usecols=(2,8,9,11,18))
+    Mgi  = (Mg - Mi)
+    ss = np.argsort(Mgi)  # needs to be sorted for interpolation
+    mass_o = np.interp(np.arange(0.5,3.5,0.5), Mgi[ss], massi[ss])
+    mass_s = map(lambda x: format(x, '.2F'), mass_o)
+
+    fig1 = plt.figure()
+    ax1 = fig1.add_subplot(111)
+    ax2 = ax1.twiny()
     plt.scatter(gi_all[okclr], Prot_all[okclr], c=clr[okclr],
                 alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=50)
-    plt.xlabel('g-i (mag)')
-    plt.ylabel('P$_{rot}$ (days)')
+    ax1.set_xlabel('g-i (mag)')
+    ax1.set_ylabel('P$_{rot}$ (days)')
     plt.yscale('log')
-    plt.xlim((0,3))
+    ax1.set_xlim((0,3))
     plt.ylim((0.1,100))
+
+    ax2.set_xlim(ax1.get_xlim())
+    ax2.set_xticks(np.arange(0.5, 3.5, 0.5))
+    ax2.set_xticklabels(mass_s)
+    ax2.set_xlabel(r'Mass ($M_\odot$)')
+
     cb = plt.colorbar()
     cb.set_label(Lfl_Lbol_label)
+
     plt.savefig(figdir + 'masterplot_lfl_lkep' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
@@ -843,12 +865,22 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.close()
 
     # Eok = np.where((maxE > 0))
-    plt.figure()
-    plt.scatter(gi_all[okclr], maxE[okclr], alpha=0.5, linewidths=0, c='k')
-    plt.xlabel('g-i (mag)')
-    plt.ylabel('Max log Flare Energy (erg)')
-    plt.xlim(-1, 3)
-    plt.ylim(32, 40)
+    fig1 = plt.figure()
+    ax1 = fig1.add_subplot(111)
+    ax2 = ax1.twiny()
+    ax1.scatter(gi_all[okclr], maxE[okclr], alpha=0.5, linewidths=0, c='k')
+    ax1.set_xlabel('g-i (mag)')
+    ax1.set_ylabel('Max log Flare Energy (erg)')
+    ax1.set_xlim(-1, 3)
+    ax1.set_ylim(32, 40)
+
+    ax2.set_xlim(ax1.get_xlim())
+    mass_o = np.interp(np.arange(0., 3.5, 0.5), Mgi[ss], massi[ss])
+    mass_s = map(lambda x: format(x, '.2F'), mass_o)
+    ax2.set_xticks(np.arange(0., 3.5, 0.5))
+    ax2.set_xticklabels(mass_s)
+    ax2.set_xlabel(r'Mass ($M_\odot$)')
+
     plt.savefig(figdir + 'maxE_vs_gi_okclr' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
@@ -902,11 +934,13 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     frac_flaring = np.zeros(crng.shape[0])
     frac_flaring_err = np.zeros_like(crng)
-    # frac_flaring_perr = np.zeros_like(crng)
+    # frac_flaring_perr = np.zeros _like(crng)
 
     Ro_peakL = np.zeros(crng.shape[0])
     Ro_slope = np.zeros(crng.shape[0])
     Ro_break = np.zeros(crng.shape[0])
+
+    fparam = 0.
 
     for k in range(crng.shape[0]):
         ts = np.where((gi_all[okclr]  > crng[k,0]) &
@@ -928,6 +962,15 @@ def paper1_plots(condorfile='condorout.dat.gz',
         plt.savefig(figdir + 'rot_lfllkp'+str(k) + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.close()
 
+        print(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
+
+        p0 = (-3., -0.2, -1.)  # saturation level, Prot break, slope
+        popt1, pcov = curve_fit(RoFlare, np.log10(Prot_all[okclr][ts]),
+                                clr_raw[okclr][ts], p0=p0)
+        lfit_k = np.polyfit(np.log10(Prot_all[okclr][ts]), clr[okclr][ts], 1)
+        bic_l = appaloosa.chisq(clr[okclr][ts], clr_err[okclr][ts] + fparam, np.polyval(lfit_k, np.log10(Prot_all[okclr][ts]))) + 2. * np.log(len(ts[0]))
+        bic_k = appaloosa.chisq(clr[okclr][ts], clr_err[okclr][ts] + fparam, RoFlare(np.log10(Prot_all[okclr][ts]), *popt1)) + 3. * np.log(len(ts[0]))
+        print('> BIC_k rotation ', bic_k, bic_l)
 
         # compute the fraction of stars within each color bin that pass our flare cuts
         doflare = np.where((gi_all[okclr]  > crng[k,0]) & (gi_all[okclr] <= crng[k,1]))
@@ -937,7 +980,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
         frac_flaring_err[k,:] = funcs.binom_conf_interval(np.float(len(doflare[0])), np.float(len(allstars[0])), interval='wald')
         # frac_flaring_perr[k, :] = _Perror(len(doflare[0]), full=True)
 
-        print(len(doflare[0]), len(allstars[0]), frac_flaring[k], frac_flaring_err[k,:])
+        # print(len(doflare[0]), len(allstars[0]), frac_flaring[k], frac_flaring_err[k,:])
 
 
         # the rossby number figure (incl fit)
@@ -946,6 +989,11 @@ def paper1_plots(condorfile='condorout.dat.gz',
                                 clr_raw[okclr][ts], p0=p0)
         perr1 = np.sqrt(np.diag(pcov))
         ff.write('Rossby Parameters ' + str(k) + ': ' + str(popt1) + str(perr1) + '\n')
+
+        lfit_k = np.polyfit(np.log10(Rossby[okclr][ts]), clr[okclr][ts], 1)
+        bic_l = appaloosa.chisq(clr[okclr][ts], clr_err[okclr][ts] + fparam, np.polyval(lfit_k, np.log10(Rossby[okclr][ts]))) + 2. * np.log(len(ts[0]))
+        bic_k = appaloosa.chisq(clr[okclr][ts], clr_err[okclr][ts] + fparam, RoFlare(np.log10(Rossby[okclr][ts]), *popt1)) + 3. * np.log(len(ts[0]))
+        print('> BIC_k rossby ', bic_k, bic_l)
 
         Ro_peakL[k], Ro_break[k], Ro_slope[k] = popt1
 
@@ -980,6 +1028,8 @@ def paper1_plots(condorfile='condorout.dat.gz',
                      (gi_all[okclr] >= 1.5) &
                      (gi_all[okclr] <= 3.))
 
+    print('typical error in Lfl_Lkp: ', np.median(clr_err[okclr][pok]))
+
     p0 = (-3., -0.8, -1.)
     popt1, pcov = curve_fit(RoFlare, np.log10(Rossby[okclr][pok]),
                             clr[okclr][pok], p0=p0)
@@ -987,15 +1037,43 @@ def paper1_plots(condorfile='condorout.dat.gz',
     print('Rossby numbers:', popt1, perr1)
     ff.write('Rossby Parameters: ' + str(popt1) + str(perr1) + '\n')
 
-    plt.figure()
+    # the referee wants us to compute just a straight line too
+    lfit, lcov = np.polyfit(np.log10(Rossby[okclr][pok]), clr[okclr][pok], 1, cov=True)
+    lerr = np.sqrt(np.diag(lcov))
+    print('Powerlaw numbers:', lfit, lerr)
+    ff.write('Powerlaw Parameters: ' + str(lfit) +  str(lerr) + '\n')
+
+    bic_fit = appaloosa.chisq(clr[okclr][pok], clr_err[okclr][pok] + fparam,
+                              RoFlare(np.log10(Rossby[okclr][pok]), *popt1)) + \
+              3. * np.log(len(pok[0]))
+    bic_flat = appaloosa.chisq(clr[okclr][pok], clr_err[okclr][pok] + fparam,
+                               np.polyval(lfit, np.log10(Rossby[okclr][pok]))) + \
+               2. * np.log(len(pok[0]))
+
+    print('> BIC_fit: ', bic_fit)
+    print('> BIC_flat: ', bic_flat)
+
+    print('Chisqs: ',
+          appaloosa.chisq(clr[okclr][pok], clr_err[okclr][pok], RoFlare(np.log10(Rossby[okclr][pok]), *popt1)),
+          appaloosa.chisq(clr[okclr][pok], clr_err[okclr][pok], np.polyval(lfit, np.log10(Rossby[okclr][pok]))) )
+
+    fig1 = plt.figure()
+    ax1 = fig1.add_subplot(111)
     plt.scatter(Rossby[okclr][pok], clr[okclr][pok], s=50, lw=0, c='k', alpha=0.5)
     # plt.errorbar(Rossby[okclr], clr[okclr], yerr=clr_err[okclr], fmt='none', ecolor='k', capsize=0)
-    # plt.plot(10.**np.arange(-3, 1,.01), RoFlare(np.arange(-3, 1,.01), *popt1),
-    #          c='red', lw=3, alpha=0.75)
+
+    plt.plot(10.**np.arange(-3, 1,.01), RoFlare(np.arange(-3, 1,.01), *popt1),
+             c='red', lw=3, alpha=0.75)
+
+    plt.plot(10.**np.arange(-3, 1,.01), np.polyval(lfit, np.arange(-3,1,.01)),
+             c='blue', lw=2, alpha=0.6, linestyle='--')
+
     plt.ylabel(Lfl_Lbol_label)
-    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
-    plt.xscale('log')
-    plt.xlim(0.8e-2, 4e0)
+    ax1.set_xlabel(r'Ro = P$_{rot}$ / $\tau$')
+    ax1.set_xscale('log')
+    ax1.set_xlim(0.8e-2, 4e0)
+    ax1.set_xticks((0.01, 0.1, 1))
+    ax1.set_xticklabels(('0.01', '0.1', '1.0'))
     plt.ylim(-5, -1.5)
     plt.savefig(figdir + 'Rossby_lfllkp' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
@@ -1051,15 +1129,26 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.close()
 
 
-    ###
-    plt.figure()
-    plt.errorbar((crng[:,0] + crng[:,1])/2., frac_flaring, xerr=(crng[:,1] - crng[:,0])/2.,
+    ### fraction of flaring stars
+    fig1 = plt.figure()
+    ax1 = fig1.add_subplot(111)
+    ax2 = ax1.twiny()
+    ax1.errorbar((crng[:,0] + crng[:,1])/2., frac_flaring, xerr=(crng[:,1] - crng[:,0])/2.,
                  ecolor='k', capsize=0, fmt='none', yerr=frac_flaring_err.T)
+    ax1.set_xlabel('g-i (mag)')
+    ax1.set_xlim([0,3])
+    ax1.set_ylabel('Fraction of Flaring Stars')
+    ax1.set_ylim([0, 0.1])
 
-    plt.xlabel('g-i (mag)')
-    plt.xlim(0,3)
-    plt.ylabel('Fraction of Flaring Stars')
-    plt.ylim(0, 0.1)
+    ax2.set_xlim(ax1.get_xlim())
+    mass_o = np.interp(np.arange(0.5, 3.5, 0.5), Mgi[ss], massi[ss])
+    mass_s = map(lambda x: format(x, '.2F'), mass_o)
+    ax2.set_xticks(np.arange(0.5,3.5,0.5))
+    ax2.set_xticklabels(mass_s)
+    ax2.set_xlabel(r'Mass ($M_\odot$)')
+    # add second axis label of Mass for the referee
+    # based on example here: http://stackoverflow.com/a/10517481
+
     plt.savefig(figdir + 'frac_flaring' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
