@@ -759,6 +759,21 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     # print('eee:', np.shape(mass[okclr]), np.shape(ffd_ab[1,okclr]), np.shape(rate_E[okclr]))
 
+
+    # investigatory figure of N flares vs Lfl_Lkp. Are we missing "good" stars w/ too few flares?
+    plt.figure()
+    plt.scatter(Nflare68, clr, alpha=0.3, s=5, lw=0, color='k')
+    plt.scatter(Nflare68[okclr], clr[okclr], lw=0, alpha=0.2, s=20)
+    plt.xlabel('Nflare68')
+    plt.xscale('log')
+    plt.ylim(-10,0)
+    plt.xlim(0.8,1e4)
+    plt.ylabel(Lfl_Lbol_label)
+    plt.savefig(figdir + 'Nfl68_vs_LflLkp.png', dpi=300)
+    plt.close()
+
+
+
     # spit out table of KID, color (g-i), Lfl/Lbol
     dfout = pd.DataFrame(data={'kicnum': kicnum_c[okclr],
                                'giclr': gi_all[okclr],
@@ -917,10 +932,12 @@ def paper1_plots(condorfile='condorout.dat.gz',
     plt.close()
 
     plt.figure()
-    _ = plt.hist(Nflare68[okclr], bins=100, histtype='step', color='k')
+    _ = plt.hist(Nflare68, bins=np.arange(0, 1000, 25), histtype='step', color='g', alpha=0.6)
+    _ = plt.hist(Nflare68[okclr], bins=np.arange(0,1000,25), histtype='step', color='k')
     plt.xlabel('Number of Flares per Star (E > E$_{68}$)')
     plt.ylabel('Number of Stars')
     plt.yscale('log')
+    plt.xlim(0,1000)
     plt.savefig(figdir + 'Nflare68' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
