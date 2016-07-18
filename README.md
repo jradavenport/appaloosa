@@ -5,7 +5,7 @@
 Finding every flare in every *Kepler* light curve.
 
 ## About
-If you use this code, or the data table of flare stars, please cite the paper Davenport (2016, ApJ). 
+If you use this code, or the data table of flare stars, please cite the paper [Davenport (2016, ApJ)](https://arxiv.org/abs/1607.03494). 
 This work is supported by a NSF Astronomy and Astrophysics Postdoctoral Fellowship under award AST-1501418.
 
 
