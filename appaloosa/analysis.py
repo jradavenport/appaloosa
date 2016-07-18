@@ -7,8 +7,6 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
 import matplotlib
-from scipy.stats import binned_statistic_2d
-from os.path import expanduser
 import os
 import appaloosa
 import pandas as pd
@@ -16,6 +14,8 @@ import datetime
 import warnings
 from scipy.optimize import curve_fit
 from astropy.stats import funcs
+# from scipy.stats import binned_statistic_2d
+# from os.path import expanduser
 
 matplotlib.rcParams.update({'font.size':18})
 matplotlib.rcParams.update({'font.family':'serif'})
@@ -837,7 +837,7 @@ def paper1_plots(condorfile='condorout.dat.gz',
     except NameError:
         __file__ = os.getenv("HOME") +  '/python/appaloosa/analysis.py'
 
-    isodir = os.path.dirname(os.path.realpath(__file__)) + '/misc/'
+    isodir = os.path.dirname(os.path.realpath(__file__)) + '/../misc/'
     isochrone = '1.0gyr.dat'
     massi, Mkp, Mg, Mi, Mk = np.loadtxt(isodir + isochrone, comments='#', unpack=True, usecols=(2,8,9,11,18))
     Mgi  = (Mg - Mi)
@@ -1337,7 +1337,7 @@ def energies(gmag, kmag, isochrone='1.0gyr.dat', return_all=False):
     except NameError:
         __file__ = os.getenv("HOME") +  '/python/appaloosa/analysis.py'
 
-    dir = os.path.dirname(os.path.realpath(__file__)) + '/misc/'
+    dir = os.path.dirname(os.path.realpath(__file__)) + '/../misc/'
 
     '''
     Mkp, Mg, Mr, Mi = np.loadtxt(dir + isochrone, comments='#',

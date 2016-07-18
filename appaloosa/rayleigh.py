@@ -1,5 +1,7 @@
 '''
 Methods related to the Rayleigh test (e.g. Mardia 1972)
+
+Code originally from here: https://github.com/jradavenport/rayleigh
 '''
 
 import numpy as np

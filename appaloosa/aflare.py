@@ -2,6 +2,8 @@
 Hold the analytic flare model
 
 Could also put other simple flare models in here, e.g. polynomial from Balona (2015)
+
+Algorithm originally from here: https://github.com/jradavenport/FBEYE
 '''
 
 import numpy as np
