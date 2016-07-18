@@ -1,3 +1,5 @@
+[![DOI](https://zenodo.org/badge/doi/10.5281/zenodo.58169.svg)](http://dx.doi.org/10.5281/zenodo.58169)
+
 # PROJECT: appaloosa
 
 Finding every flare in every *Kepler* light curve.
