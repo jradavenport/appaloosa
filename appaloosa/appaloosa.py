@@ -198,6 +198,60 @@ def GetLCk2(file):
     return qtr, time[isrl], sap_quality[isrl], exptime, flux_raw[isrl], error[isrl]
 
 
+def GetLCvdb(file, win_size=3):
+    '''
+    Ingest K2 lightcurve from the Vanderburg .txt file
+
+    also generates errors via median short term scatter
+    '''
+    time, flux_raw = np.loadtxt(file, unpack=True, usecols=(0,1), skiprows=1, delimiter=',')
+    isrl = np.isfinite(flux_raw)
+    qtr = np.zeros_like(time[isrl])
+    qual = np.zeros_like(time[isrl])
+
+    dt = np.nanmedian(time[1:] - time[0:-1])
+    if (dt < 0.01):
+        dtime = 54.2 / 60. / 60. / 24.
+    else:
+        dtime = 30 * 54.2 / 60. / 60. / 24.
+    exptime = np.ones_like(time[isrl]) * dtime
+
+    error = np.ones_like(time[isrl]) * np.nanmedian(rolling_std(flux_raw[isrl], win_size, center=True))
+
+    return qtr, time[isrl], qual, exptime, flux_raw[isrl], error
+
+
+def GetLCeverest(file, win_size=3):
+    '''
+    Ingest K2 light curve from the Everest .fits file
+
+    also generates errors via median short term scatter
+    '''
+
+    hdu = fits.open(file)
+    data_rec = hdu[1].data
+
+    time = data_rec['TIME']
+    flux_raw = data_rec['FLUX']
+    isrl = np.isfinite(flux_raw)
+
+    qtr = np.zeros_like(time[isrl])
+
+    dt = np.nanmedian(time[1:] - time[0:-1])
+    if (dt < 0.01):
+        dtime = 54.2 / 60. / 60. / 24.
+    else:
+        dtime = 30 * 54.2 / 60. / 60. / 24.
+    exptime = np.ones_like(time[isrl]) * dtime
+
+    # qual = data_rec['OUTLIER']
+    qual = np.zeros_like(flux_raw) # keep the outliers... for now
+
+    error = np.ones_like(time[isrl]) * np.nanmedian(rolling_std(flux_raw[isrl], win_size, center=True))
+
+    return qtr, time[isrl], qual[isrl], exptime, flux_raw[isrl], error
+
+
 def GetLCtxt(file, skiprows=1):
     '''
     Import the most basic lightcurve, with columns:
@@ -916,7 +970,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 # objectid = '9726699'  # GJ 1243
 def RunLC(file='', objectid='', ftype='sap', lctype='',
           display=False, readfile=False, debug=False, dofake=True,
-          dbmode='fits', gapwindow=0.1, verbosefake=False):
+          dbmode='fits', gapwindow=0.1, verbosefake=False, nfake=100):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -999,6 +1053,38 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         outfile = file
 
     ######################
+    elif dbmode is 'vdb':
+        objectid = str(int(file[file.find('lightcurve_')+11:file.find('-')]))
+        qtr, time, lcflag, exptime, flux_raw, error = GetLCvdb(file)
+
+        # put the output in the local research dir
+        fldr = objectid[0:3]
+        home = expanduser("~")
+        outdir = home + '/research/k2_cluster_flares/aprun/' + fldr + '/'
+        if not os.path.isdir(outdir):
+            try:
+                os.makedirs(outdir)
+            except OSError:
+                pass
+        outfile = outdir + file[file.find('lightcurve_')+11:]
+
+    ######################
+    elif dbmode is 'everest':
+        objectid = str(int(file[file.find('everest')+15:file.find('-')]))
+        qtr, time, lcflag, exptime, flux_raw, error = GetLCeverest(file)
+
+        # put the output in the local research dir
+        fldr = objectid[0:3]
+        home = expanduser("~")
+        outdir = home + '/research/k2_cluster_flares/aprun/' + fldr + '/'
+        if not os.path.isdir(outdir):
+            try:
+                os.makedirs(outdir)
+            except OSError:
+                pass
+        outfile = outdir + file[file.find('everest')+15:]
+
+    ######################
     elif dbmode is 'txt':
         objectid = file[0:3]
         qtr, time, lcflag, exptime, flux_raw, error = GetLCtxt(file)
@@ -1053,7 +1139,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
                                            time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i],
                                            savefile=True, verboseout=verbosefake, gapwindow=gapwindow,
                                            outfile=outfile + '.fake', display=display,
-                                           nfake=100)
+                                           nfake=nfake)
 
             rl = np.isfinite(frac_rec)
             frac_rec_sm = wiener(frac_rec[rl], 3)
