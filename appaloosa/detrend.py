@@ -9,6 +9,7 @@ from gatspy.periodic import LombScargleFast
 import pywt
 from scipy import signal
 from scipy.interpolate import LSQUnivariateSpline, UnivariateSpline
+import matplotlib.pyplot as plt
 
 
 def rolling_poly(time, flux, error, order=3, window=0.5):
@@ -49,7 +50,7 @@ def rolling_poly(time, flux, error, order=3, window=0.5):
     return smo
 
 
-def GapFlat(time, flux, order=3):
+def GapFlat(time, flux, order=3, maxgap=0.125):
     '''
 
     Parameters
@@ -59,7 +60,7 @@ def GapFlat(time, flux, order=3):
     -------
     Data with polymonials removed
     '''
-    _, dl, dr = FindGaps(time) # finds right edge of time windows
+    _, dl, dr = FindGaps(time, maxgap=maxgap) # finds right edge of time windows
 
     tot_med = np.nanmedian(flux) # the total from all quarters
 
@@ -107,7 +108,7 @@ def QtrFlat(time, flux, qtr, order=3):
         if (krnl < 10.0):
             krnl = 10.0
 
-        flux_sm = rolling_median(flux[x], krnl)
+        flux_sm = rolling_median(np.array(flux[x], dtype='float'), krnl)
 
         indx = np.isfinite(flux_sm) # get rid of NaN's put in by rolling_median.
 
@@ -318,7 +319,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
         return np.array(indx_out, dtype='int')
 
 
-def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3):
+def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=False):
     '''
     IRLS = Iterative Re-weight Least Squares
 
@@ -338,11 +339,22 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3):
     '''
     weight = 1. / (error**2.0)
 
-    knots = np.arange(min(time) + ksep, max(time) - ksep, ksep)
+    knots = np.arange(np.nanmin(time) + ksep, np.nanmax(time) - ksep, ksep)
+
+    if debug is True:
+        print('IRLSSpline: knots: ', np.shape(knots))
+        print('IRLSSpline: time: ', np.shape(time), np.nanmin(time), time[0], np.nanmax(time), time[-1])
+        print('IRLSSpline: <weight> = ', np.mean(weight))
+        print(np.where((time[1:] - time[:-1] < 0))[0])
+        print(flux)
+
+        # plt.figure()
+        # plt.errorbar(time, flux, error)
+        # plt.scatter(knots, knots*0. + np.median(flux))
+        # plt.show()
 
     for k in range(numpass):
-        spl = LSQUnivariateSpline(time, flux, knots, w=weight, k
-        =order)
+        spl = LSQUnivariateSpline(time, flux, knots, k=order, check_finite=True, w=weight)
         # spl = UnivariateSpline(time, flux, w=weight, k=order, s=1)
 
         chisq = ((flux - spl(time))**2.) / (error**2.0)

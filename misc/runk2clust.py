@@ -3,7 +3,7 @@ Script to process all the K2 cluster data with Appaloosa
 
 Run on WWU workstation (iMac)
 Run like this:
-$ ipython ~/python/appaloosa/runk2clus.py
+$ ipython ~/python/appaloosa/misc/runk2clust.py
 
 
 run all the data on the workstation with this, but do actual analysis/plots later
@@ -11,7 +11,7 @@ run all the data on the workstation with this, but do actual analysis/plots late
 '''
 
 import numpy as np
-import appaloosa.appaloosa as ap
+from appaloosa.appaloosa import appaloosa as ap
 from os.path import expanduser
 
 
@@ -19,8 +19,8 @@ from os.path import expanduser
 # dir = home + '/research/k2_cluster_flares/'
 
 # do both types of LC's
-lctype = ['Vanderburg', 'Everest']
-dbmode = ['vdb', 'everest']
+lctype = ['Everest', 'Vanderburg']
+dbmode = ['everest', 'vdb']
 
 # datadir = dir + 'k2clusters.ipac.caltech.edu/'
 # clusters = ['hyades','pleiades']
@@ -30,8 +30,11 @@ for i in range(len(lctype)):
 
     lis = dir + '/' + 'all.lis'
 
-    files = np.loadtxt(lis, dtype='str')
+    print('>> running ' + lis)
+
+    files = np.loadtxt(lis, dtype='str', unpack=True, usecols=(0,))
 
     for f in files:
-        print(dir + f)
-        ap.RunLC(file= dir + f[1:], dbmode=dbmode[i], debug=False, display=False, verbosefake=True, nfake=1000)
+        print(dir + f[1:])
+        ap.RunLC(file= dir + f[1:], dbmode=dbmode[i], verbosefake=True, nfake=1000, maxgap=2,
+                 debug=False, display=False)

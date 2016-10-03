@@ -204,7 +204,7 @@ def GetLCvdb(file, win_size=3):
 
     also generates errors via median short term scatter
     '''
-    time, flux_raw = np.loadtxt(file, unpack=True, usecols=(0,1), skiprows=1, delimiter=',')
+    time, flux_raw = np.loadtxt(file, unpack=True, usecols=(0,1), skiprows=1, delimiter=',', comments=('#','*'))
     isrl = np.isfinite(flux_raw)
     qtr = np.zeros_like(time[isrl])
     qual = np.zeros_like(time[isrl])
@@ -231,8 +231,8 @@ def GetLCeverest(file, win_size=3):
     hdu = fits.open(file)
     data_rec = hdu[1].data
 
-    time = data_rec['TIME']
-    flux_raw = data_rec['FLUX']
+    time = np.array(data_rec['TIME'])
+    flux_raw = np.array(data_rec['FLUX'])
     isrl = np.isfinite(flux_raw)
 
     qtr = np.zeros_like(time[isrl])
@@ -751,7 +751,9 @@ def MultiFind(time, flux, error, flags, mode=3,
 
         dt = np.nanmedian(time[1:] - time[0:-1])
 
-        flux_model = detrend.IRLSSpline(time, box3, error, numpass=10) + sin1
+        exptime_m = (np.nanmax(time) - np.nanmin(time)) / len(time)
+        # ksep used to = 0.07...
+        flux_model = detrend.IRLSSpline(time, box3, error, numpass=10, debug=debug, ksep=exptime_m*10.) + sin1
 
         signalfwhm = dt * 2
         ftime = np.arange(0, 2, dt)
@@ -774,8 +776,8 @@ def MultiFind(time, flux, error, flags, mode=3,
 
     # print(len(cand1))
     if (len(cand1) < 1):
-        istart = []
-        istop = []
+        istart = np.array([])
+        istop = np.array([])
     else:
         # find start and stop index, combine neighboring candidates in to same events
         istart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
@@ -786,12 +788,12 @@ def MultiFind(time, flux, error, flags, mode=3,
     if len(to1[0])>0:
         istop[to1] += 1
 
-    if debug is True:
-        plt.figure()
-        plt.scatter(time, flux, alpha=0.5)
-        plt.plot(time,flux_model, c='black')
-        plt.scatter(time[cand1], flux[cand1], c='red')
-        plt.show()
+    # if debug is True:
+    #     plt.figure()
+    #     plt.scatter(time, flux, alpha=0.5)
+    #     plt.plot(time,flux_model, c='black')
+    #     plt.scatter(time[cand1], flux[cand1], c='red')
+    #     plt.show()
 
     # print(istart, len(istart))
     return istart, istop, flux_model
@@ -818,7 +820,7 @@ def MatchedFilterFind(time, flux, signalfwhm=0.01):
 def FakeFlares(time, flux, error, flags, tstart, tstop,
                nfake=100, npass=1, ampl=(0.1,100), dur=(0.5,60),
                outfile='', savefile=False, gapwindow=0.1,
-               verboseout=False, display=False):
+               verboseout=False, display=False, debug=False):
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
@@ -851,8 +853,11 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
             # choose a random peak time
             t0 =  np.random.choice(time)
 
-            x = np.where((t0 >= tstart) & (t0 <= tstop))
-            if (len(x[0]) < 1):
+            if len(tstart)>0:
+                x = np.where((t0 >= tstart) & (t0 <= tstop))
+                if (len(x[0]) < 1):
+                    isok = True
+            else:
                 isok = True
 
         t0_fake[k] = t0
@@ -865,12 +870,6 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         s2n_fake[k] = np.sqrt( np.sum((fl_flux**2.0) / (std**2.0)) )
         ed_fake[k] = EquivDur(time, fl_flux)
 
-        # plt.figure()
-        # plt.plot(time, flux, alpha=0.25)
-        # plt.plot(time, fl_flux)
-        # print(dur_fake[k], ampl_fake[k], std, s2n_fake[k], ed_fake[k])
-        # plt.show()
-
         # inject flare in to light curve
         new_flux = new_flux + fl_flux
 
@@ -880,15 +879,18 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
     '''
 
     # all the hard decision making should go here
-    istart, istop, flux_model = MultiFind(time, new_flux, error, flags, gapwindow=gapwindow)
+    istart, istop, flux_model = MultiFind(time, new_flux, error, flags, gapwindow=gapwindow, debug=debug)
 
     rec_fake = np.zeros(nfake)
-    for k in range(nfake):
-        rec = np.where((t0_fake[k] >= time[istart]) &
-                       (t0_fake[k] <= time[istop]))
 
-        if (len(rec[0]) > 0):
-            rec_fake[k] = 1
+    if len(istart)>0: # in case no flares are recovered, even after injection
+        for k in range(nfake): # go thru all recovered flares
+            # do any injected flares overlap recovered flares?
+            rec = np.where((t0_fake[k] >= time[istart]) &
+                           (t0_fake[k] <= time[istop]))
+
+            if (len(rec[0]) > 0):
+                rec_fake[k] = 1
 
     # nbins = int(nfake/10.)
     # if nbins < 10:
@@ -970,7 +972,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
 # objectid = '9726699'  # GJ 1243
 def RunLC(file='', objectid='', ftype='sap', lctype='',
           display=False, readfile=False, debug=False, dofake=True,
-          dbmode='fits', gapwindow=0.1, verbosefake=False, nfake=100):
+          dbmode='fits', gapwindow=0.1, maxgap=0.125, verbosefake=False, nfake=100):
     '''
     Main wrapper to obtain and process a light curve
     '''
@@ -1101,9 +1103,9 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
     # then flatten between gaps
-    flux_gap = detrend.GapFlat(time, flux_qtr)
+    flux_gap = detrend.GapFlat(time, flux_qtr, maxgap=maxgap)
 
-    _, dl, dr = detrend.FindGaps(time)
+    _, dl, dr = detrend.FindGaps(time, maxgap=maxgap)
     if debug is True:
         print("dl")
         print(dl)
@@ -1125,7 +1127,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 
         istart_i, istop_i, flux_model_i = MultiFind(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]],
                                                     error[dl[i]:dr[i]], lcflag[dl[i]:dr[i]],
-                                                    gapwindow=gapwindow)
+                                                    gapwindow=gapwindow, debug=debug)
 
         # run artificial flare test in this gap
         if debug is True:
@@ -1134,12 +1136,18 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         if dofake is True:
             medflux = np.nanmedian(flux_model_i) # flux needs to be normalized
 
+            if len(istart_i)>0:
+                t_tmp1 = time[dl[i]:dr[i]][istart_i]
+                t_tmp2 = time[dl[i]:dr[i]][istop_i]
+            else:
+                t_tmp1 = []
+                t_tmp2 = []
             ed_fake, frac_rec = FakeFlares(time[dl[i]:dr[i]], flux_gap[dl[i]:dr[i]]/medflux - 1.0,
                                            error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
-                                           time[dl[i]:dr[i]][istart_i], time[dl[i]:dr[i]][istop_i],
+                                           t_tmp1, t_tmp2,
                                            savefile=True, verboseout=verbosefake, gapwindow=gapwindow,
                                            outfile=outfile + '.fake', display=display,
-                                           nfake=nfake)
+                                           nfake=nfake, debug=debug)
 
             rl = np.isfinite(frac_rec)
             frac_rec_sm = wiener(frac_rec[rl], 3)
