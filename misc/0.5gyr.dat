@@ -10,7 +10,7 @@
 # IMF: Chabrier (2001) lognormal 
 # On RGB, assumed Reimers mass loss with efficiency eta=0.2
 # Kind of output: isochrone tables
-# >> NOTE: manually deleted data past bluest tip of the Main Sequence Turn-Off
+# >> NOTE: Davenport manually deleted data past bluest tip of the Main Sequence Turn-Off
 #	Isochrone  Z = 0.01900	Y = 0.28242	[M/H] = 0.119	eta_R = 0.200	Age = 	5.0000e+08 yr
 #      Z	log(age/yr)	M_ini   	M_act	logL/Lo	logTe	logG	mbol    Kepler  g       r       i       z       DDO51_finf	int_IMF	stage    J       H       Ks
 	0.019000	8.6990	0.09000000	0.0900	-3.2757	3.3674	5.0894	12.959	16.321	20.419	18.554	15.475	13.399	20.359	1.46765435	0	10.723	10.150	9.830
