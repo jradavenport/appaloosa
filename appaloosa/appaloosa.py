@@ -1071,6 +1071,22 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         outfile = outdir + file[file.find('lightcurve_')+11:]
 
     ######################
+    elif dbmode is 'csv':
+        objectid = '0000'
+        qtr, time, lcflag, exptime, flux_raw, error = GetLCvdb(file)
+
+        # put the output in the local research dir
+        fldr = objectid[0:3]
+        home = expanduser("~")
+        outdir = home + '/research/k2_cluster_flares/aprun/'
+        if not os.path.isdir(outdir):
+            try:
+                os.makedirs(outdir)
+            except OSError:
+                pass
+        outfile = outdir + file[file.find('lightcurve_') + 11:]
+
+    ######################
     elif dbmode is 'everest':
         objectid = str(int(file[file.find('everest')+15:file.find('-')]))
         qtr, time, lcflag, exptime, flux_raw, error = GetLCeverest(file)
@@ -1315,5 +1331,5 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 # $python appaloosa.py 12345678
 if __name__ == "__main__":
     import sys
-    RunLC(file=str(sys.argv[1]), dbmode='fits', display=True)
+    RunLC(file=str(sys.argv[1]), dbmode='csv', display=True, debug=True)
 

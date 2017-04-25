@@ -6,7 +6,7 @@ import numpy as np
 from pandas import rolling_median #, rolling_mean, rolling_std, rolling_skew
 from scipy.optimize import curve_fit
 from gatspy.periodic import LombScargleFast
-import pywt
+# import pywt
 from scipy import signal
 from scipy.interpolate import LSQUnivariateSpline, UnivariateSpline
 import matplotlib.pyplot as plt
@@ -67,9 +67,9 @@ def GapFlat(time, flux, order=3, maxgap=0.125):
     flux_flat = np.array(flux, copy=True)
 
     for i in range(0, len(dl)):
-        krnl = float(dl[i]-dr[i]) / 100.0
-        if (krnl < 10.0):
-            krnl = 10.0
+        krnl = int(float(dl[i]-dr[i]) / 100.0)
+        if (krnl < 10):
+            krnl = 10
         flux_sm = rolling_median(flux[dl[i]:dr[i]], krnl)
 
         indx = np.isfinite(flux_sm)
@@ -104,9 +104,9 @@ def QtrFlat(time, flux, qtr, order=3):
         # find all epochs within each Qtr, but careful w/ floats
         x = np.where( (np.abs(qtr-q) < 0.1) )
 
-        krnl = float(len(x[0])) / 100.0
-        if (krnl < 10.0):
-            krnl = 10.0
+        krnl = int(float(len(x[0])) / 100.0)
+        if (krnl < 10):
+            krnl = 10
 
         flux_sm = rolling_median(np.array(flux[x], dtype='float'), krnl)
 
@@ -364,74 +364,75 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
     return spl(time)
 
 
-def WaveletSmooth(time, flux, threshold=1, wavelet='db6', all=False):
-    '''
-    WORK IN PROGRESS - DO NOT USE
 
-    Generate a wavelet transform of the data, clip on some noise level,
-    then do inverse wavelet to generate model.
-
-    Requires uniformly sampled data!
-    If your data has gaps, watch out....
-    '''
-    _, dl, dr = FindGaps(time)
-
-    if all is True:
-        dl = [0]
-        dr = [len(time)]
-
-    model = np.zeros_like(flux)
-    # now loop over every chunk of data and fit wavelet
-    for i in range(0, len(dl)):
-
-        flux_i = flux[dl[i]:dr[i]]
-
-        # Do basic wavelet decontruct
-        WC = pywt.wavedec(flux_i, wavelet)
-
-        # now do thresholding
-        # got some tips here:
-        # https://blancosilva.wordpress.com/teaching/mathematical-imaging/denoising-wavelet-thresholding/
-        # and:
-        # https://pywavelets.readthedocs.org/en/latest/ref/idwt-inverse-discrete-wavelet-transform.html
-
-        NWC = map(lambda x: pywt.thresholding.hard(x,threshold * np.sqrt(2.*np.log(len(flux_i))) * np.std(flux_i)), WC)
-
-        model_i = pywt.waverec(NWC, wavelet)
-        # print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
-        #
-        # print(model_i[0:10])
-        # print(model_i[-10:])
-        if len(model_i) != len(model[dl[i]:dr[i]]):
-            print("length error on gap ",i)
-            print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
-            model_i = model_i[1:]
-
-        model[dl[i]:dr[i]] = model_i
-
-    # WC = pywt.wavedec(flux, wavelet)
-    # NWC = map(lambda x: pywt.thresholding.soft(x,threshold * np.sqrt(2.*np.log(len(flux))) * np.std(flux)), WC)
-    # model = pywt.waverec(NWC, wavelet)
-
-    print(len(model), len(time))
-    return model
-
-
-def Wavelet_Peaks(time, flux):
-    '''
-    Peak detection via continuous wavelets in scipy... doesnt work very well
-    '''
-    _, dl, dr = FindGaps(time)
-    indx = []
-    for i in range(0, len(dl)):
-        flux_i = flux[dl[i]:dr[i]]
-        time_i = time[dl[i]:dr[i]]
-        exptime = np.nanmedian(time_i[1:]-time_i[:-1])
-        if (exptime*24.*60. < 5):
-            widths = np.arange(1,100)
-        else:
-            widths = np.arange(1,10)
-
-        indx_i = signal.find_peaks_cwt(flux_i, widths)
-        indx = np.append(indx, indx_i)
-    return np.array(indx, dtype='int')
+# def WaveletSmooth(time, flux, threshold=1, wavelet='db6', all=False):
+#     '''
+#     WORK IN PROGRESS - DO NOT USE
+#
+#     Generate a wavelet transform of the data, clip on some noise level,
+#     then do inverse wavelet to generate model.
+#
+#     Requires uniformly sampled data!
+#     If your data has gaps, watch out....
+#     '''
+#     _, dl, dr = FindGaps(time)
+#
+#     if all is True:
+#         dl = [0]
+#         dr = [len(time)]
+#
+#     model = np.zeros_like(flux)
+#     # now loop over every chunk of data and fit wavelet
+#     for i in range(0, len(dl)):
+#
+#         flux_i = flux[dl[i]:dr[i]]
+#
+#         # Do basic wavelet decontruct
+#         WC = pywt.wavedec(flux_i, wavelet)
+#
+#         # now do thresholding
+#         # got some tips here:
+#         # https://blancosilva.wordpress.com/teaching/mathematical-imaging/denoising-wavelet-thresholding/
+#         # and:
+#         # https://pywavelets.readthedocs.org/en/latest/ref/idwt-inverse-discrete-wavelet-transform.html
+#
+#         NWC = map(lambda x: pywt.thresholding.hard(x,threshold * np.sqrt(2.*np.log(len(flux_i))) * np.std(flux_i)), WC)
+#
+#         model_i = pywt.waverec(NWC, wavelet)
+#         # print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
+#         #
+#         # print(model_i[0:10])
+#         # print(model_i[-10:])
+#         if len(model_i) != len(model[dl[i]:dr[i]]):
+#             print("length error on gap ",i)
+#             print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
+#             model_i = model_i[1:]
+#
+#         model[dl[i]:dr[i]] = model_i
+#
+#     # WC = pywt.wavedec(flux, wavelet)
+#     # NWC = map(lambda x: pywt.thresholding.soft(x,threshold * np.sqrt(2.*np.log(len(flux))) * np.std(flux)), WC)
+#     # model = pywt.waverec(NWC, wavelet)
+#
+#     print(len(model), len(time))
+#     return model
+#
+#
+# def Wavelet_Peaks(time, flux):
+#     '''
+#     Peak detection via continuous wavelets in scipy... doesnt work very well
+#     '''
+#     _, dl, dr = FindGaps(time)
+#     indx = []
+#     for i in range(0, len(dl)):
+#         flux_i = flux[dl[i]:dr[i]]
+#         time_i = time[dl[i]:dr[i]]
+#         exptime = np.nanmedian(time_i[1:]-time_i[:-1])
+#         if (exptime*24.*60. < 5):
+#             widths = np.arange(1,100)
+#         else:
+#             widths = np.arange(1,10)
+#
+#         indx_i = signal.find_peaks_cwt(flux_i, widths)
+#         indx = np.append(indx, indx_i)
+#     return np.array(indx, dtype='int')
