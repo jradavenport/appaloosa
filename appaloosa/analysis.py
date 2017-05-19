@@ -1598,7 +1598,7 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
     # need KICnumber, Flare Freq data in units of ED
     kicnum_c = fdata.iloc[:,0].unique()
-    num_fl_tot = fdata.groupby([0])[4].sum()
+    # num_fl_tot = fdata.groupby([0])[4].sum()
 
     bigdata = kicdata[kicdata['kic_kepler_id'].isin(kicnum_c)]
 
@@ -1722,7 +1722,14 @@ def paper2_plots(condorfile='condorout.dat.gz',
     for k in range(crng.shape[0]):
         ts = np.where((gi_all[okclr] >= crng[k, 0]) &
                       (gi_all[okclr] <= crng[k, 1]) &
-                      (Prot_all[okclr] >= 0.1))
+                      (Prot_all[okclr] >= 0.1) &
+                      (kicnum_c[okclr] != 10924462) &  # manually throw out bad FFDs
+                      (kicnum_c[okclr] != 3864443) &
+                      (kicnum_c[okclr] != 5559631) &
+                      (kicnum_c[okclr] != 7988343) &
+                      (kicnum_c[okclr] != 9591503) &
+                      (kicnum_c[okclr] != 3240305)
+                      )
 
         # ff.write('# that pass TS color cut: ' + str(len(ts[0])) + '\n')
 
@@ -1839,7 +1846,14 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
     # Rossby figure w/ points colored by mass
     pok = np.where((Prot_all[okclr] > 0.1) &
-                   (gi_all[okclr] > 0.5)) # manually throw out the bluest stars
+                   (gi_all[okclr] > 0.5) & # manually throw out the bluest stars
+                   (kicnum_c[okclr] != 10924462) &  # manually throw out bad FFDs
+                   (kicnum_c[okclr] != 3864443) &
+                   (kicnum_c[okclr] != 5559631) &
+                   (kicnum_c[okclr] != 7988343) &
+                   (kicnum_c[okclr] != 9591503) &
+                   (kicnum_c[okclr] != 3240305)
+                   )
 
     plt.figure()
     plt.scatter(Rossby[okclr][pok], clr[okclr][pok],
@@ -1927,7 +1941,19 @@ def paper2_plots(condorfile='condorout.dat.gz',
     '''
     Loop over all stars again, stack data up into big arrays to fit w/ age-dependent evolution
     '''
-    ts = np.where((Prot_all[okclr] >= 0.1))
+
+    # manually identify bad FFDs
+    bad_ids = [10924462, 3864443, 5559631, 7988343, 9591503, 3240305]
+
+    ts = np.where((Prot_all[okclr] >= 0.1) &
+                  (gi_all[okclr] > 0.5) & # manually throw out the bluest stars)
+                  (kicnum_c[okclr] != 10924462) & # manually throw out bad FFDs
+                  (kicnum_c[okclr] != 3864443) &
+                  (kicnum_c[okclr] != 5559631) &
+                  (kicnum_c[okclr] != 7988343) &
+                  (kicnum_c[okclr] != 9591503) &
+                  (kicnum_c[okclr] != 3240305)
+                  )
     ts = ts[0][np.argsort(Rossby[okclr][ts])]
 
     # # try a ridiculous 3d figure
@@ -1940,6 +1966,7 @@ def paper2_plots(condorfile='condorout.dat.gz',
     logt_stack = np.array([])
     mass_stack = np.array([])
     logR_stack = np.array([])
+    logRerr_stack = np.array([])
 
     B_V_ts = getBV(mass[okclr][ts])
     age_ts = MH2008_age(B_V_ts, Prot_all[okclr][ts])
@@ -1991,6 +2018,11 @@ def paper2_plots(condorfile='condorout.dat.gz',
             logt_stack = np.append(logt_stack, np.ones_like(ffd_x[ffd_ok]) * np.log10(age_ts[l]))
             mass_stack = np.append(mass_stack, np.ones_like(ffd_x[ffd_ok]) * mass[okclr][ts][l])
 
+            # propgate the log of the error in the FFD
+            yerr_temp = np.abs(ffd_yerr[ffd_ok] / (ffd_y[ffd_ok] * np.log(10.)))
+            yerr_temp = np.sqrt(yerr_temp**2. + np.nanmedian(yerr_temp)**2.)
+            logRerr_stack = np.append(logRerr_stack, yerr_temp)
+
     # ax.set_xlabel('log Flare Energy (erg)')
     # ax.set_ylabel('log Flare Freq')
     # ax.set_zlabel('Mass')
@@ -1999,73 +2031,76 @@ def paper2_plots(condorfile='condorout.dat.gz',
     p0 = (0., 0., 0., -0.5,
           -1., 1., 0., 10.)
     stackOK = np.where(np.isfinite(logE_stack) & np.isfinite(logR_stack) &
-                       np.isfinite(logt_stack) & np.isfinite(mass_stack))
+                       np.isfinite(logt_stack) & np.isfinite(mass_stack) &
+                       np.isfinite(logRerr_stack))
     X = (logE_stack[stackOK], logt_stack[stackOK], mass_stack[stackOK])
 
-    fit, cov = curve_fit(FlareEqn, X, logR_stack[stackOK], p0)
+    fit, cov = curve_fit(FlareEqn, X, logR_stack[stackOK], p0, sigma=logRerr_stack[stackOK])
 
     print('FlareEqn coefficients:')
     print(fit)
 
 
     # now some plots exploring this fit
-    plt.figure(figsize=(6, 5))
+    ffig = plt.figure(figsize=(6, 5))
+    ax = ffig.add_subplot(111)
     y1 = FlareEqn((np.arange(33, 37), np.array([1, 1, 1, 1]), np.array([0.5, 0.5, 0.5, 0.5])), *fit)
     y2 = FlareEqn((np.arange(33, 37), np.array([2, 2, 2, 2]), np.array([0.5, 0.5, 0.5, 0.5])), *fit)
     y3 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([0.5, 0.5, 0.5, 0.5])), *fit)
     y4 = FlareEqn((np.arange(33, 37), np.array([4, 4, 4, 4]), np.array([0.5, 0.5, 0.5, 0.5])), *fit)
 
-    plt.plot(np.arange(33, 37), 10.**y1)
-    plt.plot(np.arange(33, 37), 10.**y2)
-    plt.plot(np.arange(33, 37), 10.**y3)
-    plt.plot(np.arange(33, 37), 10.**y4)
+    plt.plot(np.arange(33, 37), 10.**y1, c='CornflowerBlue')
+    plt.plot(np.arange(33, 37), 10.**y2, c='DarkViolet')
+    plt.plot(np.arange(33, 37), 10.**y3, c='FireBrick')
+    plt.plot(np.arange(33, 37), 10.**y4, c='Red')
 
     plt.yscale('log')
     plt.xlabel('log Flare Energy (erg)')
     plt.ylabel('Cumulative Flare Freq (#/day)')
     # plt.xlim(32, 38)
     # plt.ylim(1e-4, 1e0)
-    plt.title('M = 0.5, log t = (1,2,3,4)')
+    plt.text(0.025, 0.025, r'M = 0.5 M$_{\odot}$, log t = [1,2,3,4] Myr', fontsize=12, transform=ax.transAxes)
     plt.savefig(figdir + 'eqnFFD_mass1' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
-    plt.figure(figsize=(6, 5))
+    ffig = plt.figure(figsize=(6, 5))
+    ax = ffig.add_subplot(111)
     y1 = FlareEqn((np.arange(33, 37), np.array([1, 1, 1, 1]), np.array([1.0, 1.0, 1.0, 1.0])), *fit)
     y2 = FlareEqn((np.arange(33, 37), np.array([2, 2, 2, 2]), np.array([1.0, 1.0, 1.0, 1.0])), *fit)
     y3 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([1.0, 1.0, 1.0, 1.0])), *fit)
     y4 = FlareEqn((np.arange(33, 37), np.array([4, 4, 4, 4]), np.array([1.0, 1.0, 1.0, 1.0])), *fit)
 
-    plt.plot(np.arange(33, 37), 10.**y1)
-    plt.plot(np.arange(33, 37), 10.**y2)
-    plt.plot(np.arange(33, 37), 10.**y3)
-    plt.plot(np.arange(33, 37), 10.**y4)
+    plt.plot(np.arange(33, 37), 10.**y1, c='CornflowerBlue')
+    plt.plot(np.arange(33, 37), 10.**y2, c='DarkViolet')
+    plt.plot(np.arange(33, 37), 10.**y3, c='FireBrick')
+    plt.plot(np.arange(33, 37), 10.**y4, c='Red')
 
     plt.yscale('log')
     plt.xlabel('log Flare Energy (erg)')
     plt.ylabel('Cumulative Flare Freq (#/day)')
-    plt.title('M = 1.0, log t = (1,2,3,4)')
+    plt.text(0.025, 0.025, r'M = 1.0 M$_{\odot}$, log t = [1,2,3,4] Myr', fontsize=12, transform=ax.transAxes)
     plt.savefig(figdir + 'eqnFFD_mass2' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
 
-    plt.figure(figsize=(6, 5))
-    y1 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([0.25, 0.25, 0.25, 0.25])), *fit)
-    y2 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([0.5, 0.5, 0.5, 0.5])), *fit)
-    y3 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([0.75, 0.75, 0.75, 0.75])), *fit)
-    y4 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([1.0, 1.0, 1.0, 1.0])), *fit)
-
-    plt.plot(np.arange(33, 37), 10.**y1)
-    plt.plot(np.arange(33, 37), 10.**y2)
-    plt.plot(np.arange(33, 37), 10.**y3)
-    plt.plot(np.arange(33, 37), 10.**y4)
-
-    plt.yscale('log')
-    plt.xlabel('log Flare Energy (erg)')
-    plt.ylabel('Cumulative Flare Freq (#/day)')
-    plt.title('log t = 3, M = (0.25,0.5,0.75,1)')
-    plt.savefig(figdir + 'eqnFFD_age1' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
+    # plt.figure(figsize=(6, 5))
+    # y1 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([0.25, 0.25, 0.25, 0.25])), *fit)
+    # y2 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([0.5, 0.5, 0.5, 0.5])), *fit)
+    # y3 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([0.75, 0.75, 0.75, 0.75])), *fit)
+    # y4 = FlareEqn((np.arange(33, 37), np.array([3, 3, 3, 3]), np.array([1.0, 1.0, 1.0, 1.0])), *fit)
+    # 
+    # plt.plot(np.arange(33, 37), 10.**y1)
+    # plt.plot(np.arange(33, 37), 10.**y2)
+    # plt.plot(np.arange(33, 37), 10.**y3)
+    # plt.plot(np.arange(33, 37), 10.**y4)
+    # 
+    # plt.yscale('log')
+    # plt.xlabel('log Flare Energy (erg)')
+    # plt.ylabel('Cumulative Flare Freq (#/day)')
+    # plt.title('log t = 3, M = (0.25,0.5,0.75,1)')
+    # plt.savefig(figdir + 'eqnFFD_age1' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    # plt.close()
 
     # same as other plots, but for the Sun
     plt.figure(figsize=(6, 5))
@@ -2094,10 +2129,10 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
 
     plt.figure()
-    plt.contourf(xx, yy+6, rate_grid, cmap=cm.magma_r)
+    plt.contourf(xx, yy, rate_grid, cmap=cm.magma_r)
     plt.xlabel(r'Mass (M$_{\odot}$)')
-    plt.xlim(0.25, 1.15)
-    plt.ylabel('log Age (years)')
+    plt.xlim(1.15,0.25)
+    plt.ylabel('log Age (Myr)')
     cbar = plt.colorbar()
     cbar.set_label('log R$_{' + EpointS + '}$ (#/day)')
     plt.savefig(figdir + 'eqnFFD_grid35' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
@@ -2171,120 +2206,104 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
 
 
+    # make figure of model FFD versus actual data for each target
+    # compute model FFD at actual observed bins, calculate ChiSq
+    # then make figure of ChiSq vs (color, Prot) to see where we're winning/losing
+    
+    ### =>> takes a few min to run, so turn off (if False) when not needed
+    if True:
+        chisq_ts = np.zeros(np.size(ts))-1
+
+        for l in range(np.size(ts)):
+
+            # find all entires for this star (LLC and SLC data)
+            star = np.where((fdata[0].values == kicnum_c[okclr][ts][l]))[0]
+            # arrays for FFD
+            fnorm = np.zeros_like(edbins[1:])
+            fsum = np.zeros_like(edbins[1:])
+
+            # find this star in the KIC data
+            mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[okclr][ts][l]))
+            Lkp_i = Lkp_uniq[mtch][0]
+            # tmp array to hold the total number of flares in each FFD bin
+            flare_tot = np.zeros_like(fnorm)
+
+            ffig = plt.figure()
+            ax = ffig.add_subplot(111)
+            for i in range(0, len(star)):
+                # Find the portion of the FFD that is above the 68% cutoff
+                ok = np.where((edbins[1:] >= fdata.loc[star[i], 3]))[0]
+                if len(ok) > 0:
+                    # add the rates together for a straight mean
+                    fsum[ok] = fsum[ok] + fdata.loc[star[i], 7:].values[ok]
+
+                    # count the number for the straight mean
+                    fnorm[ok] = fnorm[ok] + 1
+
+                    # add the actual number of flares for this data portion: rate * duration
+                    flare_tot = flare_tot + (fdata.loc[star[i], 7:].values * fdata.loc[star[i], 2])
+
+                    plt.plot(edbins[1:][ok][::-1] + Lkp_i,
+                             np.log10(np.cumsum(fdata.loc[star[i], 7:].values[ok][::-1]) + 1e-10), # put 1e-10 buffer in for plot
+                             alpha=0.35, color='k', linewidth=0.5)
+            # the important arrays for the averaged FFD
+            ffd_x = edbins[1:][::-1] + Lkp_i
+            ffd_y = np.cumsum(fsum[::-1] / fnorm[::-1])
+
+            # the "error" is the Poisson err from the total # flares per bin
+            ffd_yerr = _Perror(flare_tot[::-1], down=True) / dur_all[okclr][ts][l]
+
+            # Fit the FFD w/ a line, save the coefficeints
+            ffd_ok = np.where((ffd_y > 0) &
+                              np.isfinite(ffd_y) & np.isfinite(ffd_x) & np.isfinite(ffd_yerr) &
+                              (ffd_x < 39))  # fix one of the outlier problems
 
 
-    ## plots versus FFD parameters
-    # plt.figure()
-    # plt.scatter(Rossby[okclr][pok], ffd_ab[0,okclr[0][pok]],
-    #             s=30, lw=0, alpha=0.75, c=mass[okclr][pok])
-    # plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
-    # plt.xscale('log')
-    # plt.xlim(0.8e-2, 4e0)
-    # plt.ylabel(r'$\beta$ (log rate per energy)')
-    # plt.ylim(-2, 0.1)
-    # cbar = plt.colorbar()
-    # cbar.set_label('Mass')
-    # plt.savefig(figdir + 'ffd_beta' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
-    #
-    # plt.figure()
-    # plt.scatter(Rossby[okclr][pok], ffd_ab[1,okclr[0][pok]],
-    #             s=30, lw=0, alpha=0.75, c=mass[okclr][pok], cmap=cm.Spectral)
-    # plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
-    # plt.xscale('log')
-    # plt.xlim(0.8e-2, 4e0)
-    # plt.ylabel(r'$\alpha$ (log # flares per day)')
-    # plt.yscale('log')
-    # plt.ylim(3,100)
-    # cbar = plt.colorbar()
-    # cbar.set_label('Mass')
-    # plt.savefig(figdir + 'ffd_alpha' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
-    #
-    # plt.figure()
-    # plt.scatter(ffd_ab[0,okclr[0][pok]], ffd_ab[1, okclr[0][pok]],
-    #             s=30, lw=0, alpha=0.75, c=np.log10(Rossby[okclr][pok]))
-    # plt.xlabel(r'$\beta$ (FFD slope)')
-    # plt.yscale('log')
-    # plt.xlim(-2,0.1)
-    # plt.ylabel(r'$\alpha$ (FFD intercept)')
-    # plt.ylim(3, 100)
-    # cbar = plt.colorbar()
-    # cbar.set_label(r'log Ro')
-    # plt.savefig(figdir + 'alpha_beta' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
+            # if there are at least 2 energy bins w/ valid flares...
+            if len(ffd_ok[0]) > 1:
+                yerr_temp = np.abs(ffd_yerr[ffd_ok] / (ffd_y[ffd_ok] * np.log(10.)))
+                yerr_temp = np.sqrt(yerr_temp ** 2. + np.nanmedian(yerr_temp) ** 2.)
 
-    # plt.figure()
-    # plt.scatter(ffd_ab[0, okclr], ffd_ab[1, okclr],
-    #             s=30, lw=0, alpha=0.75, c=np.log10(Rossby[okclr]))
-    # plt.xlabel(r'$\beta$ (FFD slope)')
-    # # plt.xlim(-2,0.1)
-    # plt.ylabel(r'$\alpha$ (FFD intercept)')
-    # # plt.ylim(3, 100)
-    # cbar = plt.colorbar()
-    # cbar.set_label(r'log Ro')
-    # plt.savefig(figdir + 'alpha_beta2' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # # plt.close()
-    # plt.show()
+                # make model FFD at same ffd_x values
+                model_y = FlareEqn((ffd_x[ffd_ok], np.log10(age_ts[l]), mass[okclr][ts][l]), *fit)
 
-    # plt.figure()
-    # plt.scatter(ffd_ab[0,okclr[0]], ffd_ab[1, okclr[0]],
-    #             s=30, lw=0, alpha=0.75, c=mass[okclr])
-    # plt.xlabel(r'$\beta$ (FFD slope)')
-    # plt.yscale('log')
-    # plt.xlim(-2,0.1)
-    # plt.ylabel(r'$\alpha$ (FFD intercept)')
-    # plt.ylim(3, 100)
-    # cbar = plt.colorbar()
-    # cbar.set_label('Mass')
-    # plt.savefig(figdir + 'alpha_beta_all' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
+                # compute chisq!
+                chisq_ts[l] = np.sum( ((np.log10(ffd_y[ffd_ok]) - model_y) / yerr_temp)**2.0 ) / np.float(model_y.size)
 
-    # plt.figure()
-    # plt.scatter(clr[okclr][pok], ffd_ab[1,okclr[0][pok]],
-    #             s=30, lw=0, alpha=0.75, c=mass[okclr][pok])
-    # plt.xlabel('log R$_{' + EpointS + '}$ (#/day)')
-    # plt.xlim(-3.5,0)
-    # plt.ylabel(r'$\alpha$ (log # flares per day)')
-    # plt.yscale('log')
-    # plt.ylim(3,100)
-    # cbar = plt.colorbar()
-    # cbar.set_label('Mass')
-    # plt.savefig(figdir + 'R35_alpha' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
+                plt.plot(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), linewidth=2, alpha=0.7, c='k')
+                plt.errorbar(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), yerr_temp, fmt='k,')
+                plt.plot(ffd_x[ffd_ok], model_y, linewidth=1, alpha=0.7, c='r')
+
+                plt.text(0.025, 0.025,
+                         r'$\chi^2$=' + format(chisq_ts[l], '.2F') + ', g-i='+format(gi_all[okclr][ts][l],'.2F') + ', Prot='+format(Prot_all[okclr][ts][l]),
+                         fontsize=10, transform=ax.transAxes)
+                plt.xlim(np.nanmin(ffd_x[ffd_ok])-0.1, np.nanmax(ffd_x[ffd_ok])+0.1)
+                plt.ylim(np.nanmin(np.log10(ffd_y[ffd_ok]))-np.nanmax(yerr_temp),
+                         np.nanmax(np.log10(ffd_y[ffd_ok]))+2.*np.nanmin(yerr_temp))
+            plt.xlabel('log Flare Energy (erg)')
+            plt.ylabel('log Cumulative Flare Freq (#/day)')
+            plt.savefig(figdir + 'ffd_models/' + str(kicnum_c[okclr][ts][l]) + '_ffd_fit' + figtype,
+                        dpi=300, bbox_inches='tight', pad_inches=0.5)
+            plt.close()
 
 
-    # plt.figure()
-    # plt.scatter(np.log10(Lfl_Lbol)[okclr][pok], ffd_ab[1, okclr[0][pok]],
-    #             s=30, lw=0, alpha=0.75, c=mass[okclr][pok], cmap=cm.Spectral)
-    # plt.xlabel('log ($L_{fl}$ $L_{Kp}^{-1}$)')
-    # plt.xlim(-5, -1.5)
-    # plt.ylabel(r'$\alpha$ (log # flares per day)')
-    # plt.yscale('log')
-    # plt.ylim(3, 100)
-    # cbar = plt.colorbar()
-    # cbar.set_label('Mass')
-    # plt.savefig(figdir + 'Lfl_alpha' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
-    #
-    # plt.figure()
-    # plt.scatter(np.log10(Lfl_Lbol)[okclr][pok], ffd_ab[0, okclr[0][pok]],
-    #             s=30, lw=0, alpha=0.75, c=mass[okclr][pok], cmap=cm.Spectral)
-    # plt.xlabel('log ($L_{fl}$ $L_{Kp}^{-1}$)')
-    # plt.xlim(-5, -1.5)
-    # plt.ylabel(r'$\beta$ (log rate per energy)')
-    # # plt.yscale('log')
-    # plt.ylim(-2,0.1)
-    # cbar = plt.colorbar()
-    # cbar.set_label('Mass')
-    # plt.savefig(figdir + 'Lfl_beta' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
+        plt.figure()
+        plt.scatter(gi_all[okclr][ts], Prot_all[okclr][ts], c=np.log10(chisq_ts),
+                    s=50, linewidths=0.5, edgecolors='k', alpha=0.85, cmap=cm.magma_r)
+        cbar = plt.colorbar()
+        cbar.set_label(r'log $\chi^2$')
+        plt.xlabel('g-i (mag)')
+        plt.xlim(0.4, 3)
+        plt.ylabel(r'P$_{rot}$ (days)')
+        plt.yscale('log')
+        plt.savefig(figdir + 'color_rot_chisq' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
 
 
-'''
-  let this file be called from the terminal directly. e.g.:
-  $ python analysis.py
-'''
+
 if __name__ == "__main__":
-    # import sys
+    '''
+      let this file be called from the terminal directly. e.g.:
+      $ python analysis.py
+    '''
     paper2_plots()
