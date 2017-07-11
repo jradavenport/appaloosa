@@ -1662,9 +1662,10 @@ def paper2_plots(condorfile='condorout.dat.gz',
                                               return_all=True)
 
     ## ingest Amy McQuillans rotation period catalog
-    # rotfile = 'comparison_datasets/Table_Periodic.txt'
-    # rotdata = pd.read_table(rotfile, delimiter=',', comment='#', header=None)
-    ## KID,Teff,logg,Mass,Prot,Prot_err,Rper,LPH,w,DC,Flag
+    rotfile = 'comparison_datasets/Table_Periodic.txt'
+    rotdata = pd.read_table(rotfile, delimiter=',', comment='#', header=None,
+                            names=('KID','Teff','logg','Mass','Prot','Prot_err','Rper','LPH','w','DC','Flag'))
+
 
     # For every star: compute flare rate at some arbitrary energy
     Epoint = 35
@@ -1738,7 +1739,8 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
     # stars that have enough flares and have valid rates
     okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.8) &
-                     np.isfinite(clr) & (Nflare >= Nflare_limit))
+                     np.isfinite(clr) &
+                     (Nflare >= Nflare_limit))
 
     # stars that just have valid rates
     okclr0 = np.where(  # (clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
@@ -1750,23 +1752,6 @@ def paper2_plots(condorfile='condorout.dat.gz',
     clr_rng = [np.nanmin(clr), np.nanmax(clr)]
     rate_range = [[-1, 3], [-20,4]]
 
-    # plt.figure()
-    # plt.hist2d(gi_all[okclr], np.log10(fit_E[okclr]), bins=50, range=rate_range,
-    #            alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
-    # plt.xlabel('g-i (mag)')
-    # # plt.yscale('log')
-    # plt.ylabel('log R$_{' + EpointS + '}$ (#/day)')
-    # plt.savefig(figdir + 'flarerate_okclr' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
-    #
-    # plt.figure()
-    # plt.hist2d(gi_all[okclr0], np.log10(fit_E[okclr0]), bins=50, range=rate_range,
-    #            alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
-    # plt.xlabel('g-i (mag)')
-    # # plt.yscale('log')
-    # plt.ylabel('log R$_{' + EpointS + '}$ (#/day)')
-    # plt.savefig(figdir + 'flarerate_okclr0' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.close()
 
 
     # g-i color range bins
@@ -1777,6 +1762,11 @@ def paper2_plots(condorfile='condorout.dat.gz',
                      [2., 2.5],
                      [2.5, 3.]])
                      # [0.0, 0.5]]) # a bin I don't expect to understand. Should be F stars
+
+    # the same ED bins used in paper1_plots
+    edbins = np.arange(-5, 5, 0.2)
+    edbins = np.append(-10, edbins)
+    edbins = np.append(edbins, 10)
 
     if oldplot:
         for k in range(crng.shape[0]):
@@ -1829,9 +1819,6 @@ def paper2_plots(condorfile='condorout.dat.gz',
             ^&*^&*^&*^&*^&*^&*^&*^&*^&*^&*^&*^&*^&*^&*&^&*^&*^&*^&*
             '''
 
-            edbins = np.arange(-5, 5, 0.2)
-            edbins = np.append(-10, edbins)
-            edbins = np.append(edbins, 10)
 
             plt.figure(figsize=(6,5))
             color = iter(cm.Spectral(np.linspace(0,1,np.size(ts))))
@@ -2008,8 +1995,6 @@ def paper2_plots(condorfile='condorout.dat.gz',
     >>>>>>>>>>>>>>>>>>>>>>>
     '''
 
-    # manually identify bad FFDs
-    # bad_ids = [10924462, 3864443, 5559631, 7988343, 9591503, 3240305]
 
     ts = np.where((Prot_all[okclr] >= 0.1) &
                   (gi_all[okclr] > 0.5) & # manually throw out the bluest stars)
@@ -2023,11 +2008,6 @@ def paper2_plots(condorfile='condorout.dat.gz',
                   )
     ts = ts[0][np.argsort(Rossby[okclr][ts])]
 
-    # # try a ridiculous 3d figure
-    # from mpl_toolkits.mplot3d import Axes3D
-    # fig = plt.figure()
-    # color = iter(cm.Spectral(np.linspace(0, 1, np.size(ts))))
-    # ax = fig.add_subplot(111, projection='3d')
 
     logE_stack = np.array([])
     logt_stack = np.array([])
@@ -2094,11 +2074,6 @@ def paper2_plots(condorfile='condorout.dat.gz',
             yerr_temp = np.sqrt(yerr_temp**2. + np.nanmedian(yerr_temp)**2.)
             logRerr_stack = np.append(logRerr_stack, yerr_temp)
 
-    # ax.set_xlabel('log Flare Energy (erg)')
-    # ax.set_ylabel('log Flare Freq')
-    # ax.set_zlabel('Mass')
-    # plt.show()
-
 
 
 
@@ -2114,20 +2089,6 @@ def paper2_plots(condorfile='condorout.dat.gz',
                        np.isfinite(logRerr_stack))
     X = (logE_stack[stackOK], logt_stack[stackOK], mass_stack[stackOK])
 
-    '''# version 1 of model: w/ mass,time, and cross terms
-    p02 = (0., 0., 0., -0.5,
-          -1., 1., 0., 10.)
-    fit2, cov2 = curve_fit(FlareEqn2, X, logR_stack[stackOK], p02, sigma=logRerr_stack[stackOK])
-
-    modelStack2 = FlareEqn2(X, *fit2)
-    ChiSq2 = appaloosa.chisq(logR_stack[stackOK], logRerr_stack[stackOK], modelStack2)
-    BIC2 = ChiSq2 + np.size(p02) * np.log(np.size(X))
-
-    print('FlareEqn2 coefficients:')
-    print(fit2)
-    print('Chi, BIC')
-    print(ChiSq2, BIC2)
-    '''
 
     # version 2 of model: just mass and time terms
     p0 = (0., 0., -0.5,
@@ -2144,24 +2105,6 @@ def paper2_plots(condorfile='condorout.dat.gz',
     print('Chi, BIC')
     print(ChiSq1, BIC1)
 
-
-    '''
-    p03 = (0., 0., -0.5,
-           -1., 1., 20.,
-           0., 0., -0.5,
-           -2., 1., 30.)
-    fit3, cov3 = curve_fit(FlareEqn3, X, logR_stack[stackOK], p03,
-                           sigma=logRerr_stack[stackOK])
-
-    modelStack3 = FlareEqn3(X, *fit3)
-    ChiSq3 = appaloosa.chisq(logR_stack[stackOK], logRerr_stack[stackOK], modelStack3)
-    BIC3 = ChiSq3 + np.size(p03) * np.log(np.size(X))
-
-    print('FlareEqn3 coefficients:')
-    print(fit)
-    print('Chi, BIC')
-    print(ChiSq3, BIC3)
-    '''
     # sys.exit('DONE FOR NOW, turn this off in future')
 
 
@@ -2249,10 +2192,10 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
     # fit the FFD model at the energy the corresponds to 1 sec of the quiescent Luminosity
     # (i.e. 1 sec Equiv Duration)
-    R1s_fit = FlareEqn((Lkp_all[okclr][pok], np.log10(age_pok), mass[okclr][pok]), *fit)
+    R1s_fit = FlareEqn((Lkp_all[okclr][ts], np.log10(age_ts), mass[okclr][ts]), *fit)
 
     plt.figure()
-    plt.scatter(mass[okclr][pok], age_pok, c=(R1s_fit),
+    plt.scatter(mass[okclr][ts], age_ts, c=(R1s_fit),
                 s=50, linewidths=0.5, edgecolors='k', alpha=0.85, cmap=cm.magma_r)
     cbar = plt.colorbar()
     cbar.set_label('log R$_{1s}$ (#/day)')
@@ -2264,7 +2207,7 @@ def paper2_plots(condorfile='condorout.dat.gz',
     plt.close()
 
     plt.figure()
-    plt.scatter(gi_all[okclr][pok], Prot_all[okclr][pok], c=(R1s_fit),
+    plt.scatter(gi_all[okclr][ts], Prot_all[okclr][ts], c=(R1s_fit),
                 s=50, linewidths=0.5, edgecolors='k', alpha=0.85, cmap=cm.magma_r)
     cbar = plt.colorbar()
     cbar.set_label('log R$_{1s}$ (#/day)')
@@ -2425,15 +2368,15 @@ def paper2_plots(condorfile='condorout.dat.gz',
     print('doing Lfl_Lkp tracks for Riley')
 
     # mass_wb = np.array([0.5,0.7,0.9,1.0])
-    mass_wb = np.arange(0.25, 0.9, 0.05)
+    mass_wb = np.arange(0.45, 0.9, 0.05)
 
     # figure out the quiescent lum for these targets to make Energy -> ED
-    msort = np.argsort(mass[okclr][pok])
-    Lkp_wb = np.interp(mass_wb, mass[okclr][pok][msort], Lkp_all[okclr][pok][msort])
+    msort = np.argsort(mass[okclr][ts])
+    Lkp_wb = np.interp(mass_wb, mass[okclr][ts][msort], Lkp_all[okclr][ts][msort])
 
-    age_range = np.arange(1.5, 3.7, 0.1)
+    age_range = np.arange(1.5, 5, 0.1)
 
-    ed_wb = np.linspace(-3,2,20)
+    ed_wb = np.linspace(-6, 5, 20)
 
     # the array to fill w/ integrated model values!
     Lfl_Lkp_wb = np.zeros((mass_wb.size, age_range.size))
@@ -2468,7 +2411,7 @@ def paper2_plots(condorfile='condorout.dat.gz',
     plt.savefig(figdir + 'wb_model' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
-    # np.savez('ABtracks.npz', ABarray=Lfl_Lkp_wb, mass=mass_wb, age=age_range)
+    np.savez('ABtracks.npz', ABarray=Lfl_Lkp_wb, mass=mass_wb, age=age_range)
 
 
 if __name__ == "__main__":

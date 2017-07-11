@@ -744,16 +744,18 @@ def MultiFind(time, flux, error, flags, mode=3,
     if (mode == 3):
         # do iterative rejection and spline fit - like FBEYE did
         # also like DFM & Hogg suggest w/ BART
-        box1 = detrend.MultiBoxcar(time, flux, error, kernel=2.0, numpass=2)
-        sin1 = detrend.FitSin(time, box1, error, maxnum=5, maxper=(max(time)-min(time)))
 
+        box1 = detrend.MultiBoxcar(time, flux, error, kernel=2.0, numpass=2)
+        sin1 = detrend.FitSin(time, box1, error, maxnum=5, maxper=(max(time)-min(time)),
+                              per2=False, debug=debug)
+        # sin1 = detrend.FitMedSin(time, box1, error)
         box3 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.3)
 
         dt = np.nanmedian(time[1:] - time[0:-1])
 
         exptime_m = (np.nanmax(time) - np.nanmin(time)) / len(time)
         # ksep used to = 0.07...
-        flux_model = detrend.IRLSSpline(time, box3, error, numpass=10, debug=debug, ksep=exptime_m*10.) + sin1
+        flux_model = detrend.IRLSSpline(time, box3, error, numpass=20, debug=debug, ksep=exptime_m*10.) + sin1
 
         signalfwhm = dt * 2
         ftime = np.arange(0, 2, dt)
@@ -788,12 +790,12 @@ def MultiFind(time, flux, error, flags, mode=3,
     if len(to1[0])>0:
         istop[to1] += 1
 
-    # if debug is True:
-    #     plt.figure()
-    #     plt.scatter(time, flux, alpha=0.5)
-    #     plt.plot(time,flux_model, c='black')
-    #     plt.scatter(time[cand1], flux[cand1], c='red')
-    #     plt.show()
+    if debug is True:
+        plt.figure()
+        plt.scatter(time, flux, alpha=0.5)
+        plt.plot(time,flux_model, c='black')
+        plt.scatter(time[cand1], flux[cand1], c='red')
+        plt.show()
 
     # print(istart, len(istart))
     return istart, istop, flux_model
@@ -1247,7 +1249,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
             plt.plot(time[istart[g]:istop[g]+1],
                      flux_gap[istart[g]:istop[g]+1],color='red', lw=1)
 
-        plt.plot(time, flux_model, 'blue', lw=3)
+        plt.plot(time, flux_model, 'blue', lw=3, alpha=0.7)
 
 
         plt.xlabel('Time (BJD - 2454833 days)')
@@ -1259,7 +1261,10 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         plt.xlim(xdur0, xdur1) # only plot a chunk of the data
 
         xdurok = np.where((time >= xdur0) & (time <= xdur1))
-        plt.ylim(np.nanmin(flux_gap[xdurok]), np.nanmax(flux_gap[xdurok]))
+        if len(xdurok[0])>0:
+            yminmax = [np.nanmin(flux_gap[xdurok]), np.nanmax(flux_gap[xdurok])]
+            if sum(np.isfinite(yminmax)) > 1:
+                plt.ylim(yminmax[0], yminmax[1])
 
         plt.savefig(file + '_lightcurve.pdf', dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.show()
@@ -1331,5 +1336,5 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 # $python appaloosa.py 12345678
 if __name__ == "__main__":
     import sys
-    RunLC(file=str(sys.argv[1]), dbmode='csv', display=True, debug=True)
+    RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
 

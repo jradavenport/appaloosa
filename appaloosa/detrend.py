@@ -6,6 +6,7 @@ import numpy as np
 from pandas import rolling_median #, rolling_mean, rolling_std, rolling_skew
 from scipy.optimize import curve_fit
 from gatspy.periodic import LombScargleFast
+from gatspy.periodic import SuperSmoother
 # import pywt
 from scipy import signal
 from scipy.interpolate import LSQUnivariateSpline, UnivariateSpline
@@ -153,10 +154,15 @@ def FindGaps(time, maxgap=0.125, minspan=2.0):
 def _sinfunc(t, per, amp, t0, yoff):
     return np.sin((t - t0) * 2.0 * np.pi / per) * amp  + yoff
 
+def _sinfunc2(t, per1, amp1, t01, per2, amp2, t02, yoff):
+    output = np.sin((t - t01) * 2.0 * np.pi / per1) * amp1 + \
+             np.sin((t - t02) * 2.0 * np.pi / per2) * amp2 + yoff
+    return output
+
 
 def FitSin(time, flux, error, maxnum=5, nper=20000,
            minper=0.1, maxper=30.0, plim=0.25,
-           returnmodel=True, debug=False):
+           returnmodel=True, debug=False, per2=False):
     '''
     Use Lomb Scargle to find periods, fit sins, remove, repeat.
 
@@ -213,24 +219,87 @@ def FitSin(time, flux, error, maxnum=5, nper=20000,
         # if a period w/ enough power is detected
         if (pp > plim):
             # fit sin curve to window and subtract
-            p0 = [pk, 3.0 * np.nanstd(flux_out-medflux), 0.0, 0.0]
-            try:
-                pfit, pcov = curve_fit(_sinfunc, time, flux_out-medflux, p0=p0)
-            except RuntimeError:
-                pfit = [pk, 0., 0., 0.]
-                if debug is True:
-                    print('Curve_Fit no good')
+            if per2 is True:
+                p0 = [pk, 3.0 * np.nanstd(flux_out-medflux), 0.0,
+                      pk/2., 1.5 * np.nanstd(flux_out-medflux), 0.1, 0.0]
+                try:
+                    pfit, pcov = curve_fit(_sinfunc2, time, flux_out-medflux, p0=p0)
+                    if debug is True:
+                        print('>>', pfit)
+                except RuntimeError:
+                    pfit = [pk, 0., 0., 0., 0., 0., 0.]
+                    if debug is True:
+                        print('Curve_Fit2 no good')
 
-            flux_out = flux_out - _sinfunc(time, *pfit)
-            sin_out = sin_out + _sinfunc(time, *pfit)
+                flux_out = flux_out - _sinfunc2(time, *pfit)
+                sin_out = sin_out + _sinfunc2(time, *pfit)
+
+            else:
+                p0 = [pk, 3.0 * np.nanstd(flux_out-medflux), 0.0, 0.0]
+                try:
+                    pfit, pcov = curve_fit(_sinfunc, time, flux_out-medflux, p0=p0)
+                except RuntimeError:
+                    pfit = [pk, 0., 0., 0.]
+                    if debug is True:
+                        print('Curve_Fit no good')
+
+                flux_out = flux_out - _sinfunc(time, *pfit)
+                sin_out = sin_out + _sinfunc(time, *pfit)
 
         # add the median flux for this window BACK in
         sin_out = sin_out + medflux
+
+    # if debug is True:
+    #     plt.figure()
+    #     plt.plot(time, flux)
+    #     plt.plot(time, flux_out, c='red')
+    #     plt.show()
 
     if returnmodel is True:
         return sin_out
     else:
         return flux_out
+
+
+'''
+def FitMedSin(time, flux, error, nper=20000,
+              minper=0.1, maxper=30.0, plim=0.25,
+              returnmodel=True ):
+
+    flux_out = np.array(flux, copy=True)
+    sin_out = np.zeros_like(flux) # return the sin function!
+
+    # total baseline of time window
+    dt = np.nanmax(time) - np.nanmin(time)
+
+    medflux = np.nanmedian(flux)
+    # ti = time[dl[i]:dr[i]]
+
+    if np.nanmax(time) - np.nanmin(time) < maxper*2.:
+        maxper = (np.nanmax(time) - np.nanmin(time))/2.
+
+    
+    # Use Jake Vanderplas supersmoother version
+    pgram = SuperSmoother()
+    pgram.optimizer.period_range=(minper,maxper)
+    pgram = pgram.fit(time,
+                      flux_out - medflux,
+                      error)
+
+    # Predict on a regular phase grid
+    period = pgram.best_period
+
+    phz = np.mod(time, period) / period
+    ss = np.argsort(phz)
+    magfit = np.zeros_like(phz)
+
+    magfit[ss] = pgram.predict(phz[ss])
+
+    if returnmodel is True:
+        return magfit + medflux
+    else:
+        return flux - magfit
+'''
 
 
 def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
