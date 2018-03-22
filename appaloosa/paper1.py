@@ -4,7 +4,6 @@ import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
 import matplotlib
 import os
-import sys
 import appaloosa
 import pandas as pd
 import datetime
@@ -12,6 +11,9 @@ import warnings
 from scipy.optimize import curve_fit, minimize
 from astropy.stats import funcs
 import appaloosa.analysis as analysis
+
+matplotlib.rcParams.update({'font.size':18})
+matplotlib.rcParams.update({'font.family':'serif'})
 
 
 def paper1_plots(condorfile='condorout.dat.gz',
@@ -1164,3 +1166,11 @@ def paper1_plots(condorfile='condorout.dat.gz',
 
     ff.close() # close the output stats file
     return
+
+
+if __name__ == "__main__":
+    '''
+      let this file be called from the terminal directly
+    '''
+
+    paper1_plots()
