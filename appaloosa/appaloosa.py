@@ -23,7 +23,7 @@ from astropy.io import fits
 import matplotlib
 matplotlib.rcParams.update({'font.size':18})
 matplotlib.rcParams.update({'font.family':'serif'})
-
+from scipy.signal import savgol_filter
 
 # from rayleigh import RayleighPowerSpectrum
 try:
@@ -723,10 +723,10 @@ def MultiFind(time, flux, error, flags, mode=3,
     flux_i = np.copy(flux)
 
     if (mode == 1):
-        # just use the multi-pass boxcar and average. Dumb
-        flux_model1 = detrend.MultiBoxcar(time, flux, error, kernel=0.2)
+        # just use the multi-pass boxcar and average. Simple. Too simple...
+        flux_model1 = detrend.MultiBoxcar(time, flux, error, kernel=0.1)
         flux_model2 = detrend.MultiBoxcar(time, flux, error, kernel=1.0)
-        flux_model3 = detrend.MultiBoxcar(time, flux, error, kernel=3.0)
+        flux_model3 = detrend.MultiBoxcar(time, flux, error, kernel=10.0)
 
         flux_model = (flux_model1 + flux_model2 + flux_model3) / 3.
         flux_diff = flux - flux_model
@@ -761,6 +761,15 @@ def MultiFind(time, flux, error, flags, mode=3,
         ftime = np.arange(0, 2, dt)
         modelfilter = aflare1(ftime, 1, signalfwhm, 1)
         flux_diff = signal.correlate(flux - flux_model, modelfilter, mode='same')
+
+    if (mode == 4):
+        # fit data with a SAVGOL filter
+        dt = np.nanmedian(time[1:] - time[0:-1])
+        Nsmo = np.floor(0.2 / dt)
+        if Nsmo % 2 == 0:
+            Nsmo = Nsmo + 1
+        flux_model = savgol_filter(flux, Nsmo, 2, mode='nearest')
+        flux_diff = flux - flux_model
 
 
     # run final flare-find on DATA - MODEL
