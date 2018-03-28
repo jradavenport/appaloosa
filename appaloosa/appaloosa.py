@@ -1322,13 +1322,14 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     for i in range(0,len(istart)):
         stats_i = FlareStats(time, flux_gap, error, flux_model,
                              istart=istart[i], istop=istop[i])
-        dfout = dfout.append(pd.DataFrame(dict(zip(header, [[item] for item in [*stats_i,ed68[i],ed90[i]]]))),
+        _ = [[item] for item in [*stats_i,ed68[i],ed90[i]]]
+        dfout = dfout.append(pd.DataFrame(dict(zip(header,_))),
                              ignore_index=True)
         
     h5store(outfile + '_flare.h5',dfout,**metadata)
     return
 
-#Use h5 for storing metadata and data such that it is easy to propagate, found here: https://stackoverflow.com/a/29130146
+#Use h5 to store metadata and data such that it is easy to propagate, found here: https://stackoverflow.com/a/29130146
 #originally from Pandas Cookbook
 
 def h5store(filename, df, **kwargs):
@@ -1350,4 +1351,3 @@ def h5load(store):
 if __name__ == "__main__":
     import sys
     RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
-
