@@ -3,7 +3,8 @@ Use this file to keep various detrending methods
 
 '''
 import numpy as np
-from pandas import rolling_median #, rolling_mean, rolling_std, rolling_skew
+#from pandas import rolling_median #, rolling_mean, rolling_std, rolling_skew
+import pandas as pd
 from scipy.optimize import curve_fit
 from gatspy.periodic import LombScargleFast
 from gatspy.periodic import SuperSmoother
@@ -71,11 +72,11 @@ def GapFlat(time, flux, order=3, maxgap=0.125):
         krnl = int(float(dl[i]-dr[i]) / 100.0)
         if (krnl < 10):
             krnl = 10
-        flux_sm = rolling_median(flux[dl[i]:dr[i]], krnl)
+        flux_sm = pd.Series(flux).iloc[dl[i]:dr[i]].rolling(krnl).median()
 
         indx = np.isfinite(flux_sm)
 
-        fit = np.polyfit(time[dl[i]:dr[i]][indx], flux_sm[indx], order)
+        fit = np.polyfit(np.array(time)[dl[i]:dr[i]][indx], flux_sm[indx], order)
 
         flux_flat[dl[i]:dr[i]] = flux[dl[i]:dr[i]] - \
                                  np.polyval(fit, time[dl[i]:dr[i]]) + \
@@ -109,13 +110,13 @@ def QtrFlat(time, flux, qtr, order=3):
         if (krnl < 10):
             krnl = 10
 
-        flux_sm = rolling_median(np.array(flux[x], dtype='float'), krnl)
-
+        #flux_sm = rolling_median(np.array(flux[x], dtype='float'), krnl)
+        flux_sm = flux.iloc[x].rolling(krnl).median()
         indx = np.isfinite(flux_sm) # get rid of NaN's put in by rolling_median.
 
-        fit = np.polyfit(time[x][indx], flux_sm[indx], order)
+        fit = np.polyfit(time.iloc[x][indx], flux_sm[indx], order)
 
-        flux_flat[x] = flux[x] - np.polyval(fit, time[x]) + tot_med
+        flux_flat[x] = flux.iloc[x] - np.polyval(fit, time.iloc[x]) + tot_med
 
     return flux_flat
 
@@ -339,12 +340,13 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     # indx_out = []
 
     # the data within each gap range
-    time_i = time
-    flux_i = flux
+    flux = pd.Series(flux)
+    time_i = np.array(time)
+    flux_i = np.array(flux)
     error_i = error
     indx_i = np.arange(len(time)) # for tracking final indx used
-
     exptime = np.nanmedian(time_i[1:]-time_i[:-1])
+    print(exptime)
     nptsmooth = int(kernel/24.0 / exptime)
 
     if (nptsmooth < 4):
@@ -356,7 +358,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     # now take N passes of rejection on it
     for k in range(0, numpass):
         # rolling median in this data span with the kernel size
-        flux_i_sm = rolling_median(flux_i, nptsmooth, center=True)
+        flux_i_sm = flux.rolling(nptsmooth, center=True).median()
         indx = np.isfinite(flux_i_sm)
 
         if (sum(indx) > 1):

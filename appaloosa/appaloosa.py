@@ -14,7 +14,6 @@ import detrend
 from gatspy.periodic import LombScargleFast
 import warnings
 import matplotlib.pyplot as plt
-from pandas import rolling_std
 import pandas as pd
 from scipy import stats
 from scipy.optimize import curve_fit
@@ -205,21 +204,30 @@ def GetLCvdb(file, win_size=3):
 
     also generates errors via median short term scatter
     '''
-    time, flux_raw = np.loadtxt(file, unpack=True, usecols=(0,1), skiprows=1, delimiter=',', comments=('#','*'))
-    isrl = np.isfinite(flux_raw)
-    qtr = np.zeros_like(time[isrl])
-    qual = np.zeros_like(time[isrl])
+    
+    lc = pd.read_csv(file,index_col=False)
+    lc.rename(index=str, 
+              columns={'BJD - 2454833': 'time',' Corrected Flux':'flux_raw'},
+              inplace=True,
+              )
+    print(lc.head())
+    #time, flux_raw = np.loadtxt(file, unpack=True, usecols=(0,1), skiprows=1, delimiter=',', comments=('#','*'))
+    lc['isrl'] = np.isfinite(lc.flux_raw)
+    
+    #isrl = np.isfinite(flux_raw)
+    qtr = np.zeros_like(lc.time[lc.isrl])
+    qual = np.zeros_like(lc.time[lc.isrl])
 
-    dt = np.nanmedian(time[1:] - time[0:-1])
+    dt = np.nanmedian(lc.time[1:] - lc.time[0:-1])
     if (dt < 0.01):
         dtime = 54.2 / 60. / 60. / 24.
     else:
         dtime = 30 * 54.2 / 60. / 60. / 24.
-    exptime = np.ones_like(time[isrl]) * dtime
+    exptime = np.ones_like(lc.time[lc.isrl]) * dtime
 
-    error = np.ones_like(time[isrl]) * np.nanmedian(rolling_std(flux_raw[isrl], win_size, center=True))
+    error = np.ones_like(lc.time[lc.isrl]) * np.nanmedian(pd.Series(lc.flux_raw[lc.isrl]).rolling(win_size, center=True).std())
 
-    return qtr, time[isrl], qual, exptime, flux_raw[isrl], error
+    return qtr, lc.time[lc.isrl], qual, exptime, lc.flux_raw[lc.isrl], error
 
 
 def GetLCeverest(file, win_size=3):
@@ -248,7 +256,7 @@ def GetLCeverest(file, win_size=3):
     # qual = data_rec['OUTLIER']
     qual = np.zeros_like(flux_raw) # keep the outliers... for now
 
-    error = np.ones_like(time[isrl]) * np.nanmedian(rolling_std(flux_raw[isrl], win_size, center=True))
+    error = np.ones_like(time[isrl]) * np.nanmedian(pd.Series(flux_raw[isrl]).rolling(win_size, center=True).std())
 
     return qtr, time[isrl], qual[isrl], exptime, flux_raw[isrl], error
 
@@ -271,9 +279,7 @@ def GetLCtxt(file, skiprows=1):
     '''
 
     time, flux_raw, error = np.loadtxt(file, unpack=True, usecols=(0,1,2), skiprows=skiprows)
-
     isrl = np.isfinite(flux_raw)
-
     qtr = np.zeros_like(time[isrl])
     sap_quality = np.zeros_like(time[isrl])
 
@@ -415,10 +421,10 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
         The number of consecutive points required to flag as a flare
     avg_std : bool, optional
         Should the "sigma" in this data be computed by the median of
-        the rolling_std? (Default is False)
+        the rolling().std()? (Default is False)
         (Not part of original algorithm)
     std_window : float, optional
-        If rolling_std=True, how big of a window should it use?
+        If avg_std=True, how big of a window should it use?
         (Default is 25 data points)
         (Not part of original algorithm)
     returnbinary : bool, optional
@@ -437,8 +443,7 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
     else:
         # take the average of the rolling stddev in the window.
         # better for windows w/ significant starspots being removed
-        sig_i = np.nanmedian(rolling_std(flux, std_window, center=True))
-
+        sig_i = np.nanmedian(pd.Series(flux).rolling(std_window, center=True).std())
     if debug is True:
         print("DEBUG: sig_i = " + str(sig_i))
 
@@ -1329,7 +1334,8 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     h5store(outfile + '_flare.h5',dfout,**metadata)
     return
 
-#Use h5 to store metadata and data such that it is easy to propagate, found here: https://stackoverflow.com/a/29130146
+#Use h5 to store metadata and data such that it is easy to propagate, 
+#found here: https://stackoverflow.com/a/29130146
 #originally from Pandas Cookbook
 
 def h5store(filename, df, **kwargs):
@@ -1350,4 +1356,7 @@ def h5load(store):
 # $python appaloosa.py 12345678
 if __name__ == "__main__":
     import sys
-    RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
+    #RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
+    #file = '/home/ekaterina/Documents/appaloosa/stars_shortlist/M44/hlsp_everest_k2_llc_211943618-c05_kepler_v2.0_lc.fits'
+    file = '/home/ekaterina/Documents/vanderburg/hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt'
+    RunLC(file=file, dbmode='vdb', display=True, debug=False, nfake=10)
