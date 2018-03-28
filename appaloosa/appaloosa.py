@@ -15,6 +15,7 @@ from gatspy.periodic import LombScargleFast
 import warnings
 import matplotlib.pyplot as plt
 from pandas import rolling_std
+import pandas as pd
 from scipy import stats
 from scipy.optimize import curve_fit
 from scipy.signal import wiener
@@ -648,9 +649,9 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
                        popt1[0], popt1[1], popt1[2],
                        flare_chisq, ks_d, ks_p, ks_dc, ks_pc, ed), dtype='float')
     # the parameter names for later reference
-    header = 't_start, t_stop, t_peak, amplitude, FWHM, duration, '+\
-             't_peak_aflare1, t_FWHM_aflare1, amplitude_aflare1, '+\
-             'flare_chisq, KS_d_model, KS_p_model, KS_d_cont, KS_p_cont, Equiv_Dur'
+    header = ['t_start', 't_stop', 't_peak', 'amplitude', 'FWHM', 'duration',
+             't_peak_aflare1', 't_FWHM_aflare1', 'amplitude_aflare1',
+             'flare_chisq', 'KS_d_model', 'KS_p_model', 'KS_d_cont', 'KS_p_cont', 'Equiv_Dur']
 
     if ReturnHeader is True:
         return header
@@ -1297,48 +1298,51 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 
     # set this to silence bad fit warnings from polyfit
     warnings.simplefilter('ignore', np.RankWarning)
-
-    outstring = ''
-    outstring = outstring + '# ObjectID = ' + objectid + '\n'
-    outstring = outstring + '# File = ' + file + '\n'
-    now = datetime.datetime.now()
-    outstring = outstring + '# Date-Run = ' + str(now) + '\n'
-    outstring = outstring + '# Appaloosa-Version = ' + __version__ + '\n'
-
-    # outstring = outstring + '# ED68 = ' + str(ed68T) + '\n'
-    # outstring = outstring + '# ED90 = ' + str(ed90T) + '\n'
-
-    outstring = outstring + '# N_epoch in LC = ' + str(len(time)) + '\n'
-    outstring = outstring + '# Total exp time of LC = ' + str(np.sum(exptime)) + '\n'
-    outstring = outstring + '# Columns: '
+    
+    metadata = {'ObjectID' : objectid,
+                 'File' : file,
+                 'Date-Run' : str(datetime.datetime.now()),
+                 'Appaloosa-Version': __version__,
+                 'N_epoch in LC' : str(len(time)),
+                 'Total exp time of LC' : str(np.sum(exptime)),
+                 }
 
     if debug is True:
         print(str(datetime.datetime.now()) + 'Getting output header')
+        
     header = FlareStats(time, flux_gap, error, flux_model,
                         ReturnHeader=True)
-    header = header + ', ED68i, ED90i '
-    outstring = outstring + '# ' + header + '\n'
-
+    header = header + ['ED68i','ED90i']
+    dfout = pd.DataFrame()
+    
     if debug is True:
         print(str(datetime.datetime.now()) + 'Getting FlareStats')
+        
     # loop over EACH FLARE, compute stats
     for i in range(0,len(istart)):
         stats_i = FlareStats(time, flux_gap, error, flux_model,
                              istart=istart[i], istop=istop[i])
-
-        outstring = outstring + str(stats_i[0])
-        for k in range(1,len(stats_i)):
-            outstring = outstring + ', ' + str(stats_i[k])
-
-        outstring = outstring + ', ' + str(ed68[i]) + ', ' + str(ed90[i])
-        outstring = outstring + '\n'
-
-
-    fout = open(outfile + '.flare', 'w')
-    fout.write(outstring)
-    fout.close()
-
+        dfout = dfout.append(pd.DataFrame(dict(zip(header, [[item] for item in [*stats_i,ed68[i],ed90[i]]]))),
+                             ignore_index=True)
+        
+    h5store(outfile + '_flare.h5',dfout,**metadata)
     return
+
+#Use h5 for storing metadata and data such that it is easy to propagate, found here: https://stackoverflow.com/a/29130146
+#originally from Pandas Cookbook
+
+def h5store(filename, df, **kwargs):
+    store = pd.HDFStore(filename)
+    store.put('mydata', df)
+    store.get_storer('mydata').attrs.metadata = kwargs
+    store.close()
+    return
+
+#not needed yet but left here for reference and future use
+def h5load(store):
+    data = store['mydata']
+    metadata = store.get_storer('mydata').attrs.metadata
+    return data, metadata
 
 
 # let this file be called from the terminal directly. e.g.:
