@@ -111,7 +111,10 @@ def QtrFlat(time, flux, qtr, order=3):
             krnl = 10
 
         #flux_sm = rolling_median(np.array(flux[x], dtype='float'), krnl)
-        flux_sm = flux.iloc[x].rolling(krnl).median()
+        flu = flux.iloc[x]
+        flux_sm = flu.rolling(krnl).median()#,min_periods=1,center=False)
+        print(flux_sm)
+        #.median()
         indx = np.isfinite(flux_sm) # get rid of NaN's put in by rolling_median.
 
         fit = np.polyfit(time.iloc[x][indx], flux_sm[indx], order)

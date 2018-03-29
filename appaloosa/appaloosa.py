@@ -21,6 +21,7 @@ from scipy.signal import wiener
 from scipy import signal
 from astropy.io import fits
 import matplotlib
+import glob
 matplotlib.rcParams.update({'font.size':18})
 matplotlib.rcParams.update({'font.family':'serif'})
 from scipy.signal import savgol_filter
@@ -932,11 +933,18 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         #         os.makedirs(outdir)
         #     except OSError:
         #         pass
+        if glob.glob(outfile)==[]:
+            dfout = pd.DataFrame()
+            header = ['min_time','max_time','std_dev','nfake',
+                       'min_amplitude','max_amplitude',
+                       'min_duration','max_duration',
+                       'ed68_i','ed90_i',
+                       'ed_bin_center','rec_bin','frac_rec_sm']
+            metadata = dict()
+        else:
+            dfout, metadata = h5load(pd.HDFStore(outfile)) 
+            
 
-        rl = np.isfinite(rec_bin)
-        w_in = rec_bin[rl]
-
-        frac_rec_sm = wiener(w_in, 3)
 
         # print('>')
         # print('rl ', len(rl), rl)
@@ -945,6 +953,9 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         # print('frac_rec_sm', len(frac_rec_sm), frac_rec_sm)
 
         # use this completeness curve to estimate 68% complete
+        rl = np.isfinite(rec_bin)
+        w_in = rec_bin[rl]
+        frac_rec_sm = wiener(w_in, 3)
         x68 = np.where((frac_rec_sm >= 0.68))
         if len(x68[0])>0:
             ed68_i = min(ed_bin_center[rl][x68])
@@ -957,24 +968,26 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         else:
             ed90_i = -99
 
-        outstring = str(min(time)) + ', ' + str(max(time)) + ', ' + str(std) + \
-                    ', ' + str(nfake) + ', ' + str(ampl[0]) + ', ' + str(ampl[1]) + \
-                    ', ' + str(dur[0]) + ', ' + str(dur[1]) + \
-                    ', ' + str(ed68_i) + ', ' + str(ed90_i) + '\n'
-
-        # print(len(ed_bin_center), len(rec_bin), len(frac_rec_sm), len(rl))
+        outrow = [min(time), max(time), std, nfake, ampl[0], 
+                  ampl[1], dur[0], dur[1], ed68_i, ed90_i, 
+                  np.nan, np.nan, np.nan,]
+        
         if verboseout is True:
             for i in range(len(w_in)-1):
                 outstring = outstring + \
                             str(ed_bin_center[rl][i]) + ', ' + \
                             str(rec_bin[rl][i]) + ', ' + \
                             str(frac_rec_sm[i]) + '\n'
-
+                outrow[-3:] = [ed_bin_center[rl][i],rec_bin[rl][i],frac_rec_sm[i]]
+                dfout = dfout.append(pd.DataFrame(dict(zip(header,outrow))),ignore_index=True)
+        else:
+            dfout = dfout.append(pd.DataFrame(dict(zip(header,outrow))),ignore_index=True)
+            
         # use mode "a+", append or create
-        ff = open(outfile, 'a+')
-        ff.write(outstring)
-        ff.close()
-
+        #ff = open(outfile, 'a+')
+        #ff.write(outstring)
+        #ff.close()
+        h5store(outfile,dfout,**metadata)
     # if display is True:
     #     plt.figure()
     #     plt.plot(ed_bin_center, rec_bin)
@@ -1133,7 +1146,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 
     ### Basic flattening
     # flatten quarters with polymonial
-    flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
+    flux_qtr = detrend.QtrFlat(pd.Series(time), pd.Series(flux_raw), qtr)
 
     # then flatten between gaps
     flux_gap = detrend.GapFlat(time, flux_qtr, maxgap=maxgap)
@@ -1179,7 +1192,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
                                            error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
                                            t_tmp1, t_tmp2,
                                            savefile=True, verboseout=verbosefake, gapwindow=gapwindow,
-                                           outfile=outfile + '.fake', display=display,
+                                           outfile=outfile + '_fake.csv', display=display,
                                            nfake=nfake, debug=debug)
 
             rl = np.isfinite(frac_rec)
@@ -1345,7 +1358,6 @@ def h5store(filename, df, **kwargs):
     store.close()
     return
 
-#not needed yet but left here for reference and future use
 def h5load(store):
     data = store['mydata']
     metadata = store.get_storer('mydata').attrs.metadata
@@ -1357,6 +1369,6 @@ def h5load(store):
 if __name__ == "__main__":
     import sys
     #RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
-    #file = '/home/ekaterina/Documents/appaloosa/stars_shortlist/M44/hlsp_everest_k2_llc_211943618-c05_kepler_v2.0_lc.fits'
-    file = '/home/ekaterina/Documents/vanderburg/hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt'
-    RunLC(file=file, dbmode='vdb', display=True, debug=False, nfake=10)
+    file = '/home/ekaterina/Documents/appaloosa/stars_shortlist/M44/hlsp_everest_k2_llc_211943618-c05_kepler_v2.0_lc.fits'
+    #file = '/home/ekaterina/Documents/vanderburg/hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt'
+    RunLC(file=file, dbmode='everest', display=True, debug=False, nfake=10)
