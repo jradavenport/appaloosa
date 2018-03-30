@@ -100,27 +100,24 @@ def QtrFlat(time, flux, qtr, order=3):
 
     tot_med = np.nanmedian(flux) # the total from all quarters
 
-    flux_flat = np.ones_like(flux) * tot_med
+    df = pd.DataFrame({'flux':flux,'time':time,'flux_flat':np.ones_like(flux) * tot_med})
+    flux_flat = pd.Series(df.flux_flat)
 
     for q in uQtr:
         # find all epochs within each Qtr, but careful w/ floats
-        x = np.where( (np.abs(qtr-q) < 0.1) )
+        df = df[np.abs(qtr-q) < 0.1]
 
-        krnl = int(float(len(x[0])) / 100.0)
+        krnl = int(float(df.shape[0]) / 100.0)
         if (krnl < 10):
             krnl = 10
+ 
+        df['flux_sm'] = df.flux.rolling(krnl,center=False).median()
+        df = df.dropna(how='any')
 
-        #flux_sm = rolling_median(np.array(flux[x], dtype='float'), krnl)
-        flu = flux.iloc[x]
-        flux_sm = flu.rolling(krnl).median()#,min_periods=1,center=False)
-        print(flux_sm)
-        #.median()
-        indx = np.isfinite(flux_sm) # get rid of NaN's put in by rolling_median.
+        fit = np.polyfit(df.time, df.flux_sm, order)
 
-        fit = np.polyfit(time.iloc[x][indx], flux_sm[indx], order)
-
-        flux_flat[x] = flux.iloc[x] - np.polyval(fit, time.iloc[x]) + tot_med
-
+        flux_flat[df.index.values] = df.flux - np.polyval(fit, df.time) + tot_med
+        #df.flux_flat =  df.flux - np.polyval(fit, df.time) + tot_med
     return flux_flat
 
 
@@ -343,13 +340,17 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     # indx_out = []
 
     # the data within each gap range
-    flux = pd.Series(flux)
+    
+    #This is annoying: https://pandas.pydata.org/pandas-docs/stable/gotchas.html#byte-ordering-issues
+    flux = flux.byteswap().newbyteorder()
+    
+    flux_i = pd.DataFrame({'flux':flux,'error_i':error,'time_i':time})
     time_i = np.array(time)
-    flux_i = np.array(flux)
+    #flux_i = pd.Series(flux)
     error_i = error
     indx_i = np.arange(len(time)) # for tracking final indx used
     exptime = np.nanmedian(time_i[1:]-time_i[:-1])
-    print(exptime)
+
     nptsmooth = int(kernel/24.0 / exptime)
 
     if (nptsmooth < 4):
@@ -361,31 +362,36 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     # now take N passes of rejection on it
     for k in range(0, numpass):
         # rolling median in this data span with the kernel size
-        flux_i_sm = flux.rolling(nptsmooth, center=True).median()
-        indx = np.isfinite(flux_i_sm)
-
-        if (sum(indx) > 1):
-            diff_k = (flux_i[indx] - flux_i_sm[indx])
-            lims = np.nanpercentile(diff_k, (pcentclip, 100-pcentclip))
+        flux_i['flux_i_sm'] = flux_i.flux.rolling(nptsmooth, center=True).median()
+        #indx = np.isfinite(flux_i_sm)
+        flux_i = flux_i.dropna(how='any')
+        
+        if (flux_i.shape[0] > 1):
+            #diff_k = (flux_i[indx] - flux_i_sm[indx])
+            flux_i['diff_k'] = flux_i.flux-flux_i.flux_i_sm
+            lims = np.nanpercentile(flux_i.diff_k, (pcentclip, 100-pcentclip))
 
             # iteratively reject points
             # keep points within sigclip (for phot errors), or
             # within percentile clip (for scatter)
-            ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
-                               (lims[0] < diff_k) * (diff_k < lims[1]))
-
+            #ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
+                              # (lims[0] < diff_k) * (diff_k < lims[1]))
+            ok = np.logical_or((np.abs(flux_i.diff_k / flux_i.error_i) < sigclip),
+                               (lims[0] < flux_i.diff_k) * (flux_i.diff_k < lims[1]))
             if debug is True:
                 print('k = '+str(k))
                 print('number of accepted points: '+str(len(ok[0])))
+    
+            #time_i = time_i[indx][ok]
+            #flux_i = flux_i[indx][ok]
+            #error_i = error_i[indx][ok]
+            #indx_i = indx_i[indx][ok]
+            flux_i = flux_i[ok]
 
-            time_i = time_i[indx][ok]
-            flux_i = flux_i[indx][ok]
-            error_i = error_i[indx][ok]
-            indx_i = indx_i[indx][ok]
 
-    flux_sm = np.interp(time, time_i, flux_i)
+    flux_sm = np.interp(time, flux_i.time_i, flux_i.flux)
 
-    indx_out = indx_i
+    indx_out = flux_i.index.values
 
     if returnindx is False:
         return flux_sm
@@ -417,7 +423,7 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
 
     if debug is True:
         print('IRLSSpline: knots: ', np.shape(knots))
-        print('IRLSSpline: time: ', np.shape(time), np.nanmin(time), time[0], np.nanmax(time), time[-1])
+        print('IRLSSpline: time: ', np.shape(time), np.nanmin(time), time.iloc[0], np.nanmax(time), time.iloc[-1])
         print('IRLSSpline: <weight> = ', np.mean(weight))
         print(np.where((time[1:] - time[:-1] < 0))[0])
         print(flux)
@@ -428,7 +434,7 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
         # plt.show()
 
     for k in range(numpass):
-        spl = LSQUnivariateSpline(time, flux, knots, k=order, check_finite=True, w=weight)
+        spl = LSQUnivariateSpline(np.array(time), np.array(flux), knots, k=order, check_finite=True, w=weight)
         # spl = UnivariateSpline(time, flux, w=weight, k=order, s=1)
 
         chisq = ((flux - spl(time))**2.) / (error**2.0)

@@ -182,21 +182,26 @@ def GetLCk2(file):
     -------
     qtr, time, sap_quality, exptime, flux_raw, error
     '''
-
-    time, flux_raw, error, sap_quality = np.loadtxt(file, unpack=True, usecols=(0,7,8,9), skiprows=1)
-
-    isrl = np.isfinite(flux_raw)
-
-    qtr = np.zeros_like(time[isrl])
-
-    dt = np.nanmedian(time[1:] - time[0:-1])
+    hdu = fits.open(file)
+    data_rec = hdu[1].data
+    lc = pd.DataFrame({'time':data_rec['TIME'].byteswap().newbyteorder(),
+                      'flux_raw':data_rec['SAP_FLUX'].byteswap().newbyteorder(),
+                      'error':data_rec['SAP_FLUX_ERR'].byteswap().newbyteorder(),
+                      'sap_quality':data_rec['SAP_QUALITY'].byteswap().newbyteorder()})
+    #time, flux_raw, error, sap_quality = np.loadtxt(file, unpack=True, usecols=(0,7,8,9), skiprows=1)
+    #lc = pd.read_csv(file,usecols=(0,7,8,9),names=['time','flux_raw','error','sap_quality'])
+    #isrl = np.isfinite(flux_raw)
+    lc = lc.dropna(how='any')
+    #qtr = np.zeros_like(time[isrl])
+    lc['qtr'] = 0
+    dt = np.nanmedian(lc.time[1:] - lc.time[0:-1])
     if (dt < 0.01):
         dtime = 54.2 / 60. / 60. / 24.
     else:
         dtime = 30 * 54.2 / 60. / 60. / 24.
-    exptime = np.ones_like(time[isrl]) * dtime
+    lc['exptime'] = dtime
 
-    return qtr, time[isrl], sap_quality[isrl], exptime, flux_raw[isrl], error[isrl]
+    return lc.qtr, lc.time, lc.sap_quality,lc.exptime, lc.flux_raw, lc.error
 
 
 def GetLCvdb(file, win_size=3):
@@ -227,7 +232,7 @@ def GetLCvdb(file, win_size=3):
     exptime = np.ones_like(lc.time[lc.isrl]) * dtime
 
     error = np.ones_like(lc.time[lc.isrl]) * np.nanmedian(pd.Series(lc.flux_raw[lc.isrl]).rolling(win_size, center=True).std())
-
+    
     return qtr, lc.time[lc.isrl], qual, exptime, lc.flux_raw[lc.isrl], error
 
 
@@ -259,7 +264,7 @@ def GetLCeverest(file, win_size=3):
 
     error = np.ones_like(time[isrl]) * np.nanmedian(pd.Series(flux_raw[isrl]).rolling(win_size, center=True).std())
 
-    return qtr, time[isrl], qual[isrl], exptime, flux_raw[isrl], error
+    return qtr.byteswap().newbyteorder(), time[isrl].byteswap().newbyteorder(), qual[isrl].byteswap().newbyteorder(), exptime.byteswap().newbyteorder(), flux_raw[isrl].byteswap().newbyteorder(), error.byteswap().newbyteorder()
 
 
 def GetLCtxt(file, skiprows=1):
@@ -290,8 +295,9 @@ def GetLCtxt(file, skiprows=1):
     else:
         dtime = 30 * 54.2 / 60. / 60. / 24.
     exptime = np.ones_like(time[isrl]) * dtime
-
-    return qtr, time[isrl], sap_quality, exptime, flux_raw[isrl], error[isrl]
+    #This is annoying: https://pandas.pydata.org/pandas-docs/stable/gotchas.html#byte-ordering-issues
+        
+    return qtr, time[isrl], sap_quality, exptime, flux_raw[isrl].byteswap().newbyteorder(), error[isrl]
 
 
 def OneCadence(data):
@@ -575,25 +581,25 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
 
     # print(istart, istop) # % ;
 
-    tstart = time[istart]
-    tstop = time[istop]
+    tstart = time.iloc[istart]
+    tstop = time.iloc[istop]
     dur0 = tstop - tstart
 
     # define continuum regions around the flare, same duration as
     # the flare, but spaced by half a duration on either side
     if (c1[0]==-1):
-        t0 = time[istart] - dur0
-        t1 = time[istart] - dur0/2.
+        t0 = time.iloc[istart] - dur0
+        t1 = time.iloc[istart] - dur0/2.
         c1 = np.where((time >= t0) & (time <= t1))
     if (c2[0]==-1):
-        t0 = time[istop] + dur0/2.
-        t1 = time[istop] + dur0
+        t0 = time.iloc[istop] + dur0/2.
+        t1 = time.iloc[istop] + dur0
         c2 = np.where((time >= t0) & (time <= t1))
 
     flareflux = flux[istart:istop+1]
-    flaretime = time[istart:istop+1]
+    flaretime = time.iloc[istart:istop+1]
     modelflux = model[istart:istop+1]
-    flareerror = error[istart:istop+1]
+    flareerror = error.iloc[istart:istop+1]
 
     contindx = np.concatenate((c1[0], c2[0]))
     if (len(contindx) == 0):
@@ -601,7 +607,7 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
         contindx = np.array([istart, istop])
         cpoly = 1
     contflux = flux[contindx] # flux IN cont. regions
-    conttime = time[contindx]
+    conttime = time.iloc[contindx]
     contfit = np.polyfit(conttime, contflux, cpoly)
     contline = np.polyval(contfit, flaretime) # poly fit to cont. regions
 
@@ -609,14 +615,14 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
 
     # measure flare amplitude
     ampl = np.max(flareflux-contline) / medflux
-    tpeak = flaretime[np.argmax(flareflux-contline)]
+    tpeak = flaretime.iloc[np.argmax(flareflux-contline)]
 
     p05 = np.where((flareflux-contline <= ampl*0.5))
     if len(p05[0]) == 0:
         fwhm = dur0 * 0.25
         # print('> warning') # % ;
     else:
-        fwhm = np.max(flaretime[p05]) - np.min(flaretime[p05])
+        fwhm = np.max(flaretime.iloc[p05]) - np.min(flaretime.iloc[p05])
 
     # fit flare with single aflare model
     pguess = (tpeak, fwhm, ampl)
@@ -624,7 +630,7 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     # print(len(flaretime)) # % ;
 
     try:
-        popt1, pcov = curve_fit(aflare1, flaretime, (flareflux-contline) / medflux, p0=pguess)
+        popt1, pcov = curve_fit(aflare1, np.array(flaretime), (flareflux-contline) / medflux, p0=pguess)
     except ValueError:
         # tried to fit bad data, so just fill in with NaN's
         # shouldn't happen often
@@ -648,7 +654,7 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     # rel_error = error / np.median(flux_model)
 
     # measure flare ED
-    ed = EquivDur(flaretime, (flareflux-contline)/medflux)
+    ed = EquivDur(np.array(flaretime), (flareflux-contline)/medflux)
 
     # output a dict or array?
     params = np.array((tstart, tstop, tpeak, ampl, fwhm, dur0,
@@ -757,9 +763,9 @@ def MultiFind(time, flux, error, flags, mode=3,
                               per2=False, debug=debug)
         # sin1 = detrend.FitMedSin(time, box1, error)
         box3 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.3)
-
-        dt = np.nanmedian(time[1:] - time[0:-1])
-
+        t = np.array(time)
+        dt = np.nanmedian(t[1:] - t[0:-1])
+        print(dt)
         exptime_m = (np.nanmax(time) - np.nanmin(time)) / len(time)
         # ksep used to = 0.07...
         flux_model = detrend.IRLSSpline(time, box3, error, numpass=20, debug=debug, ksep=exptime_m*10.) + sin1
@@ -787,8 +793,8 @@ def MultiFind(time, flux, error, flags, mode=3,
     # now pick out final flare candidate points from above
     cand1 = np.where((bad < 1) & (isflare > 0))[0]
 
-    x1 = np.where((np.abs(time[cand1]-time[-1]) < gapwindow))
-    x2 = np.where((np.abs(time[cand1]-time[0]) < gapwindow))
+    x1 = np.where((np.abs(time.iloc[cand1]-time.iloc[-1]) < gapwindow))
+    x2 = np.where((np.abs(time.iloc[cand1]-time.iloc[0]) < gapwindow))
     cand1 = np.delete(cand1, x1)
     cand1 = np.delete(cand1, x2)
 
@@ -881,7 +887,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         t0_fake[k] = t0
 
         # generate the fake flare
-        fl_flux = aflare1(time, t0, dur_fake[k], ampl_fake[k])
+        fl_flux = aflare1(np.array(time), t0, dur_fake[k], ampl_fake[k])
 
         # in_fl = np.where((time >= t0-dur_fake[k]) & (time <= t0 + 3.0*dur_fake[k]))
 
@@ -933,13 +939,15 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         #         os.makedirs(outdir)
         #     except OSError:
         #         pass
+        
+        header = ['min_time','max_time','std_dev','nfake',
+                  'min_amplitude','max_amplitude',
+                  'min_duration','max_duration',
+                  'ed68_i','ed90_i',
+                  'ed_bin_center','rec_bin','frac_rec_sm']
+
         if glob.glob(outfile)==[]:
             dfout = pd.DataFrame()
-            header = ['min_time','max_time','std_dev','nfake',
-                       'min_amplitude','max_amplitude',
-                       'min_duration','max_duration',
-                       'ed68_i','ed90_i',
-                       'ed_bin_center','rec_bin','frac_rec_sm']
             metadata = dict()
         else:
             dfout, metadata = h5load(pd.HDFStore(outfile)) 
@@ -968,9 +976,9 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         else:
             ed90_i = -99
 
-        outrow = [min(time), max(time), std, nfake, ampl[0], 
+        outrow = [[item] for item in [min(time), max(time), std, nfake, ampl[0], 
                   ampl[1], dur[0], dur[1], ed68_i, ed90_i, 
-                  np.nan, np.nan, np.nan,]
+                  np.nan, np.nan, np.nan,]]
         
         if verboseout is True:
             for i in range(len(w_in)-1):
@@ -1146,7 +1154,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 
     ### Basic flattening
     # flatten quarters with polymonial
-    flux_qtr = detrend.QtrFlat(pd.Series(time), pd.Series(flux_raw), qtr)
+    flux_qtr = detrend.QtrFlat(time, flux_raw, qtr)
 
     # then flatten between gaps
     flux_gap = detrend.GapFlat(time, flux_qtr, maxgap=maxgap)
@@ -1192,7 +1200,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
                                            error[dl[i]:dr[i]]/medflux, lcflag[dl[i]:dr[i]],
                                            t_tmp1, t_tmp2,
                                            savefile=True, verboseout=verbosefake, gapwindow=gapwindow,
-                                           outfile=outfile + '_fake.csv', display=display,
+                                           outfile=outfile + '_fake.h5', display=display,
                                            nfake=nfake, debug=debug)
 
             rl = np.isfinite(frac_rec)
@@ -1371,4 +1379,10 @@ if __name__ == "__main__":
     #RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
     file = '/home/ekaterina/Documents/appaloosa/stars_shortlist/M44/hlsp_everest_k2_llc_211943618-c05_kepler_v2.0_lc.fits'
     #file = '/home/ekaterina/Documents/vanderburg/hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt'
-    RunLC(file=file, dbmode='everest', display=True, debug=False, nfake=10)
+    file = '/home/ekaterina/Documents/appaloosa/misc/testdata/ktwo210422945-c04_llc.fits'
+    #RunLC(file=file, dbmode='everest', display=True, debug=True, nfake=100)
+    #RunLC(file=file, dbmode='vdb', display=True, debug=True, nfake=100)
+    
+    
+    file = '/home/ekaterina/Documents/appaloosa/misc/testdata/ktwo210422945-c04_llc.fits'
+    RunLC(file=file, dbmode='k2', display=True, debug=True, nfake=100)
