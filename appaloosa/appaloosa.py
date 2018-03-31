@@ -133,6 +133,12 @@ def GetLCdb(objectid, type='', readfile=False,
 
     return data
 
+def Get(file, mode):
+    modes = {'fits': GetLCfits,
+             'vdb': GetLCvdb,
+             'everest': GetLCeverest,
+             'txt': GetLCtxt,
+             'csv': LCvdb}
 
 def GetLCfits(file):
     '''
@@ -148,60 +154,21 @@ def GetLCfits(file):
 
     hdu = fits.open(file)
     data_rec = hdu[1].data
-
-    time = data_rec['TIME']
-    flux_raw = data_rec['SAP_FLUX']
-    error = data_rec['SAP_FLUX_ERR']
-    sap_quality = data_rec['SAP_QUALITY']
-
-    isrl = np.isfinite(flux_raw)
-
-    qtr = np.zeros_like(time[isrl])
-
-    dt = np.nanmedian(time[1:] - time[0:-1])
-    if (dt < 0.01):
-        dtime = 54.2 / 60. / 60. / 24.
-    else:
-        dtime = 30 * 54.2 / 60. / 60. / 24.
-    exptime = np.ones_like(time[isrl]) * dtime
-
-    return qtr, time[isrl], sap_quality[isrl], exptime, flux_raw[isrl], error[isrl]
-
-
-def GetLCk2(file):
-    '''
-    Read K2 data in.
-
-    Currently supporting the ascii-dumps of MAST .fits files
-
-    Parameters
-    ----------
-    file : str
-
-    Returns
-    -------
-    qtr, time, sap_quality, exptime, flux_raw, error
-    '''
-    hdu = fits.open(file)
-    data_rec = hdu[1].data
     lc = pd.DataFrame({'time':data_rec['TIME'].byteswap().newbyteorder(),
                       'flux_raw':data_rec['SAP_FLUX'].byteswap().newbyteorder(),
                       'error':data_rec['SAP_FLUX_ERR'].byteswap().newbyteorder(),
-                      'sap_quality':data_rec['SAP_QUALITY'].byteswap().newbyteorder()})
-    #time, flux_raw, error, sap_quality = np.loadtxt(file, unpack=True, usecols=(0,7,8,9), skiprows=1)
-    #lc = pd.read_csv(file,usecols=(0,7,8,9),names=['time','flux_raw','error','sap_quality'])
-    #isrl = np.isfinite(flux_raw)
+                      'quality':data_rec['SAP_QUALITY'].byteswap().newbyteorder()})
     lc = lc.dropna(how='any')
-    #qtr = np.zeros_like(time[isrl])
     lc['qtr'] = 0
-    dt = np.nanmedian(lc.time[1:] - lc.time[0:-1])
+    t = lc.time.values
+    dt = np.nanmedian(t[1:] - t[0:-1])
     if (dt < 0.01):
         dtime = 54.2 / 60. / 60. / 24.
     else:
         dtime = 30 * 54.2 / 60. / 60. / 24.
     lc['exptime'] = dtime
 
-    return lc.qtr, lc.time, lc.sap_quality,lc.exptime, lc.flux_raw, lc.error
+    return lc
 
 
 def GetLCvdb(file, win_size=3):
@@ -216,55 +183,54 @@ def GetLCvdb(file, win_size=3):
               columns={'BJD - 2454833': 'time',' Corrected Flux':'flux_raw'},
               inplace=True,
               )
-    print(lc.head())
-    #time, flux_raw = np.loadtxt(file, unpack=True, usecols=(0,1), skiprows=1, delimiter=',', comments=('#','*'))
-    lc['isrl'] = np.isfinite(lc.flux_raw)
+    lc.dropna(how='any')
+    lc['qtr'] = 0
+    lc['quality'] = 0
     
-    #isrl = np.isfinite(flux_raw)
-    qtr = np.zeros_like(lc.time[lc.isrl])
-    qual = np.zeros_like(lc.time[lc.isrl])
-
+    t = lc.time.values
     dt = np.nanmedian(lc.time[1:] - lc.time[0:-1])
     if (dt < 0.01):
         dtime = 54.2 / 60. / 60. / 24.
     else:
         dtime = 30 * 54.2 / 60. / 60. / 24.
-    exptime = np.ones_like(lc.time[lc.isrl]) * dtime
-
-    error = np.ones_like(lc.time[lc.isrl]) * np.nanmedian(pd.Series(lc.flux_raw[lc.isrl]).rolling(win_size, center=True).std())
     
-    return qtr, lc.time[lc.isrl], qual, exptime, lc.flux_raw[lc.isrl], error
+    lc['exptime'] = dtime
+    lc['error'] = np.nanmedian(lc.flux_raw.rolling(win_size, center=True).std())
+    
+    return lc
 
 
 def GetLCeverest(file, win_size=3):
+    
     '''
     Ingest K2 light curve from the Everest .fits file
 
     also generates errors via median short term scatter
     '''
-
+    
     hdu = fits.open(file)
     data_rec = hdu[1].data
-
-    time = np.array(data_rec['TIME'])
-    flux_raw = np.array(data_rec['FLUX'])
-    isrl = np.isfinite(flux_raw)
-
-    qtr = np.zeros_like(time[isrl])
-
-    dt = np.nanmedian(time[1:] - time[0:-1])
+    lc = pd.DataFrame({'time':np.array(data_rec['TIME']).byteswap().newbyteorder(),
+                      'flux_raw':np.array(data_rec['FLUX']).byteswap().newbyteorder(),})
+    lc = lc.dropna(how='any')
+    
+    lc['qtr'] = 0
+    
+    #keep the outliers... for now
+    #lc['quality'] = data_rec['OUTLIER'].byteswap().newbyteorder()
+    lc['quality'] = 0
+    
+    t = np.array(lc.time)
+    dt = np.nanmedian(t[1:] - t[0:-1])
     if (dt < 0.01):
         dtime = 54.2 / 60. / 60. / 24.
     else:
         dtime = 30 * 54.2 / 60. / 60. / 24.
-    exptime = np.ones_like(time[isrl]) * dtime
-
-    # qual = data_rec['OUTLIER']
-    qual = np.zeros_like(flux_raw) # keep the outliers... for now
-
-    error = np.ones_like(time[isrl]) * np.nanmedian(pd.Series(flux_raw[isrl]).rolling(win_size, center=True).std())
-
-    return qtr.byteswap().newbyteorder(), time[isrl].byteswap().newbyteorder(), qual[isrl].byteswap().newbyteorder(), exptime.byteswap().newbyteorder(), flux_raw[isrl].byteswap().newbyteorder(), error.byteswap().newbyteorder()
+    lc['exptime'] = dtime
+    
+    lc['error'] = np.nanmedian(lc.flux_raw.rolling(win_size, center=True).std())
+    
+    return lc
 
 
 def GetLCtxt(file, skiprows=1):
@@ -283,21 +249,24 @@ def GetLCtxt(file, skiprows=1):
     -------
 
     '''
-
-    time, flux_raw, error = np.loadtxt(file, unpack=True, usecols=(0,1,2), skiprows=skiprows)
-    isrl = np.isfinite(flux_raw)
-    qtr = np.zeros_like(time[isrl])
-    sap_quality = np.zeros_like(time[isrl])
-
+    lc = pd.read_csv(file,
+                     index_col=False,
+                     usecols=(0,1,2),
+                     skiprows=1
+                     header = None,
+                     names = ['time','flux','error'])
+    lc.dropna(how='any')
+    lc['qtr'] = 0
+    lc['quality'] = 0
+    t=lc.time.values
     dt = np.nanmedian(time[1:] - time[0:-1])
     if (dt < 0.01):
         dtime = 54.2 / 60. / 60. / 24.
     else:
         dtime = 30 * 54.2 / 60. / 60. / 24.
-    exptime = np.ones_like(time[isrl]) * dtime
-    #This is annoying: https://pandas.pydata.org/pandas-docs/stable/gotchas.html#byte-ordering-issues
+    lc['exptime'] = dtime
         
-    return qtr, time[isrl], sap_quality, exptime, flux_raw[isrl].byteswap().newbyteorder(), error[isrl]
+    return lc
 
 
 def OneCadence(data):
@@ -793,8 +762,8 @@ def MultiFind(time, flux, error, flags, mode=3,
     # now pick out final flare candidate points from above
     cand1 = np.where((bad < 1) & (isflare > 0))[0]
 
-    x1 = np.where((np.abs(time.iloc[cand1]-time.iloc[-1]) < gapwindow))
-    x2 = np.where((np.abs(time.iloc[cand1]-time.iloc[0]) < gapwindow))
+    x1 = np.where((np.abs(time[cand1]-time[-1]) < gapwindow))
+    x2 = np.where((np.abs(time[cand1]-time[0]) < gapwindow))
     cand1 = np.delete(cand1, x1)
     cand1 = np.delete(cand1, x2)
 
@@ -868,8 +837,11 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
     s2n_fake = np.zeros(nfake, dtype='float')
     ed_fake = np.zeros(nfake, dtype='float')
 
-    new_flux = np.array(flux, copy=True)
-
+    new_flux = np.array(flux)#, copy=True)
+    time = np.array(time)
+    error = np.array(error) 
+    flags = np.array(flags)
+    
     for k in range(nfake):
         # generate random peak time, avoid known flares
         isok = False
@@ -887,7 +859,7 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
         t0_fake[k] = t0
 
         # generate the fake flare
-        fl_flux = aflare1(np.array(time), t0, dur_fake[k], ampl_fake[k])
+        fl_flux = aflare1(time, t0, dur_fake[k], ampl_fake[k])
 
         # in_fl = np.where((time >= t0-dur_fake[k]) & (time <= t0 + 3.0*dur_fake[k]))
 
@@ -1069,8 +1041,8 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     ######################
     elif dbmode is 'fits':
         objectid = str(int( file[file.find('kplr')+4:file.find('-')] ))
-        qtr, time, lcflag, exptime, flux_raw, error = GetLCfits(file)
-
+        lc = GetLCfits(file)
+        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
         # put flare output in to a set of subdirectories.
         # use first 3 digits to help keep directories to ~1k files
         fldr = objectid[0:3]
@@ -1087,16 +1059,17 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     ######################
     elif dbmode is 'k2':
         objectid = str(int( file[file.find('ktwo')+4:file.find('-')] ))
-        qtr, time, lcflag, exptime, flux_raw, error = GetLCk2(file)
-
+        lc = GetLCfits(file)
+        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
+        #qtr, time, lcflag, exptime, flux_raw, error = lc.qtr, lc.time, lc.sap_quality, lc.exptime, lc.flux_raw, lc.error
         # just put the output right along side the input. Not awesome, but works
         outfile = file
 
     ######################
     elif dbmode is 'vdb':
         objectid = str(int(file[file.find('lightcurve_')+11:file.find('-')]))
-        qtr, time, lcflag, exptime, flux_raw, error = GetLCvdb(file)
-
+        lc = GetLCvdb(file)
+        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
         # put the output in the local research dir
         fldr = objectid[0:3]
         home = expanduser("~")
@@ -1111,8 +1084,8 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     ######################
     elif dbmode is 'csv':
         objectid = '0000'
-        qtr, time, lcflag, exptime, flux_raw, error = GetLCvdb(file)
-
+        lc = GetLCvdb(file)
+        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
         # put the output in the local research dir
         fldr = objectid[0:3]
         home = expanduser("~")
@@ -1127,8 +1100,9 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     ######################
     elif dbmode is 'everest':
         objectid = str(int(file[file.find('everest')+15:file.find('-')]))
-        qtr, time, lcflag, exptime, flux_raw, error = GetLCeverest(file)
-
+        lc = GetLCeverest(file)
+        #qtr, time, lcflag, exptime, flux_raw, error = lc.qtr, lc.time, lc.quality, lc.exptime, lc.flux_raw, lc.error
+        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
         # put the output in the local research dir
         fldr = objectid[0:3]
         home = expanduser("~")
@@ -1143,9 +1117,9 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     ######################
     elif dbmode is 'txt':
         objectid = file[0:3]
-        qtr, time, lcflag, exptime, flux_raw, error = GetLCtxt(file)
-
-        # just put the output right along side the input. Not awesome, but works
+        lc = GetLCtxt(file)
+        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
+        # just put qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)the output right along side the input. Not awesome, but works
         outfile = file
 
 
@@ -1377,11 +1351,11 @@ def h5load(store):
 if __name__ == "__main__":
     import sys
     #RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
-    file = '/home/ekaterina/Documents/appaloosa/stars_shortlist/M44/hlsp_everest_k2_llc_211943618-c05_kepler_v2.0_lc.fits'
-    #file = '/home/ekaterina/Documents/vanderburg/hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt'
-    file = '/home/ekaterina/Documents/appaloosa/misc/testdata/ktwo210422945-c04_llc.fits'
+    #file = '/home/ekaterina/Documents/appaloosa/stars_shortlist/M44/hlsp_everest_k2_llc_211943618-c05_kepler_v2.0_lc.fits'
+    file = '/home/ekaterina/Documents/vanderburg/hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt'
+    #file = '/home/ekaterina/Documents/appaloosa/misc/testdata/ktwo210422945-c04_llc.fits'
     #RunLC(file=file, dbmode='everest', display=True, debug=True, nfake=100)
-    #RunLC(file=file, dbmode='vdb', display=True, debug=True, nfake=100)
+    RunLC(file=file, dbmode='vdb', display=True, debug=True, nfake=100)
     
     
     file = '/home/ekaterina/Documents/appaloosa/misc/testdata/ktwo210422945-c04_llc.fits'

@@ -342,7 +342,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     # the data within each gap range
     
     #This is annoying: https://pandas.pydata.org/pandas-docs/stable/gotchas.html#byte-ordering-issues
-    flux = flux.byteswap().newbyteorder()
+    #flux = flux.byteswap().newbyteorder()
     
     flux_i = pd.DataFrame({'flux':flux,'error_i':error,'time_i':time})
     time_i = np.array(time)
@@ -423,7 +423,7 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
 
     if debug is True:
         print('IRLSSpline: knots: ', np.shape(knots))
-        print('IRLSSpline: time: ', np.shape(time), np.nanmin(time), time.iloc[0], np.nanmax(time), time.iloc[-1])
+        print('IRLSSpline: time: ', np.shape(time), np.nanmin(time), time[0], np.nanmax(time), time[-1])
         print('IRLSSpline: <weight> = ', np.mean(weight))
         print(np.where((time[1:] - time[:-1] < 0))[0])
         print(flux)
@@ -434,7 +434,7 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
         # plt.show()
 
     for k in range(numpass):
-        spl = LSQUnivariateSpline(np.array(time), np.array(flux), knots, k=order, check_finite=True, w=weight)
+        spl = LSQUnivariateSpline(time, flux, knots, k=order, check_finite=True, w=weight)
         # spl = UnivariateSpline(time, flux, w=weight, k=order, s=1)
 
         chisq = ((flux - spl(time))**2.) / (error**2.0)
