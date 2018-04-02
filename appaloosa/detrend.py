@@ -72,15 +72,16 @@ def GapFlat(time, flux, order=3, maxgap=0.125):
         krnl = int(float(dl[i]-dr[i]) / 100.0)
         if (krnl < 10):
             krnl = 10
-        flux_sm = pd.Series(flux).iloc[dl[i]:dr[i]].rolling(krnl).median()
-
+        flux_sm = np.array(pd.Series(flux).iloc[dl[i]:dr[i]].rolling(krnl).median())
+            
         indx = np.isfinite(flux_sm)
+        print('TIME',time[dl[i]:dr[i]][indx].shape)
+        print('FLUXSM',flux_sm[indx].shape)
 
-        fit = np.polyfit(np.array(time)[dl[i]:dr[i]][indx], flux_sm[indx], order)
+        fit = np.polyfit(time[dl[i]:dr[i]][indx], flux_sm[indx], order)
+        print('Shapres',fit,time[dl[i]:dr[i]].shape)
+        flux_flat[dl[i]:dr[i]] = flux[dl[i]:dr[i]] - np.polyval(fit, time[dl[i]:dr[i]]) + tot_med
 
-        flux_flat[dl[i]:dr[i]] = flux[dl[i]:dr[i]] - \
-                                 np.polyval(fit, time[dl[i]:dr[i]]) + \
-                                 tot_med
     return flux_flat
 
 
@@ -100,25 +101,30 @@ def QtrFlat(time, flux, qtr, order=3):
 
     tot_med = np.nanmedian(flux) # the total from all quarters
 
-    df = pd.DataFrame({'flux':flux,'time':time,'flux_flat':np.ones_like(flux) * tot_med})
+    df = pd.DataFrame({'flux':flux,'time':time,'flux_flat':np.ones_like(flux) * tot_med,'qtr':qtr})
     flux_flat = pd.Series(df.flux_flat)
+
 
     for q in uQtr:
         # find all epochs within each Qtr, but careful w/ floats
-        df = df[np.abs(qtr-q) < 0.1]
+        df = df[np.abs(df.qtr-q) < 0.1]
 
         krnl = int(float(df.shape[0]) / 100.0)
         if (krnl < 10):
             krnl = 10
- 
+
         df['flux_sm'] = df.flux.rolling(krnl,center=False).median()
         df = df.dropna(how='any')
-
-        fit = np.polyfit(df.time, df.flux_sm, order)
-
-        flux_flat[df.index.values] = df.flux - np.polyval(fit, df.time) + tot_med
+    
+        fit = np.polyfit(np.array(df.time), np.array(df.flux_sm), order)
+        flux_flat.iloc[df.index.values] = df.flux - np.polyval(fit, df.time) + tot_med
         #df.flux_flat =  df.flux - np.polyval(fit, df.time) + tot_med
-    return flux_flat
+        #plt.plot(df.time,np.polyval(fit, df.time),label='fit here')
+        #plt.plot(df.time,df.flux,label='flux here')
+        #plt.plot(time,flux_flat,label='flux_flat here')
+        #plt.legend()
+        #plt.show()
+    return np.array(flux_flat)
 
 
 def FindGaps(time, maxgap=0.125, minspan=2.0):
@@ -148,7 +154,7 @@ def FindGaps(time, maxgap=0.125, minspan=2.0):
     # bad = np.where((time[right]-time[left] < minspan))[0]
     # for k in range(1,len(bad)-1):
         # for each bad span of data, figure out if it can be tacked on
-
+    print('DT is HERERE:', left,right)
     return gap_out, left, right
 
 
@@ -417,6 +423,7 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
     -------
 
     '''
+
     weight = 1. / (error**2.0)
 
     knots = np.arange(np.nanmin(time) + ksep, np.nanmax(time) - ksep, ksep)
@@ -426,7 +433,7 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
         print('IRLSSpline: time: ', np.shape(time), np.nanmin(time), time[0], np.nanmax(time), time[-1])
         print('IRLSSpline: <weight> = ', np.mean(weight))
         print(np.where((time[1:] - time[:-1] < 0))[0])
-        print(flux)
+        #print(flux)
 
         # plt.figure()
         # plt.errorbar(time, flux, error)
