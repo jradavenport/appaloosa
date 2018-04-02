@@ -133,7 +133,9 @@ def GetLCdb(objectid, type='', readfile=False,
 
     return data
 
-def Get(mode, file, win_size=3):
+
+
+def Get(mode, file, objectid, win_size=3):
     
     '''
     
@@ -154,16 +156,67 @@ def Get(mode, file, win_size=3):
     lc: light curve DataFrame
     
     '''
+    
+    def GetObjectID(mode):
+        if mode == 'fits':
+            return str(int( file[file.find('kplr')+4:file.find('-')]))
+        elif mode == 'ktwo':
+            return str(int( file[file.find('ktwo')+4:file.find('-')] ))
+        elif mode == 'vdb':
+            str(int(file[file.find('lightcurve_')+11:file.find('-')]))
+        elif mode == 'everest':
+            return str(int(file[file.find('everest')+15:file.find('-')]))
+        elif mode == 'txt':
+            return file[0:3]
+        elif mode == 'csv':
+            return '0000'
+        
+    def GetOutfile(mode,file):
+        
+        if mode == 'everest':
+            fldr = objectid[0:3]
+            home = expanduser("~")
+            outdir = home + '/research/k2_cluster_flares/aprun/' + fldr + '/'
+            if not os.path.isdir(outdir):
+                try:
+                    os.makedirs(outdir)
+                except OSError:
+                    pass
+            return outdir + file[file.find('everest')+15:]
+        
+        elif mode == 'fits':
+            fldr = objectid[0:3]
+            outdir = 'aprun/' + fldr + '/'
+            if not os.path.isdir(outdir):
+                try:
+                    os.makedirs(outdir)
+                except OSError:
+                    pass
+            return outdir + file[file.find('kplr'):]
+        
+        elif mode in ('vdb','csv'):
+            fldr = objectid[0:3]
+            home = expanduser("~")
+            outdir = home + '/research/k2_cluster_flares/aprun/' + fldr + '/'
+            if not os.path.isdir(outdir):
+                try:
+                    os.makedirs(outdir)
+                except OSError:
+                    pass
+            return outdir + file[file.find('lightcurve_')+11:]
+        
+        elif mode in ('txt','ktwo'):
+            return file
+
     modes = {'fits': GetLCfits,
-             'ktwo':GetLCfits,
-             'vdb': GetLCvdb,
-             'everest': GetLCeverest,
-             'txt': GetLCtxt,
+             'ktwo': GetLCfits, 
+             'vdb': GetLCvdb, 
+             'everest': GetLCeverest, 
+             'txt': GetLCtxt, 
              'csv': GetLCvdb}
     
-    get_func = modes[mode]
-    lc = get_func(file)
-    lc = lc.dropna(how='any')
+    lc = modes[mode](file).dropna(how='any')
+
     t = lc.time.values
     dt = np.nanmedian(t[1:] - t[0:-1])
     if (dt < 0.01):
@@ -180,7 +233,7 @@ def Get(mode, file, win_size=3):
     if 'error' not in lc.columns:
         lc['error'] = np.nanmedian(lc.flux_raw.rolling(win_size, center=True).std())
 
-    return lc
+    return GetOutfile(mode, file), GetObjectID(mode), np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
         
 def GetLCfits(file):
     
@@ -200,6 +253,8 @@ def GetLCfits(file):
                       'flux_raw':data_rec['SAP_FLUX'].byteswap().newbyteorder(),
                       'error':data_rec['SAP_FLUX_ERR'].byteswap().newbyteorder(),
                       'quality':data_rec['SAP_QUALITY'].byteswap().newbyteorder()})
+    
+
     return lc
 
 
@@ -1005,7 +1060,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         print(str(datetime.datetime.now()) + ' GetLC started')
         print(file, objectid)
 
-    #####################
+    #---------------------------------------------------
     if dbmode is 'mysql':
         data_raw = GetLCdb(objectid, readfile=readfile, type=lctype, onecadence=False)
         data = OneCadence(data_raw)
@@ -1040,91 +1095,10 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         # open the output file to store data on every flare recovered
         outfile = outdir + objectid
 
-
-    ######################
-    elif dbmode is 'fits':
-        objectid = str(int( file[file.find('kplr')+4:file.find('-')] ))
-        lc = Get(dbmode,file)
-        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
-        # put flare output in to a set of subdirectories.
-        # use first 3 digits to help keep directories to ~1k files
-        fldr = objectid[0:3]
-        outdir = 'aprun/' + fldr + '/'
-        if not os.path.isdir(outdir):
-            try:
-                os.makedirs(outdir)
-            except OSError:
-                pass
-
-        outfile = outdir + file[file.find('kplr'):]
-        # file.replace('data', 'results')
-
-    ######################
-    elif dbmode is 'ktwo':
-        objectid = str(int( file[file.find('ktwo')+4:file.find('-')] ))
-        lc = Get(dbmode,file)
-        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
-
-        # just put the output right along side the input. Not awesome, but works
-        outfile = file
-
-    ######################
-    elif dbmode is 'vdb':
-        objectid = str(int(file[file.find('lightcurve_')+11:file.find('-')]))
-        lc = Get(dbmode,file)
-        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
-        # put the output in the local research dir
-        fldr = objectid[0:3]
-        home = expanduser("~")
-        outdir = home + '/research/k2_cluster_flares/aprun/' + fldr + '/'
-        if not os.path.isdir(outdir):
-            try:
-                os.makedirs(outdir)
-            except OSError:
-                pass
-        outfile = outdir + file[file.find('lightcurve_')+11:]
-
-    ######################
-    elif dbmode is 'csv':
-        objectid = '0000'
-        lc = Get(dbmode,file)
-        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
-        # put the output in the local research dir
-        fldr = objectid[0:3]
-        home = expanduser("~")
-        outdir = home + '/research/k2_cluster_flares/aprun/'
-        if not os.path.isdir(outdir):
-            try:
-                os.makedirs(outdir)
-            except OSError:
-                pass
-        outfile = outdir + file[file.find('lightcurve_') + 11:]
-
-    ######################
-    elif dbmode is 'everest':
-        objectid = str(int(file[file.find('everest')+15:file.find('-')]))
-        lc = Get('everest',file)
-        #qtr, time, lcflag, exptime, flux_raw, error = lc.qtr, lc.time, lc.quality, lc.exptime, lc.flux_raw, lc.error
-        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
-        # put the output in the local research dir
-        fldr = objectid[0:3]
-        home = expanduser("~")
-        outdir = home + '/research/k2_cluster_flares/aprun/' + fldr + '/'
-        if not os.path.isdir(outdir):
-            try:
-                os.makedirs(outdir)
-            except OSError:
-                pass
-        outfile = outdir + file[file.find('everest')+15:]
-
-    ######################
-    elif dbmode is 'txt':
-        objectid = file[0:3]
-        lc = GetLCtxt(file)
-        qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)
-        # just put qtr, time, lcflag, exptime, flux_raw, error = np.array(lc.qtr), np.array(lc.time), np.array(lc.quality), np.array(lc.exptime), np.array(lc.flux_raw), np.array(lc.error)the output right along side the input. Not awesome, but works
-        outfile = file
-
+    elif dbmode in ('txt','ktwo','everest','vdb','csv','fits'):
+        outfile, objectid, qtr, time, lcflag, exptime, flux_raw, error = Get(dbmode,file, objectid)
+    
+    #-----------------------------------------------
 
     if debug is True:
         print('outfile = ' + outfile)
@@ -1354,11 +1328,11 @@ def h5load(store):
 if __name__ == "__main__":
     import sys
     #RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
-    file = '/home/ekaterina/Documents/appaloosa/stars_shortlist/M44/hlsp_everest_k2_llc_211943618-c05_kepler_v2.0_lc.fits'
-    RunLC(file=file, dbmode='everest', display=True, debug=True, nfake=20)
+    #file = '/home/ekaterina/Documents/appaloosa/stars_shortlist/M44/hlsp_everest_k2_llc_211943618-c05_kepler_v2.0_lc.fits'
+    #RunLC(file=file, dbmode='everest', display=True, debug=True, nfake=20)
     #file = '/home/ekaterina/Documents/vanderburg/hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt'
     #RunLC(file=file, dbmode='vdb', display=True, debug=True, nfake=20)
     
     
-    #file = '/home/ekaterina/Documents/appaloosa/misc/testdata/ktwo210422945-c04_llc.fits'
-    #RunLC(file=file, dbmode='ktwo', display=True, debug=True, nfake=20)
+    file = '/home/ekaterina/Documents/appaloosa/misc/testdata/ktwo210422945-c04_llc.fits'
+    RunLC(file=file, dbmode='ktwo', display=True, debug=True, nfake=20)
