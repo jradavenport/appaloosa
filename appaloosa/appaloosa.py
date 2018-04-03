@@ -975,22 +975,14 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
                   'min_amplitude','max_amplitude',
                   'min_duration','max_duration',
                   'ed68_i','ed90_i',
-                  'ed_bin_center','rec_bin','frac_rec_sm']
+                 ]
 
         if glob.glob(outfile)==[]:
             dfout = pd.DataFrame()
             metadata = dict()
         else:
-            dfout, metadata = h5load(pd.HDFStore(outfile)) 
-            
-
-
-        # print('>')
-        # print('rl ', len(rl), rl)
-        # print('rec_bin ', len(rec_bin), rec_bin)
-        # print('w_in', np.size(w_in), w_in)
-        # print('frac_rec_sm', len(frac_rec_sm), frac_rec_sm)
-
+            dfout, metadata = h5load(pd.HDFStore(outfile))
+        
         # use this completeness curve to estimate 68% complete
         rl = np.isfinite(rec_bin)
         w_in = rec_bin[rl]
@@ -1017,23 +1009,14 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
                             str(ed_bin_center[rl][i]) + ', ' + \
                             str(rec_bin[rl][i]) + ', ' + \
                             str(frac_rec_sm[i]) + '\n'
-                outrow[-3:] = [ed_bin_center[rl][i],rec_bin[rl][i],frac_rec_sm[i]]
+                header = header + ['ed_bin_center','rec_bin','frac_rec_sm']
+                outrow = outrow+[ed_bin_center[rl][i],rec_bin[rl][i],frac_rec_sm[i]]
                 dfout = dfout.append(pd.DataFrame(dict(zip(header,outrow))),ignore_index=True)
         else:
             dfout = dfout.append(pd.DataFrame(dict(zip(header,outrow))),ignore_index=True)
-            
-        # use mode "a+", append or create
-        #ff = open(outfile, 'a+')
-        #ff.write(outstring)
-        #ff.close()
+
         h5store(outfile,dfout,**metadata)
-    # if display is True:
-    #     plt.figure()
-    #     plt.plot(ed_bin_center, rec_bin)
-    #     plt.xlabel('ED bin center')
-    #     plt.ylabel('Fraction of recovered events')
-    #     plt.title('FakeFlares')
-    #     plt.show()
+
 
     return ed_bin_center, rec_bin
 
@@ -1118,7 +1101,6 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         print(dr)
 
     # uQtr = np.unique(qtr)
-    print('\n\nHERERES: \n\n', error)
     istart = np.array([], dtype='int')
     istop = np.array([], dtype='int')
     ed68 = []
@@ -1320,6 +1302,7 @@ def h5store(filename, df, **kwargs):
 def h5load(store):
     data = store['mydata']
     metadata = store.get_storer('mydata').attrs.metadata
+    store.close()
     return data, metadata
 
 
@@ -1327,12 +1310,5 @@ def h5load(store):
 # $python appaloosa.py 12345678
 if __name__ == "__main__":
     import sys
-    #RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
-    #file = '/home/ekaterina/Documents/appaloosa/stars_shortlist/M44/hlsp_everest_k2_llc_211943618-c05_kepler_v2.0_lc.fits'
-    #RunLC(file=file, dbmode='everest', display=True, debug=True, nfake=20)
-    #file = '/home/ekaterina/Documents/vanderburg/hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt'
-    #RunLC(file=file, dbmode='vdb', display=True, debug=True, nfake=20)
-    
-    
-    file = '/home/ekaterina/Documents/appaloosa/misc/testdata/ktwo210422945-c04_llc.fits'
-    RunLC(file=file, dbmode='ktwo', display=True, debug=True, nfake=20)
+    RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
+
