@@ -3,7 +3,8 @@ Use this file to keep various detrending methods
 
 '''
 import numpy as np
-from pandas import rolling_median #, rolling_mean, rolling_std, rolling_skew
+#from pandas import rolling_median #, rolling_mean, rolling_std, rolling_skew
+import pandas as pd
 from scipy.optimize import curve_fit
 from gatspy.periodic import LombScargleFast
 from gatspy.periodic import SuperSmoother
@@ -71,15 +72,11 @@ def GapFlat(time, flux, order=3, maxgap=0.125):
         krnl = int(float(dl[i]-dr[i]) / 100.0)
         if (krnl < 10):
             krnl = 10
-        flux_sm = rolling_median(flux[dl[i]:dr[i]], krnl)
-
+        flux_sm = np.array(pd.Series(flux).iloc[dl[i]:dr[i]].rolling(krnl).median())
         indx = np.isfinite(flux_sm)
-
         fit = np.polyfit(time[dl[i]:dr[i]][indx], flux_sm[indx], order)
+        flux_flat[dl[i]:dr[i]] = flux[dl[i]:dr[i]] - np.polyval(fit, time[dl[i]:dr[i]]) + tot_med
 
-        flux_flat[dl[i]:dr[i]] = flux[dl[i]:dr[i]] - \
-                                 np.polyval(fit, time[dl[i]:dr[i]]) + \
-                                 tot_med
     return flux_flat
 
 
@@ -99,25 +96,24 @@ def QtrFlat(time, flux, qtr, order=3):
 
     tot_med = np.nanmedian(flux) # the total from all quarters
 
-    flux_flat = np.ones_like(flux) * tot_med
+    df = pd.DataFrame({'flux':flux,'time':time,'flux_flat':np.ones_like(flux) * tot_med,'qtr':qtr})
+    flux_flat = pd.Series(df.flux_flat)
+
 
     for q in uQtr:
         # find all epochs within each Qtr, but careful w/ floats
-        x = np.where( (np.abs(qtr-q) < 0.1) )
-
-        krnl = int(float(len(x[0])) / 100.0)
+        df = df[np.abs(df.qtr-q) < 0.1]
+        krnl = int(float(df.shape[0]) / 100.0)
         if (krnl < 10):
             krnl = 10
 
-        flux_sm = rolling_median(np.array(flux[x], dtype='float'), krnl)
+        df['flux_sm'] = df.flux.rolling(krnl,center=False).median()
+        df = df.dropna(how='any')
+    
+        fit = np.polyfit(np.array(df.time), np.array(df.flux_sm), order)
+        flux_flat.iloc[df.index.values] = df.flux - np.polyval(fit, df.time) + tot_med
 
-        indx = np.isfinite(flux_sm) # get rid of NaN's put in by rolling_median.
-
-        fit = np.polyfit(time[x][indx], flux_sm[indx], order)
-
-        flux_flat[x] = flux[x] - np.polyval(fit, time[x]) + tot_med
-
-    return flux_flat
+    return np.array(flux_flat)
 
 
 def FindGaps(time, maxgap=0.125, minspan=2.0):
@@ -147,7 +143,6 @@ def FindGaps(time, maxgap=0.125, minspan=2.0):
     # bad = np.where((time[right]-time[left] < minspan))[0]
     # for k in range(1,len(bad)-1):
         # for each bad span of data, figure out if it can be tacked on
-
     return gap_out, left, right
 
 
@@ -339,12 +334,17 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     # indx_out = []
 
     # the data within each gap range
-    time_i = time
-    flux_i = flux
+    
+    #This is annoying: https://pandas.pydata.org/pandas-docs/stable/gotchas.html#byte-ordering-issues
+    #flux = flux.byteswap().newbyteorder()
+    
+    flux_i = pd.DataFrame({'flux':flux,'error_i':error,'time_i':time})
+    time_i = np.array(time)
+    #flux_i = pd.Series(flux)
     error_i = error
     indx_i = np.arange(len(time)) # for tracking final indx used
-
     exptime = np.nanmedian(time_i[1:]-time_i[:-1])
+
     nptsmooth = int(kernel/24.0 / exptime)
 
     if (nptsmooth < 4):
@@ -356,31 +356,36 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     # now take N passes of rejection on it
     for k in range(0, numpass):
         # rolling median in this data span with the kernel size
-        flux_i_sm = rolling_median(flux_i, nptsmooth, center=True)
-        indx = np.isfinite(flux_i_sm)
-
-        if (sum(indx) > 1):
-            diff_k = (flux_i[indx] - flux_i_sm[indx])
-            lims = np.nanpercentile(diff_k, (pcentclip, 100-pcentclip))
+        flux_i['flux_i_sm'] = flux_i.flux.rolling(nptsmooth, center=True).median()
+        #indx = np.isfinite(flux_i_sm)
+        flux_i = flux_i.dropna(how='any')
+        
+        if (flux_i.shape[0] > 1):
+            #diff_k = (flux_i[indx] - flux_i_sm[indx])
+            flux_i['diff_k'] = flux_i.flux-flux_i.flux_i_sm
+            lims = np.nanpercentile(flux_i.diff_k, (pcentclip, 100-pcentclip))
 
             # iteratively reject points
             # keep points within sigclip (for phot errors), or
             # within percentile clip (for scatter)
-            ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
-                               (lims[0] < diff_k) * (diff_k < lims[1]))
-
+            #ok = np.logical_or((np.abs(diff_k / error_i[indx]) < sigclip),
+                              # (lims[0] < diff_k) * (diff_k < lims[1]))
+            ok = np.logical_or((np.abs(flux_i.diff_k / flux_i.error_i) < sigclip),
+                               (lims[0] < flux_i.diff_k) * (flux_i.diff_k < lims[1]))
             if debug is True:
                 print('k = '+str(k))
                 print('number of accepted points: '+str(len(ok[0])))
+    
+            #time_i = time_i[indx][ok]
+            #flux_i = flux_i[indx][ok]
+            #error_i = error_i[indx][ok]
+            #indx_i = indx_i[indx][ok]
+            flux_i = flux_i[ok]
 
-            time_i = time_i[indx][ok]
-            flux_i = flux_i[indx][ok]
-            error_i = error_i[indx][ok]
-            indx_i = indx_i[indx][ok]
 
-    flux_sm = np.interp(time, time_i, flux_i)
+    flux_sm = np.interp(time, flux_i.time_i, flux_i.flux)
 
-    indx_out = indx_i
+    indx_out = flux_i.index.values
 
     if returnindx is False:
         return flux_sm
@@ -406,6 +411,7 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
     -------
 
     '''
+
     weight = 1. / (error**2.0)
 
     knots = np.arange(np.nanmin(time) + ksep, np.nanmax(time) - ksep, ksep)
@@ -415,7 +421,7 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
         print('IRLSSpline: time: ', np.shape(time), np.nanmin(time), time[0], np.nanmax(time), time[-1])
         print('IRLSSpline: <weight> = ', np.mean(weight))
         print(np.where((time[1:] - time[:-1] < 0))[0])
-        print(flux)
+        #print(flux)
 
         # plt.figure()
         # plt.errorbar(time, flux, error)
