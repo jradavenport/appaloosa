@@ -166,17 +166,19 @@ def Get(mode, file, objectid, win_size=3):
             str(int(file[file.find('lightcurve_')+11:file.find('-')]))
         elif mode == 'everest':
             return str(int(file[file.find('everest')+15:file.find('-')]))
+        elif mode == 'k2sc':
+            return str(int(file[file.find('k2sc')+12:file.find('-')]))
         elif mode == 'txt':
             return file[0:3]
         elif mode == 'csv':
             return '0000'
         
     def GetOutfile(mode,file):
+        home = expanduser("~")
         
         if mode == 'everest':
-            fldr = objectid[0:3]
-            home = expanduser("~")
-            outdir = home + '/research/k2_cluster_flares/aprun/' + fldr + '/'
+            
+            outdir = '{}/research/appaloosa/aprun/{}/'.format(home,mode)
             if not os.path.isdir(outdir):
                 try:
                     os.makedirs(outdir)
@@ -184,9 +186,17 @@ def Get(mode, file, objectid, win_size=3):
                     pass
             return outdir + file[file.find('everest')+15:]
         
+        if mode == 'k2sc':
+            outdir = '{}/research/appaloosa/aprun/{}/'.format(home,mode)
+            if not os.path.isdir(outdir):
+                try:
+                    os.makedirs(outdir)
+                except OSError:
+                    pass
+            return outdir + file[file.find('k2sc')+12:]
+        
         elif mode == 'fits':
-            fldr = objectid[0:3]
-            outdir = 'aprun/' + fldr + '/'
+            outdir = '{}/research/appaloosa/aprun/{}/'.format(home,mode)
             if not os.path.isdir(outdir):
                 try:
                     os.makedirs(outdir)
@@ -195,9 +205,7 @@ def Get(mode, file, objectid, win_size=3):
             return outdir + file[file.find('kplr'):]
         
         elif mode in ('vdb','csv'):
-            fldr = objectid[0:3]
-            home = expanduser("~")
-            outdir = home + '/research/k2_cluster_flares/aprun/' + fldr + '/'
+            outdir = '{}/research/appaloosa/aprun/{}/'.format(home,mode)
             if not os.path.isdir(outdir):
                 try:
                     os.makedirs(outdir)
@@ -205,13 +213,21 @@ def Get(mode, file, objectid, win_size=3):
                     pass
             return outdir + file[file.find('lightcurve_')+11:]
         
-        elif mode in ('txt','ktwo'):
-            return file
+        elif mode in ('ktwo'):
+            outdir = '{}/research/appaloosa/aprun/{}/'.format(home,mode)
+            print(outdir)
+            if not os.path.isdir(outdir):
+                try:
+                    os.makedirs(outdir)
+                except OSError:
+                    pass
+            return outdir+file[file.find('kplr'):]
 
     modes = {'fits': GetLCfits,
              'ktwo': GetLCfits, 
              'vdb': GetLCvdb, 
              'everest': GetLCeverest, 
+              'k2sc': GetLCk2sc,
              'txt': GetLCtxt, 
              'csv': GetLCvdb}
     
@@ -299,6 +315,30 @@ def GetLCeverest(file):
   
     return lc
 
+
+def GetLCk2sc(file):
+    
+
+    '''
+    Parameters
+    ----------
+    file : light curve file location for a Vanderburg de-trended .txt file
+    Returns
+    -------
+    lc: light curve DataFrame with columns [time, flux_raw]
+    '''
+    
+    hdu = fits.open(file)
+    data_rec = hdu[1].data
+
+    lc = pd.DataFrame({'time':np.array(data_rec['time']).byteswap().newbyteorder(),
+                      'flux_raw':np.array(data_rec['flux']).byteswap().newbyteorder(),})
+                      #'error':np.array(data_rec['error']).byteswap().newbyteorder(),})
+
+    #keep the outliers... for now
+    #lc['quality'] = data_rec['OUTLIER'].byteswap().newbyteorder()
+  
+    return lc
 
 def GetLCtxt(file):
 
@@ -790,7 +830,7 @@ def MultiFind(time, flux, error, flags, mode=3,
         box3 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.3)
         t = np.array(time)
         dt = np.nanmedian(t[1:] - t[0:-1])
-        print(dt)
+        #print(dt)
         exptime_m = (np.nanmax(time) - np.nanmin(time)) / len(time)
         # ksep used to = 0.07...
         flux_model = detrend.IRLSSpline(time, box3, error, numpass=20, debug=debug, ksep=exptime_m*10.) + sin1
@@ -1078,7 +1118,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         # open the output file to store data on every flare recovered
         outfile = outdir + objectid
 
-    elif dbmode in ('txt','ktwo','everest','vdb','csv','fits'):
+    elif dbmode in ('txt','ktwo','everest','vdb','csv','fits','k2sc'):
         outfile, objectid, qtr, time, lcflag, exptime, flux_raw, error = Get(dbmode,file, objectid)
     
     #-----------------------------------------------
