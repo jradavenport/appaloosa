@@ -25,8 +25,8 @@ import matplotlib
 import glob
 import json
 
-matplotlib.rcParams.update({'font.size':14})
-matplotlib.rcParams.update({'font.family':'serif'})
+matplotlib.rcParams.update({'font.size':12})
+matplotlib.rcParams.update({'font.family':'sansserif'})
 from scipy.signal import savgol_filter
 
 # from rayleigh import RayleighPowerSpectrum
@@ -343,9 +343,10 @@ def GetLCeverest(file):
     data_rec = hdu[1].data
     lc = pd.DataFrame({'time':np.array(data_rec['TIME']).byteswap().newbyteorder(),
                       'flux_raw':np.array(data_rec['FLUX']).byteswap().newbyteorder(),})
+    
     #keep the outliers... for now
     #lc['quality'] = data_rec['OUTLIER'].byteswap().newbyteorder()
-  
+      
     return lc
 
 
@@ -360,14 +361,15 @@ def GetLCk2sc(file):
     -------
     lc: light curve DataFrame with columns [time, flux_raw]
     '''
-    
+   
     hdu = fits.open(file)
     data_rec = hdu[1].data
 
     lc = pd.DataFrame({'time':np.array(data_rec['time']).byteswap().newbyteorder(),
                       'flux_raw':np.array(data_rec['flux']).byteswap().newbyteorder(),})
                       #'error':np.array(data_rec['error']).byteswap().newbyteorder(),})
-
+    hdu.close()
+    del data_rec
     #keep the outliers... for now
     #lc['quality'] = data_rec['OUTLIER'].byteswap().newbyteorder()
   
@@ -832,7 +834,12 @@ def MultiFind(time, flux, error, flags, mode=3,
     # the bad data points (search where bad < 1)
     bad = FlagCuts(flags, returngood=False)
     flux_i = np.copy(flux)
-
+    
+    if (mode == 0):
+        # only for fully preprocessed LCs like K2SC
+        flux_model = np.nanmedian(flux) * np.ones_like(flux)
+        flux_diff = flux - flux_model
+    
     if (mode == 1):
         # just use the multi-pass boxcar and average. Simple. Too simple...
         flux_model1 = detrend.MultiBoxcar(time, flux, error, kernel=0.1)
@@ -884,7 +891,7 @@ def MultiFind(time, flux, error, flags, mode=3,
 
 
     # run final flare-find on DATA - MODEL
-    isflare = FINDflare(flux_diff, error, N1=3, N3=3,
+    isflare = FINDflare(flux_diff, error, N1=3, N2=4, N3=3,
                         returnbinary=True, avg_std=True)
 
 
@@ -1254,65 +1261,65 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     if dofake is True:
         dffake = pd.DataFrame()
 
-    for k in range(iterations):
+        for k in range(iterations):
 
-        for l,r in list(zip(dl,dr)):
+            for l,r in list(zip(dl,dr)):
+
+                df2t= df2.iloc[l:r]
+                df1t = df1[(df1.istart > l) & (df1.istop <r)]
+                medflux = df2t.flux_model.median()# flux needs to be normalized
+                tmp1 = df2t.time[df1t.istart]
+                tmp2 = df2t.time[df1t.istop]
+                _ = pd.DataFrame()
+                _['ed_fake'], _['rec_fake'], ed_rec, ed_rec_err, istart_rec, istop_rec = FakeFlares(df2t.time,df2t.flux_gap/medflux - 1.0,
+                                                         df2t.error/medflux, df2t.lcflag, tmp1, tmp2,
+                                                         savefile=True, gapwindow=gapwindow, outfile=outfile[:outfile.find('.')]+'_fake.json',
+                                                         display=display, nfake=nfake, debug=debug, mode=mode)
+
+
+                _['ed_rec'], _['ed_rec_err'], _['istart_rec'], _['istop_rec'] = 0, 0, 0, 0
+                _.ed_rec[_.rec_fake == 1] = ed_rec
+                _.ed_rec_err[_.rec_fake == 1] = ed_rec_err
+                _.istart_rec[_.rec_fake == 1] = istart_rec
+                _.istop_rec[_.rec_fake == 1] = istop_rec
+                _ = _.dropna(how='any') 
+                dffake = dffake.append(_, ignore_index=True)
+        dffake.to_csv('{}_all_fakes.csv'.format(outfile))
     
-            df2t= df2.iloc[l:r]
-            df1t = df1[(df1.istart > l) & (df1.istop <r)]
-            medflux = df2t.flux_model.median()# flux needs to be normalized
-            tmp1 = df2t.time[df1t.istart]
-            tmp2 = df2t.time[df1t.istop]
-            _ = pd.DataFrame()
-            _['ed_fake'], _['rec_fake'], ed_rec, ed_rec_err, istart_rec, istop_rec = FakeFlares(df2t.time,df2t.flux_gap/medflux - 1.0,
-                                                     df2t.error/medflux, df2t.lcflag, tmp1, tmp2,
-                                                     savefile=True, gapwindow=gapwindow, outfile=outfile[:outfile.find('.')]+'_fake.json',
-                                                     display=display, nfake=nfake, debug=debug, mode=mode)
+        bins = np.linspace(0, dffake.ed_fake.max() + 1, nfake * iterations // 20)
+        binmids = np.concatenate(([0],(bins[1:]+bins[:-1])/2))
+        frac_recovered = dffake.rec_fake.groupby(np.digitize(dffake.ed_rec, bins)).mean()
+        frac_recovered.iloc[0] = 0 #add a zero intercept for aesthetics
+        frac_recovered.sort_index(inplace=True) #helps plotting
+        binmids = np.concatenate(([0],(bins[1:]+bins[:-1])/2)) #add a zero intercept for aesthetics
+
+        try:
+            print(frac_recovered.iloc[:-1])
+            dffake = pd.DataFrame({'ed_bins': binmids[frac_recovered.index.values[:-1]],
+                               'frac_recovered': frac_recovered.iloc[:-1],
+                               'frac_rec_sm': wiener(frac_recovered.iloc[:-1],3)})
+        except IndexError:
+            display=False
+            print("Something went wrong with dffake indexing.")
+        # use frac_rec_sm completeness curve to estimate 68%/90% complete
+        ed68_i, ed90_i = ed6890(dffake.ed_bins,dffake.frac_rec_sm)
+        df1['ed68'], df1['ed90'] = ed68_i, ed90_i
+
+        if display is True:
+            plt.figure(figsize=(8,6))
+            plt.plot(dffake.ed_bins, dffake.frac_recovered, c='k')
+            plt.vlines([ed68_i, ed90_i], ymin=0, ymax=1, colors='b',alpha=0.75, lw=5)
+            plt.xlabel('Flare Equivalent Duration (seconds)')
+            plt.ylabel('Fraction of Recovered Flares')
+            plt.title('Artificial Flare injection, N = {}'.format(nfake*iterations))
+            plt.xlim((0,2e3))
+            plt.savefig(file + '_fake_recovered.pdf',dpi=300, bbox_inches='tight', pad_inches=0.5)
+            plt.show()
 
 
-            _['ed_rec'], _['ed_rec_err'], _['istart_rec'], _['istop_rec'] = 0, 0, 0, 0
-            _.ed_rec[_.rec_fake == 1] = ed_rec
-            _.ed_rec_err[_.rec_fake == 1] = ed_rec_err
-            _.istart_rec[_.rec_fake == 1] = istart_rec
-            _.istop_rec[_.rec_fake == 1] = istop_rec
-            _ = _.dropna(how='any') 
-            dffake = dffake.append(_, ignore_index=True)
-    dffake.to_csv('{}_all_fakes.csv'.format(outfile))
-    
-    bins = np.linspace(0, dffake.ed_fake.max() + 1, nfake * iterations // 20)
-    binmids = np.concatenate(([0],(bins[1:]+bins[:-1])/2))
-    frac_recovered = dffake.rec_fake.groupby(np.digitize(dffake.ed_rec, bins)).mean()
-    frac_recovered.iloc[0] = 0 #add a zero intercept for aesthetics
-    frac_recovered.sort_index(inplace=True) #helps plotting
-    binmids = np.concatenate(([0],(bins[1:]+bins[:-1])/2)) #add a zero intercept for aesthetics
-
-    try:
-        print(frac_recovered.iloc[:-1])
-        dffake = pd.DataFrame({'ed_bins': binmids[frac_recovered.index.values[:-1]],
-                           'frac_recovered': frac_recovered.iloc[:-1],
-                           'frac_rec_sm': wiener(frac_recovered.iloc[:-1],3)})
-    except IndexError:
-        display=False
-        print("Something went wrong with dffake indexing.")
-    # use frac_rec_sm completeness curve to estimate 68%/90% complete
-    ed68_i, ed90_i = ed6890(dffake.ed_bins,dffake.frac_rec_sm)
-    df1['ed68'], df1['ed90'] = ed68_i, ed90_i
-
-    if display is True:
-        plt.figure(figsize=(8,6))
-        plt.plot(dffake.ed_bins, dffake.frac_recovered, c='k')
-        plt.vlines([ed68_i, ed90_i], ymin=0, ymax=1, colors='b',alpha=0.75, lw=5)
-        plt.xlabel('Flare Equivalent Duration (seconds)')
-        plt.ylabel('Fraction of Recovered Flares')
-        plt.title('Artificial Flare injection, N = {}'.format(nfake*iterations))
-        plt.xlim((0,2e3))
-        plt.savefig(file + '_fake_recovered.pdf',dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.show()
-
-
-    else:
-        df1['ed68'] = -199
-        df1['ed90'] = -199
+        else:
+            df1['ed68'] = -199
+            df1['ed90'] = -199
 
     # look at the completeness curve
     # plt.figure()
@@ -1342,32 +1349,35 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     if display is True:
         print(str(len(istart))+' flare candidates found.')
 
-        plt.figure(figsize=(8,6))
-        plt.plot(time, flux_gap, 'k', alpha=0.7, lw=0.8)
+        plt.figure(figsize=(8,4))
+        plt.scatter(time, flux_gap, c='k', alpha=0.7,)
 
         for g in range(len(istart)):
-            plt.plot(time[istart[g]:istop[g]+1],
-                     flux_gap[istart[g]:istop[g]+1],color='red', lw=1)
+            plt.scatter(time[istart[g]:istop[g]+1],
+                     flux_gap[istart[g]:istop[g]+1],color='red')
 
         plt.plot(time, flux_model, 'blue', lw=3, alpha=0.7)
-
-        plt.plot(time, flux_model+error,'green')
-        plt.plot(time, flux_model-error,'green')
+        for i in range(1,4):
+            plt.fill_between(time, flux_model+error*i,
+                             y2=flux_model-error*i,
+                             color='green',alpha=0.25)
+       
         plt.xlabel('Time (BJD - 2454833 days)')
         plt.ylabel(r'Flux (e- sec$^{-1}$)')
 
         xdur = np.nanmax(time) - np.nanmin(time)
         xdur0 = np.nanmin(time) + xdur/2.
-        xdur1 = np.nanmin(time) + xdur/2. + 2.6
+        xdur1 = np.nanmin(time) + xdur/2. + 5.
         plt.xlim(xdur0, xdur1) # only plot a chunk of the data
-
+        
+        
         xdurok = np.where((time >= xdur0) & (time <= xdur1))
         if len(xdurok[0])>0:
             yminmax = [np.nanmin(flux_gap[xdurok]), np.nanmax(flux_gap[xdurok])]
             if sum(np.isfinite(yminmax)) > 1:
                 plt.ylim(yminmax[0], yminmax[1])
 
-        plt.savefig(file + '_lightcurve.pdf', dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.savefig(file + '_lightcurve.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.show()
     '''
     #-- IF YOU WANT TO PLAY WITH THE WAVELET STUFF MORE, WORK HERE
@@ -1427,7 +1437,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
             f.write(j)
  
     #Add the number of flares from this LC to the list
-    flist = '{}_flarelist.csv'.format(outfile)
+    flist = 'flarelist.csv'.format(outfile)
     header = ['Object ID',' Date of Run','Number of Flares','Filename',
                         'Total Exposure Time of LC in Days','BJD-2454833 days']
 
@@ -1441,6 +1451,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     dfout = dfout.append(pd.DataFrame(dict(zip(header,line))),
                              ignore_index=True)
     dfout.to_csv(flist)
+    return
 # let this file be called from the terminal directly. e.g.:
 # $python appaloosa.py 12345678
 if __name__ == "__main__":
