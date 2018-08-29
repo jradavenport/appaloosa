@@ -396,6 +396,9 @@ def GetLCtxt(file):
         
     return lc
 
+#--------------------------------------------------------------------------
+#END OF READ FUNCTIONS
+#--------------------------------------------------------------------------
 
 def OneCadence(data):
     '''
@@ -438,61 +441,61 @@ def func_specific(wert):
     t = 3
     return func(t,wert)
 
-def DetectCandidate(time, flux, error, flags, model,
-                    error_cut=2, gapwindow=0.1, minsep=3,
-                    returnall=False):
-    '''
-    Detect flare candidates using sigma threshold, toss out bad flags.
-    Uses very simple sigma cut to find significant points.
+#def DetectCandidate(time, flux, error, flags, model,
+#                    error_cut=2, gapwindow=0.1, minsep=3,
+#                    returnall=False):
+#    '''
+#    Detect flare candidates using sigma threshold, toss out bad flags.
+#    Uses very simple sigma cut to find significant points.
 
-    Parameters
-    ----------
-    time :
-    flux :
-    error :
-    flags :
-    model :
-    error_cut : int, optional
-        the sigma threshold to select outliers (default is 2)
-    gapwindow : float, optional
-        The duration of time around data gaps to ignore flare candidates
-        (default is 0.1 days)
-    minsep : int, optional
-        The number of datapoints required between individual flare events
-        (default is 3)
+#    Parameters
+#    ----------
+#    time :
+#    flux :
+#    error :
+#    flags :
+#    model :
+#    error_cut : int, optional
+#        the sigma threshold to select outliers (default is 2)
+#    gapwindow : float, optional
+#        The duration of time around data gaps to ignore flare candidates
+#        (default is 0.1 days)
+#    minsep : int, optional
+#        The number of datapoints required between individual flare events
+#        (default is 3)
 
-    Returns
-    -------
-    (flare start index, flare stop index)
+#    Returns
+#    -------
+#    (flare start index, flare stop index)
 
-    if returnall=True, returns
-    (flare start index, flare stop index, candidate indicies)
+#    if returnall=True, returns
+#    (flare start index, flare stop index, candidate indicies)
 
-    '''
+#    '''
 
-    bad = FlagCuts(flags, returngood=False)
+#    bad = FlagCuts(flags, returngood=False)
 
-    chi = (flux - model) / error
+#    chi = (flux - model) / error
 
-    # find points above sigma threshold, and passing flag cuts
-    cand1 = np.where((chi >= error_cut) & (bad < 1))[0]
+#    # find points above sigma threshold, and passing flag cuts
+#    cand1 = np.where((chi >= error_cut) & (bad < 1))[0]
 
-    _, dl, dr = detrend.FindGaps(time) # find edges of time windows
-    for i in range(0, len(dl)):
-        x1 = np.where((np.abs(time[cand1]-time[dr[i]-1]) < gapwindow))
-        x2 = np.where((np.abs(time[cand1]-time[dl[i]]) < gapwindow))
-        cand1 = np.delete(cand1, x1)
-        cand1 = np.delete(cand1, x2)
+#    _, dl, dr = detrend.FindGaps(time) # find edges of time windows
+#    for i in range(0, len(dl)):
+#        x1 = np.where((np.abs(time[cand1]-time[dr[i]-1]) < gapwindow))
+#        x2 = np.where((np.abs(time[cand1]-time[dl[i]]) < gapwindow))
+#        cand1 = np.delete(cand1, x1)
+#        cand1 = np.delete(cand1, x2)
 
-    # find start and stop index, combine neighboring candidates in to same events
-    cstart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
-    cstop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
+#    # find start and stop index, combine neighboring candidates in to same events
+#    cstart = cand1[np.append([0], np.where((cand1[1:]-cand1[:-1] > minsep))[0]+1)]
+#    cstop = cand1[np.append(np.where((cand1[1:]-cand1[:-1] > minsep))[0], [len(cand1)-1])]
 
-    # for now just return index of candidates
-    if returnall is True:
-        return cstart, cstop, cand1
-    else:
-        return cstart, cstop
+#    # for now just return index of candidates
+#    if returnall is True:
+#        return cstart, cstop, cand1
+#    else:
+#        return cstart, cstop
 
 
 def FINDflare(flux, error, N1=3, N2=1, N3=3,
@@ -679,8 +682,6 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
     if (istop-istart < 2):
         istop = istop + 1
 
-    # print(istart, istop) # % ;
-
     tstart = time[istart]
     tstop = time[istop]
     dur0 = tstop - tstart
@@ -771,54 +772,54 @@ def FlareStats(time, flux, error, model, istart=-1, istop=-1,
         return params
 
 
-def MeasureS2N(flux, error, model, istart=-1, istop=-1):
-    '''
-    this MAY NOT be something i want....
-    '''
-    if (istart < 0):
-        istart = 0
-    if (istop < 0):
-        istop = len(flux)
+#def MeasureS2N(flux, error, model, istart=-1, istop=-1):
+#    '''
+#    this MAY NOT be something i want....
+#    '''
+#    if (istart < 0):
+#        istart = 0
+#    if (istop < 0):
+#        istop = len(flux)
 
-    flareflux = flux[istart:istop+1]
-    modelflux = model[istart:istop+1]
+#    flareflux = flux[istart:istop+1]
+#    modelflux = model[istart:istop+1]
 
-    s2n = np.sum(np.sqrt((flareflux) / (flareflux + modelflux)))
-    return s2n
+#    s2n = np.sum(np.sqrt((flareflux) / (flareflux + modelflux)))
+#    return s2n
 
 
-def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
-    '''
-    Look for periodicity in the flare occurrence times. Could be due to:
-    a) mis-identified periodic things (e.g. heartbeat stars)
-    b) crazy binary star flaring things
-    c) flares on a rotating star
-    d) bugs in code
-    e) aliens
+#def FlarePer(time, minper=0.1, maxper=30.0, nper=20000):
+#    '''
+#    Look for periodicity in the flare occurrence times. Could be due to:
+#    a) mis-identified periodic things (e.g. heartbeat stars)
+#    b) crazy binary star flaring things
+#    c) flares on a rotating star
+#    d) bugs in code
+#    e) aliens
 
-    '''
+#    '''
 
-    # use energy = 1 for flare times.
-    # This will create something like the window function
-    energy = np.ones_like(time)
+#    # use energy = 1 for flare times.
+#    # This will create something like the window function
+#    energy = np.ones_like(time)
 
-    # Use Jake Vanderplas faster version!
-    pgram = LombScargleFast(fit_offset=False)
-    pgram.optimizer.set(period_range=(minper,maxper))
+#    # Use Jake Vanderplas faster version!
+#    pgram = LombScargleFast(fit_offset=False)
+#    pgram.optimizer.set(period_range=(minper,maxper))
 
-    pgram = pgram.fit(time, energy - np.nanmedian(energy))
+#    pgram = pgram.fit(time, energy - np.nanmedian(energy))
 
-    df = (1./minper - 1./maxper) / nper
-    f0 = 1./maxper
-    pwr = pgram.score_frequency_grid(f0, df, nper)
+#    df = (1./minper - 1./maxper) / nper
+#    f0 = 1./maxper
+#    pwr = pgram.score_frequency_grid(f0, df, nper)
 
-    freq = f0 + df * np.arange(nper)
-    per = 1./freq
+#    freq = f0 + df * np.arange(nper)
+#    per = 1./freq
 
-    pk = per[np.argmax(pwr)] # peak period
-    pp = np.max(pwr) # peak period power
+#    pk = per[np.argmax(pwr)] # peak period
+#    pp = np.max(pwr) # peak period power
 
-    return pk, pp
+#    return pk, pp
 
 
 def MultiFind(time, flux, error, flags, mode=3,
@@ -903,7 +904,6 @@ def MultiFind(time, flux, error, flags, mode=3,
     cand1 = np.delete(cand1, x1)
     cand1 = np.delete(cand1, x2)
 
-    # print(len(cand1))
     if (len(cand1) < 1):
         istart = np.array([])
         istop = np.array([])
@@ -932,21 +932,21 @@ def MultiFind(time, flux, error, flags, mode=3,
 
 
 # sketching some baby step ideas w/a matched filter
-'''
-def MatchedFilterFind(time, flux, signalfwhm=0.01):
-    dt = np.nanmedian(time[1:] - time[0:-1])
-    ftime = np.arange(0, 2, dt)
-    modelfilter = aflare1(ftime, 1, signalfwhm, 1)
+#'''
+#def MatchedFilterFind(time, flux, signalfwhm=0.01):
+#    dt = np.nanmedian(time[1:] - time[0:-1])
+#    ftime = np.arange(0, 2, dt)
+#    modelfilter = aflare1(ftime, 1, signalfwhm, 1)
 
-    corr = signal.correlate(flux-np.nanmedian(flux), modelfilter, mode='same')
+#    corr = signal.correlate(flux-np.nanmedian(flux), modelfilter, mode='same')
 
-    plt.figure()
-    plt.plot(time, flux - np.nanmedian(flux))
-    plt.plot(time, corr,'red')
-    plt.show()
+#    plt.figure()
+#    plt.plot(time, flux - np.nanmedian(flux))
+#    plt.plot(time, corr,'red')
+#    plt.show()
 
-    return
-'''
+#    return
+#'''
 
 def FakeFlaresDist(std, nfake, ampl=(5e-1,5e2), dur=(5e-1,2e2),
                    mode='hawley2014', scatter=False, debug=False):
@@ -1025,20 +1025,50 @@ def FakeFlaresDist(std, nfake, ampl=(5e-1,5e2), dur=(5e-1,2e2),
         ax.grid(color='0.5', linestyle='-', linewidth=1)
         #ax.axis([0.,2.5,-3.5,-0.5])
         plt.show()
+        plt.close()
         #plt.savefig(mode+'_fake_scatter.pdf')
     
         
     return dur_fake, ampl_fake    
 
 
-def FakeFlares(time, flux, error, flags, tstart, tstop,
-               nfake=10, npass=1, ampl=(0.1,100), dur=(0.5,60),
-               outfile='', savefile=False, gapwindow=0.1,
-               verboseout=False, display=False, debug=False, mode=3):
+def FakeFlares(time, flux, error, flags, tstart, tstop, mode,
+               nfake=10, npass=1, gapwindow=0.1,
+               outfile='', savefile=True, 
+               verboseout=False, display=False, debug=False):
+
     '''
     Create nfake number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
-    Keep track of energy in Equiv Dur
+    Keep track of energy in Equiv Dur.
+
+    Parameters:
+    -------------
+    time
+    flux
+    error
+    flags
+    tstart
+    tstop
+
+    nfake =10
+    npass =1
+    outfile =''
+    savefile =False
+    gapwindow =0.1
+    verboseout =False
+    display =False
+    debug =False
+
+    Returns:
+    ------------
+    ed_fake
+    rec_fake
+    ed_rec
+    ed_rec_err
+    istart_rec
+    istop_rec
+
     duration defined in minutes
     amplitude defined multiples of the median error
     still need to implement npass, to re-do whole thing and average results
@@ -1096,6 +1126,8 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
     istart, istop, flux_model = MultiFind(time, new_flux, error, flags, 
                                           gapwindow=gapwindow, debug=debug, mode=mode)
 
+    header = ['ed_fake','rec_fake','ed_rec','ed_rec_err','istart_rec','istop_rec']
+    
     rec_fake, ed_rec, ed_rec_err = np.zeros(nfake), np.zeros(nfake), np.zeros(nfake)
     istart_rec, istop_rec = np.zeros(nfake), np.zeros(nfake)
 
@@ -1114,8 +1146,14 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
                 istart_rec[k], istop_rec[k] = istart[rec[0]],istop[rec[0]]
                 istart = np.delete(istart,rec[0])
                 istop = np.delete(istop,rec[0])
+                
+    #Why doesnt list comprehension work here?
+    cols = []
+    for name in header:
+        cols.append(vars()[name]) 
+    df = pd.DataFrame(dict(zip(header,cols)))
 
-    if debug is True:
+    if savefile is True:
          
         header = ['min_time','max_time','std_dev','nfake',
                   'min_amplitude','max_amplitude',
@@ -1129,15 +1167,14 @@ def FakeFlares(time, flux, error, flags, tstart, tstop,
             dfout = pd.read_json(outfile)
 
         tstamp = clock.asctime(clock.localtime(clock.time()))
-        outrow = [[item] for item in [min(time), max(time), std, nfake, ampl[0], 
-                                      ampl[1], dur[0], dur[1],tstamp]]
+        outrow = [[item] for item in [min(time), max(time), std, nfake, min(ampl_fake), 
+                                      max(ampl_fake),min(dur_fake),max(dur_fake),tstamp]]
         dfout = dfout.append(pd.DataFrame(dict(zip(header,outrow))),
                                  ignore_index=True)
         dfout.to_json(outfile)
 
     #centers of bins, fraction of recovered fake flares per bin, EDs of generated fake flares, 
-
-    return ed_fake, rec_fake, ed_rec, ed_rec_err, istart_rec, istop_rec
+    return df
 
 
 # objectid = '9726699'  # GJ 1243
@@ -1271,19 +1308,13 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
                 tmp1 = df2t.time[df1t.istart]
                 tmp2 = df2t.time[df1t.istop]
                 _ = pd.DataFrame()
-                _['ed_fake'], _['rec_fake'], ed_rec, ed_rec_err, istart_rec, istop_rec = FakeFlares(df2t.time,df2t.flux_gap/medflux - 1.0,
+                fakeres = FakeFlares(df2t.time,df2t.flux_gap/medflux - 1.0,
                                                          df2t.error/medflux, df2t.lcflag, tmp1, tmp2,
                                                          savefile=True, gapwindow=gapwindow, outfile=outfile[:outfile.find('.')]+'_fake.json',
                                                          display=display, nfake=nfake, debug=debug, mode=mode)
 
 
-                _['ed_rec'], _['ed_rec_err'], _['istart_rec'], _['istop_rec'] = 0, 0, 0, 0
-                _.ed_rec[_.rec_fake == 1] = ed_rec
-                _.ed_rec_err[_.rec_fake == 1] = ed_rec_err
-                _.istart_rec[_.rec_fake == 1] = istart_rec
-                _.istop_rec[_.rec_fake == 1] = istop_rec
-                _ = _.dropna(how='any') 
-                dffake = dffake.append(_, ignore_index=True)
+                dffake = dffake.append(fakeres, ignore_index=True)
         dffake.to_csv('{}_all_fakes.csv'.format(outfile))
     
         bins = np.linspace(0, dffake.ed_fake.max() + 1, nfake * iterations // 20)
@@ -1298,9 +1329,9 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
             dffake = pd.DataFrame({'ed_bins': binmids[frac_recovered.index.values[:-1]],
                                'frac_recovered': frac_recovered.iloc[:-1],
                                'frac_rec_sm': wiener(frac_recovered.iloc[:-1],3)})
-        except IndexError:
+        except (IndexError, ValueError):
             display=False
-            print("Something went wrong with dffake indexing.")
+            print("Something went wrong with dffake indexing. Try using even number of iterations.")
         # use frac_rec_sm completeness curve to estimate 68%/90% complete
         ed68_i, ed90_i = ed6890(dffake.ed_bins,dffake.frac_rec_sm)
         df1['ed68'], df1['ed90'] = ed68_i, ed90_i

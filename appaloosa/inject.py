@@ -17,10 +17,12 @@ test_suite = {'kplr':('kplr009726699-2009350155506_llc.fits',3),
               'vdb':('hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt',3),
               }
 
+#iteration need to be an even number bc wiener would not work otherwise???
 for key, value in test_suite.items():
     print('This is {}. Injections started! {}'.format(key,value))
     RunLC('{}{}'.format(path,value[0]), dbmode=key, display=True, 
-          debug=False, dofake=False, nfake=10,mode=value[1],
-          iterations=10,) 
+          debug=False, dofake=True, nfake=20,mode=value[1],
+          iterations=30,) 
     print(time.clock())
 
+print('Find output files here: /home/ekaterina/research/appaloosa/aprun')
