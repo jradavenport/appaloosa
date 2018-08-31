@@ -3,98 +3,6 @@ import pandas as pd
 import numpy as np
 from os.path import expanduser
 import os
-def GetLCdb(objectid, type='', readfile=False,
-          savefile=False, exten = '.lc.gz',
-          onecadence=False):
-    '''
-    Retrieve the lightcurve/data from the UW database.
-
-    Parameters
-    ----------
-    objectid
-    type : str, optional
-        If either 'slc' or 'llc' then just get 1 type of cadence. Default
-        is empty, so gets both
-    readfile : bool, optional
-        Default is False
-    savefie : bool, optional
-        Default is False
-    exten : str, optional
-        Extension for file saving. Default is '.lc.gz'
-    onecadence : bool, optional
-        For quarters with Long and Short cadence, remove the Long data.
-        Default is False. Can be done later to the data output
-
-    Returns
-    -------
-    numpy array with many columns:
-        QUARTER, TIME, PDCSAP_FLUX, PDCSAP_FLUX_ERR,
-        SAP_QUALITY, LCFLAG, SAP_FLUX, SAP_FLUX_ERR
-    '''
-
-    isok = 0 # a flag to check if database returned sensible answer
-    ntry = 0
-
-    if readfile is True:
-        # attempt to find file in working dir
-        if os.path.isfile(str(objectid) + exten):
-            data = np.loadtxt(str(objectid) + exten)
-            isok = 101
-
-
-    while isok<1:
-        # this holds the keys to the db... don't put on github!
-        auth = np.loadtxt('auth.txt', dtype='string')
-
-        # connect to the db
-        db = MySQLdb.connect(passwd=auth[2], db="Kepler",
-                             user=auth[1], host=auth[0])
-
-        query = 'SELECT QUARTER, TIME, PDCSAP_FLUX, PDCSAP_FLUX_ERR, ' +\
-                'SAP_QUALITY, LCFLAG, SAP_FLUX, SAP_FLUX_ERR ' +\
-                'FROM Kepler.source WHERE KEPLERID=' + str(objectid)
-
-        # only get SLC or LLC data if requested
-        if type=='slc':
-            query = query + ' AND LCFLAG=0 '
-        if type=='llc':
-            query = query + ' AND LCFLAG=1 '
-
-        query = query + ' ORDER BY TIME;'
-
-        # make a cursor to the db
-        cur = db.cursor()
-        cur.execute(query)
-
-        # get all the data
-        rows = cur.fetchall()
-
-        # convert to numpy data array
-        data = np.asarray(rows)
-
-        # close the cursor to the db
-        cur.close()
-
-        # make sure the database returned the actual light curve
-        if len(data[:,0] > 99):
-            isok = 10
-        # only try 10 times... shouldn't ever need this limit
-        if ntry > 9:
-            isok = 2
-        ntry = ntry + 1
-        time.sleep(10) # give the database a breather
-
-    if onecadence is True:
-        data_raw = data.copy()
-        data = OneCadence(data_raw)
-
-    if savefile is True:
-        # output a file in working directory
-        np.savetxt(str(objectid) + exten, data)
-
-    return data
-
-
 
 def Get(mode, file, objectid, win_size=3):
 
@@ -305,40 +213,169 @@ def GetLCtxt(file):
 
     return lc
 
+# UNUSED, UNTESTED, DELETE?
+# def OneCadence(data):
+#     '''
+#     Within each quarter of data from the database, pick the data with the
+#     fastest cadence. We want to study 1-min if available. Don't want
+#     multiple cadence observations in the same quarter, bad for detrending.
+#
+#     Parameters
+#     ----------
+#     data : numpy array
+#         the result from MySQL database query, using the getLC() function
+#
+#     Returns
+#     -------
+#     Data array
+#
+#     '''
+#     # get the unique quarters
+#     qtr = data[:,0]
+#     cadence = data[:,5]
+#     uQtr = np.unique(qtr)
+#
+#     indx = []
+#
+#     # for each quarter, is there more than one cadence?
+#     for q in uQtr:
+#         x = np.where( (np.abs(qtr-q) < 0.1) )
+#
+#         etimes = np.unique(cadence[x])
+#         y = np.where( (cadence[x] == min(etimes)) )
+#
+#         indx = np.append(indx, x[0][y])
+#
+#     indx = np.array(indx, dtype='int')
+#
+#     data_out = data[indx,:]
+#     return data_out
+#
+# def GetLCdb(objectid, type='', readfile=False,
+#           savefile=False, exten = '.lc.gz',
+#           onecadence=False):
+#     '''
+#     Retrieve the lightcurve/data from the UW database.
+#
+#     Parameters
+#     ----------
+#     objectid
+#     type : str, optional
+#         If either 'slc' or 'llc' then just get 1 type of cadence. Default
+#         is empty, so gets both
+#     readfile : bool, optional
+#         Default is False
+#     savefie : bool, optional
+#         Default is False
+#     exten : str, optional
+#         Extension for file saving. Default is '.lc.gz'
+#     onecadence : bool, optional
+#         For quarters with Long and Short cadence, remove the Long data.
+#         Default is False. Can be done later to the data output
+#
+#     Returns
+#     -------
+#     numpy array with many columns:
+#         QUARTER, TIME, PDCSAP_FLUX, PDCSAP_FLUX_ERR,
+#         SAP_QUALITY, LCFLAG, SAP_FLUX, SAP_FLUX_ERR
+#     '''
+#
 
-def OneCadence(data):
-    '''
-    Within each quarter of data from the database, pick the data with the
-    fastest cadence. We want to study 1-min if available. Don't want
-    multiple cadence observations in the same quarter, bad for detrending.
+    # try:
+    #   import MySQLdb
+    #   haz_mysql = True
+    # except ImportError:
+    #   haz_mysql = False
 
-    Parameters
-    ----------
-    data : numpy array
-        the result from MySQL database query, using the getLC() function
-
-    Returns
-    -------
-    Data array
-
-    '''
-    # get the unique quarters
-    qtr = data[:,0]
-    cadence = data[:,5]
-    uQtr = np.unique(qtr)
-
-    indx = []
-
-    # for each quarter, is there more than one cadence?
-    for q in uQtr:
-        x = np.where( (np.abs(qtr-q) < 0.1) )
-
-        etimes = np.unique(cadence[x])
-        y = np.where( (cadence[x] == min(etimes)) )
-
-        indx = np.append(indx, x[0][y])
-
-    indx = np.array(indx, dtype='int')
-
-    data_out = data[indx,:]
-    return data_out
+#     isok = 0 # a flag to check if database returned sensible answer
+#     ntry = 0
+#
+#     if readfile is True:
+#         # attempt to find file in working dir
+#         if os.path.isfile(str(objectid) + exten):
+#             data = np.loadtxt(str(objectid) + exten)
+#             isok = 101
+#
+#
+#     while isok<1:
+#         # this holds the keys to the db... don't put on github!
+#         auth = np.loadtxt('auth.txt', dtype='string')
+#
+#         # connect to the db
+#         db = MySQLdb.connect(passwd=auth[2], db="Kepler",
+#                              user=auth[1], host=auth[0])
+#
+#         query = 'SELECT QUARTER, TIME, PDCSAP_FLUX, PDCSAP_FLUX_ERR, ' +\
+#                 'SAP_QUALITY, LCFLAG, SAP_FLUX, SAP_FLUX_ERR ' +\
+#                 'FROM Kepler.source WHERE KEPLERID=' + str(objectid)
+#
+#         # only get SLC or LLC data if requested
+#         if type=='slc':
+#             query = query + ' AND LCFLAG=0 '
+#         if type=='llc':
+#             query = query + ' AND LCFLAG=1 '
+#
+#         query = query + ' ORDER BY TIME;'
+#
+#         # make a cursor to the db
+#         cur = db.cursor()
+#         cur.execute(query)
+#
+#         # get all the data
+#         rows = cur.fetchall()
+#
+#         # convert to numpy data array
+#         data = np.asarray(rows)
+#
+#         # close the cursor to the db
+#         cur.close()
+#
+#         # make sure the database returned the actual light curve
+#         if len(data[:,0] > 99):
+#             isok = 10
+#         # only try 10 times... shouldn't ever need this limit
+#         if ntry > 9:
+#             isok = 2
+#         ntry = ntry + 1
+#         time.sleep(10) # give the database a breather
+#
+#     if onecadence is True:
+#         data_raw = data.copy()
+#         data = OneCadence(data_raw)
+#
+#     if savefile is True:
+#         # output a file in working directory
+#         np.savetxt(str(objectid) + exten, data)
+#
+#     #---------------------------------------------------
+#         # data columns are:
+#         # QUARTER, TIME, PDCFLUX, PDCFLUX_ERR, SAP_QUALITY, LCFLAG, SAPFLUX, SAPFLUX_ERR
+#
+#         qtr = data[:,0]
+#         time = data[:,1]
+#         lcflag = data[:,4] # actual SAP_QUALITY
+#
+#         exptime = data[:,5] # actually the LCFLAG
+#         exptime[np.where((exptime < 1))] = 54.2 / 60. / 60. / 24.
+#         exptime[np.where((exptime > 0))] = 30 * 54.2 / 60. / 60. / 24.
+#
+#         if ftype == 'sap':
+#             flux_raw = data[:,6]
+#             error = data[:,7]
+#         else: # for PDC data
+#             flux_raw = data[:,2]
+#             error = data[:,3]
+#
+#         # put flare output in to a set of subdirectories.
+#         # use first 3 digits to help keep directories to ~1k files
+#         fldr = objectid[0:3]
+#         outdir = 'aprun/' + fldr + '/'
+#         if not os.path.isdir(outdir):
+#             try:
+#                 os.makedirs(outdir)
+#             except OSError:
+#                 pass
+#         # open the output file to store data on every flare recovered
+#         outfile = outdir + objectid
+#
+#     return data

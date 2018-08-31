@@ -105,8 +105,8 @@ def FlareStats(lc, istart=-1, istop=-1,
         fwhm = dur0 * 0.25
         # print('> warning') # % ;
     else:
-        print(p05)
-        fwhm = np.max(flaretime[p05[0]]) - np.min(flaretime[p05[0]])
+        #print(p05)
+        fwhm = np.max(flaretime[p05]) - np.min(flaretime[p05])
 
     # fit flare with single aflare model
     pguess = (tpeak, fwhm, ampl)
