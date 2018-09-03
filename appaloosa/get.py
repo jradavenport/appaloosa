@@ -2,9 +2,18 @@ from astropy.io import fits
 import pandas as pd
 import numpy as np
 from os.path import expanduser
+from random import randint
 import os
+from lightkurve import KeplerTargetPixelFile
+from lightkurve.mast import ArchiveError
+#load KeplerTargetPixelFile
+# flatten with k2SFF i.e. create LightCurveFile
+# transform to FlareLightCurveFile
+# define methods
 
-def Get(mode, file, objectid, win_size=3):
+
+
+def Get(mode, file='', objectid='', win_size=3):
 
     '''
 
@@ -41,6 +50,8 @@ def Get(mode, file, objectid, win_size=3):
             return file[0:3]
         elif mode == 'csv':
             return '0000'
+        elif mode == 'random':
+            return 'random'
 
     def GetOutDir(mode):
 
@@ -53,7 +64,7 @@ def Get(mode, file, objectid, win_size=3):
                 pass
         return outdir
 
-    def GetOutfile(mode,file):
+    def GetOutfile(mode,file='random'):
 
         if mode == 'everest':
             return GetOutDir(mode) + file[file.find('everest')+15:]
@@ -70,18 +81,22 @@ def Get(mode, file, objectid, win_size=3):
         elif mode in ('ktwo'):
             return GetOutDir(mode) + file[file.find('ktwo')+4:]
 
-        elif mode == 'txt':
-            return GetOutDir(mode) + file
+        elif mode in ('txt','random','test'):
+            return GetOutDir(mode) + file[-6:]
 
     modes = {'kplr': GetLCfits,
              'ktwo': GetLCfits,
              'vdb': GetLCvdb,
              'everest': GetLCeverest,
-            'k2sc': GetLCk2sc,
+             'k2sc': GetLCk2sc,
              'txt': GetLCtxt,
-             'csv': GetLCvdb}
+             'csv': GetLCvdb,
+             'random':GetLClightkurve}
 
-    lc = modes[mode](file).dropna(how='any')
+    if mode == 'test':
+        lc = pd.read_csv('test_suite/test/testlc.csv').dropna(how='any')
+    else:
+        lc = modes[mode](file=file).dropna(how='any')
 
     t = lc.time.values
     dt = np.nanmedian(t[1:] - t[0:-1])
@@ -99,9 +114,10 @@ def Get(mode, file, objectid, win_size=3):
     if 'error' not in lc.columns:
         lc['error'] = np.nanmedian(lc.flux_raw.rolling(win_size, center=True).std())
 
-    return GetOutfile(mode, file), GetObjectID(mode), lc
+    print(GetOutfile(mode, file=file))
+    return GetOutfile(mode, file=file), GetObjectID(mode), lc
 
-def GetLCfits(file):
+def GetLCfits(file=''):
 
     '''
     Parameters
@@ -124,7 +140,7 @@ def GetLCfits(file):
     return lc
 
 
-def GetLCvdb(file):
+def GetLCvdb(file=''):
 
     '''
     Parameters
@@ -144,7 +160,7 @@ def GetLCvdb(file):
     return lc
 
 
-def GetLCeverest(file):
+def GetLCeverest(file=''):
 
     '''
     Parameters
@@ -167,7 +183,7 @@ def GetLCeverest(file):
     return lc
 
 
-def GetLCk2sc(file):
+def GetLCk2sc(file=''):
 
 
     '''
@@ -192,7 +208,7 @@ def GetLCk2sc(file):
 
     return lc
 
-def GetLCtxt(file):
+def GetLCtxt(file=''):
 
     '''
     Parameters
@@ -212,6 +228,45 @@ def GetLCtxt(file):
                      names = ['time','flux_raw','error'])
 
     return lc
+
+def GetLClightkurve(file=''):
+
+    '''
+    Parameters
+    ----------
+    file : light curve file location for a basic .txt file
+
+    Returns
+    -------
+    lc: light curve DataFrame with columns [time, flux_raw, error]
+    '''
+
+    print('Searching for a random LC in the archives...')
+    for i in range(300):
+        ID = randint(211121743,229228998)#campaign 4 or 5 upwards for no particular reason
+        tpf = None
+        try:
+            tpf = KeplerTargetPixelFile.from_archive(ID, cadence='long')
+            print('Found one!')
+            break
+        except ArchiveError:
+            pass
+    if tpf == None:
+        print('Did not find any unique LC by searching random IDs in archive.')
+        print('Fall back to EPIC 220183912.')
+        tpf = KeplerTargetPixelFile.from_archive(220183912, cadence='long')
+
+    lc = tpf.to_lightcurve(method='aperture')
+    lc = lc.flatten()
+    #You could de-trend with lightkurve non-SFF style here:
+    lc = lc.correct(windows=20)
+    LC = pd.DataFrame({'flux_raw': lc.flux,
+                        'time':np.copy(lc.time).byteswap().newbyteorder(),
+                        'error':lc.flux_err,
+                        'flags':np.copy(lc.quality).byteswap().newbyteorder(),
+    })
+
+    return LC
 
 # UNUSED, UNTESTED, DELETE?
 # def OneCadence(data):

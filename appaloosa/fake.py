@@ -5,14 +5,8 @@ from scipy.signal import wiener
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from aflare import aflare1
-from helper import EquivDur
+from helper import EquivDur, chisq
 
-def chisq(data, error, model):
-    '''
-    Compute the normalized chi square statistic:
-    chisq =  1 / N * SUM(i) ( (data(i) - model(i))/error(i) )^2
-    '''
-    return np.sum( ((data - model) / error)**2.0 ) / np.size(data)
 
 
 def ed6890(bins, a):
@@ -236,7 +230,7 @@ def FakeFlaresDist(std, nfake, ampl=(5e-1,5e2), dur=(5e-1,2e2),
 
     return dur_fake, ampl_fake
 
-def FakeCompleteness(dffake,nfake,iterations,display=False,file=''):
+def FakeCompleteness(dffake,fakefreq,iterations,display=False,file=''):
     '''
     Construct a completeness curve for the fake injections.
     Parameters:
@@ -253,7 +247,7 @@ def FakeCompleteness(dffake,nfake,iterations,display=False,file=''):
     ed90
 
     '''
-    nbins = nfake * iterations // 20
+    nbins = max(8,int(np.rint(fakefreq * iterations)))
     if nbins < 10:
         print('Warning: Few injections, completeness of recovery unclear.\nTry increasing iterations.')
         return -199,-199
@@ -264,14 +258,14 @@ def FakeCompleteness(dffake,nfake,iterations,display=False,file=''):
     frac_recovered.sort_index(inplace=True) #helps plotting
     binmids = np.concatenate(([0],(bins[1:]+bins[:-1])/2)) #add a zero intercept for aesthetics
 
-    try:
-        f = pd.DataFrame({'ed_bins': binmids[frac_recovered.index.values[:-1]],
-                           'frac_recovered': frac_recovered.iloc[:-1],
-                           'frac_rec_sm': wiener(frac_recovered.iloc[:-1],3)})
-        ed68, ed90 = ed6890(f.ed_bins,f.frac_rec_sm)
-    except (IndexError, ValueError):
-        print("Something went wrong with dffake indexing. Try using even number of iterations.")
-        return -199, -199
+    # try:
+    f = pd.DataFrame({'ed_bins': binmids[frac_recovered.index.values[:-1]],
+                       'frac_recovered': frac_recovered.iloc[:-1],
+                       'frac_rec_sm': wiener(frac_recovered.iloc[:-1],3)})
+    ed68, ed90 = ed6890(f.ed_bins,f.frac_rec_sm)
+    # except (IndexError, ValueError):
+    #     print("Something went wrong with dffake indexing. Try using even number of iterations.")
+    #     return -199, -199
     # use frac_rec_sm completeness curve to estimate 68%/90% complete
 
     if display is True:

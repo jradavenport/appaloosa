@@ -1,6 +1,12 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+def chisq(data, error, model):
+    '''
+    Compute the normalized chi square statistic:
+    chisq =  1 / N * SUM(i) ( (data(i) - model(i))/error(i) )^2
+    '''
+    return np.sum( ((data - model) / error)**2.0 ) / np.size(data)
 
 def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
 

@@ -2,33 +2,30 @@
 script to carry out flare finding in Kepler LC's
 
 """
-
+import pandas as pd
 import numpy as np
-import os.path
 
 import time as clock
 import datetime
+import glob
+import os.path
+import json
+
 import helper as help
 from version import __version__
 from aflare import aflare1
 import detrend
+from fake import ed6890, FlareStats, FakeFlaresDist, FakeCompleteness
+from get import Get
+
 from gatspy.periodic import LombScargleFast
 import warnings
 import matplotlib.pyplot as plt
-import pandas as pd
+from scipy.signal import savgol_filter, correlate
 
-from scipy import signal
-
-import matplotlib
-import glob
-import json
-from fake import FlareStats, ed6890, chisq, FakeFlaresDist, FakeCompleteness
-from get import Get
-
-matplotlib.rcParams.update({'font.size':12})
-matplotlib.rcParams.update({'font.family':'sansserif'})
-from scipy.signal import savgol_filter
-
+from matplotlib import rcParams as rcp
+rcp.update({'font.size':12})
+rcp.update({'font.family':'sansserif'})
 
 
 def FINDflare(flux, error, N1=3, N2=1, N3=3,
@@ -131,7 +128,7 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
 
 
 
-def MultiFind(lc, dl,dr,mode,
+def MultiFind(lc, dlr,mode,
               gapwindow=0.1, minsep=3, debug=False):
     '''
     this needs to be either
@@ -145,7 +142,7 @@ def MultiFind(lc, dl,dr,mode,
     istop = np.array([], dtype='int')
     flux_model = lc.flux_model.copy().values
 
-    for le,ri in list(zip(dl,dr)):
+    for (le,ri) in dlr:
         lct = lc.iloc[le:ri].copy()
         time, flux, error, flags = lct.time.values, lct.flux.values, lct.error.values, lct.flags.values
         # the bad data points (search where bad < 1)
@@ -186,14 +183,14 @@ def MultiFind(lc, dl,dr,mode,
             box3 = detrend.MultiBoxcar(time, flux_i - sin1, error, kernel=0.3)
             t = np.array(time)
             dt = np.nanmedian(t[1:] - t[0:-1])
-            #print(dt)
             exptime_m = (np.nanmax(time) - np.nanmin(time)) / len(time)
             # ksep used to = 0.07...
             flux_model_i = detrend.IRLSSpline(time, box3, error, numpass=20, debug=debug, ksep=exptime_m*10.) + sin1
             signalfwhm = dt * 2
             ftime = np.arange(0, 2, dt)
             modelfilter = aflare1(ftime, 1, signalfwhm, 1)
-            flux_diff = signal.correlate(flux_i - flux_model_i, modelfilter, mode='same')
+            flux_diff = correlate(flux_i - flux_model_i, modelfilter, mode='same')
+
         if (mode == 4):
             # fit data with a SAVGOL filter
             dt = np.nanmedian(time[1:] - time[0:-1])
@@ -235,7 +232,7 @@ def MultiFind(lc, dl,dr,mode,
             plt.scatter(time[cand1], flux_i[cand1], c='red',label='flare candidates')
             plt.legend()
             plt.show()
-            plt.close()
+
 
         #chi2 = chisq(lc.flux.values[le:ri], flux_model_i, error[le:ri])
         istart = np.array(np.append(istart, istart_i + le), dtype='int')
@@ -247,125 +244,140 @@ def MultiFind(lc, dl,dr,mode,
 
 
 
-def FakeFlares(df1, lc, dl, dr, mode, gapwindow=0.1, nfake=10, debug=False, npass=1,
+def FakeFlares(df1, lc, dlr, mode, gapwindow=0.1, fakefreq=.25, debug=False,
                 savefile=False, outfile='', display=False, verboseout = False):
 
     '''
-    Create nfake number of events, inject them in to data
+    Create a number of events, inject them in to data
     Use grid of amplitudes and durations, keep ampl in relative flux units
     Keep track of energy in Equiv Dur.
+    Duration defined in minutes
+    Amplitude defined multiples of the median error
+
 
     Parameters:
     -------------
-    time
-    flux
-    error
-    flags
-    tstart
-    tstop
-
-    nfake =10
-    npass =1
-    outfile =''
-    savefile =False
-    gapwindow =0.1
-    verboseout =False
+    df1 -  contains info about flare start and stop
+    lc - lightcurve
+    dlr - list of tuples with periods in light curve to analyse
+    mode - de-trending mode
+    gapwindow - =0.1
+    fakefreq - = .25, flares per day
+    debug - =False
+    savefile - =False
+    outfile - =''
     display =False
-    debug =False
+    verboseout =False
 
     Returns:
     ------------
-    ed_fake
-    rec_fake
-    ed_rec
-    ed_rec_err
-    istart_rec
-    istop_rec
+    fakeres - DataFrame with ed_fake (injected EDs), rec_fake (bool, recovered
+    or not), ed_rec (recovered ED), ed_rec_err (uncertainty of recovered ED),
+    istart_rec, istop_rec (locations of recovered fake flares)
 
-    duration defined in minutes
-    amplitude defined multiples of the median error
-    still need to implement npass, to re-do whole thing and average results
     '''
     if debug is True:
         print(str(datetime.datetime.now()) + ' FakeFlares started')
     fakeres = pd.DataFrame()
-    new_flux = np.array(lc.flux)
-    for l,r in list(zip(dl,dr)):
-    	df2t= lc.iloc[l:r]
+    new_flux = np.copy(lc.flux)/lc.flux_model.median()-1.
+    nfakesum = int(np.rint(fakefreq * (lc.time.max() - lc.time.min())))
+    t0_fake = np.zeros(nfakesum, dtype='float')
+    ed_fake = np.zeros(nfakesum, dtype='float')
+    dur_fake = np.zeros(nfakesum, dtype='float')
+    ampl_fake = np.zeros(nfakesum, dtype='float')
+    checksum = 0
+    for (le,ri) in dlr:
+        df2t= lc.iloc[le:ri]
+        nfake = int(np.rint(fakefreq * (df2t.time.max() - df2t.time.min())))
 
-    	df1t = df1[(df1.istart >= l) & (df1.istop <= r)]
-    	medflux = df2t.flux_model.median()# flux needs to be normalized
-    	tstart = df2t.time[df2t.index.isin(df1t.istart)].values
-    	tstop = df2t.time[df2t.index.isin(df1t.istop)].values
+        if debug == True:
+            print('Inject {} fake flares into a {} datapoint long array.'.format(nfake,ri-le))
+        df1t = df1[(df1.istart >= le) & (df1.istop <= ri)]
+        medflux = df2t.flux_model.median()# flux needs to be normalized
+        rft = pd.DataFrame({'tstart':df2t.time[df2t.index.isin(df1t.istart)],
+                            'tstop':df2t.time[df2t.index.isin(df1t.istop)]})
+        flags = df2t.flags.values
+        error = df2t.error.values / medflux
+        flux = df2t.flux.values / medflux - 1.
+        time = df2t.time.values
+        std = np.nanmedian(error)
 
-    	flags = df2t.flags.values
-    	error = df2t.error.values / medflux
-    	flux = df2t.flux.values / medflux - 1.
-    	time = df2t.time.values
-    	std = np.nanmedian(error)
-
-    	dur_fake, ampl_fake = FakeFlaresDist(std, nfake, mode='hawley2014', debug=debug)
-    	t0_fake = np.zeros(nfake, dtype='float')
-    	ed_fake = np.zeros(nfake, dtype='float')
+        dur_fake[checksum:checksum+nfake], ampl_fake[checksum:checksum+nfake] = FakeFlaresDist(std, nfake, mode='hawley2014', debug=debug)
 
 
-    	for k in range(nfake):
+
+        for k in range(checksum, checksum+nfake):
     	    # generate random peak time, avoid known flares
     	    isok = False
     	    while isok is False:
     	        # choose a random peak time
     	        t0 =  np.random.choice(time)
-    	        if len(tstart)>0:
-    	            if ~(np.any(t0 >= tstart) & np.any(t0 <= tstop)):
+                # Are there any real flares to deal with?
+    	        if rft.tstart.shape[0]>0:
+                    # Are there any real flares happening at peak time?
+                    # Fake flares should not overlap with real ones.
+                    b = rft[(t0 >= rft.tstart) & (t0 <= rft.tstop)].shape[0]
+                    if b == 0:
                         isok = True
-    	           # x = np.where((t0 >= tstart) & (t0 <= tstop))
-    	           # if (len(x[0]) < 1):
-    	           #     isok = True
     	        else: isok = True
     	    t0_fake[k] = t0
     	    # generate the fake flare
     	    fl_flux = aflare1(time, t0, dur_fake[k], ampl_fake[k])
     	    ed_fake[k] = help.EquivDur(time, fl_flux)
     	    # inject flare in to light curve
-    	    new_flux[l:r] = new_flux[l:r]+ fl_flux
+    	    new_flux[le:ri] = new_flux[le:ri] + fl_flux
+        checksum +=nfake
+
     '''
     Re-run flare finding for data + fake flares
     Figure out: which flares were recovered?
     '''
     # all the hard decision making should go herehere
+    #error minimum is a safety net for the spline function if mode=3
     new_lc = pd.DataFrame({'flux':new_flux,'time':lc.time,
-                           'error':lc.error, 'flags':lc.flags})
-    istart, istop, flux_model = MultiFind(new_lc, dl, dr, mode,
+                           'error':max(1e-10,np.nanmedian(pd.Series(new_flux).rolling(3, center=True).std())),
+                           'flags':lc.flags})
+    # Create a test lightcurve with flares here:
+    # out_lc = pd.DataFrame({'flux_raw':new_flux*medflux,'time':lc.time,
+    #                        'error':max(1e-10,np.nanmedian(pd.Series(new_flux*medflux).rolling(3, center=True).std())),
+    #                        'flags':lc.flags})
+    # out_lc.to_csv('test_suite/test/testlc.csv')
+    istart, istop, new_lc['flux_model'] = MultiFind(new_lc, dlr, mode,
                                           gapwindow=gapwindow, debug=debug)
-    header = ['ed_fake','rec_fake','ed_rec',
-              'ed_rec_err','istart_rec','istop_rec']
-    for name in header[1:]:
-        vars()[name] = np.zeros(nfake)
+
+    h = {'ed_fake':ed_fake,
+              'rec_fake': np.zeros(nfakesum) ,'ed_rec':np.zeros(nfakesum),
+              'ed_rec_err':np.zeros(nfakesum),'istart_rec':np.zeros(nfakesum),
+              'istop_rec':np.zeros(nfakesum)}
 
     if len(istart)>0: # in case no flares are recovered, even after injection
+        #print(lc.time[istart].index.values,)
+        dfh = pd.DataFrame({'tr':lc.time[istart].values,'ir':lc.time[istart].index.values,
+                            'tp':lc.time[istop].values,'ip':lc.time[istop].index.values})
         for k in range(nfake): # go thru all recovered flares
             # do any injected flares overlap recovered flares?
-            rec = np.where((t0_fake[k] >= lc.time[istart]) & (t0_fake[k] <= lc.time[istop]))
-            if (len(rec[0]) > 0):
-                rec_fake[k] = 1
-                ed_rec[k], ed_rec_err[k], _ = help.ED(istart[rec[0]],
-                                                      istop[rec[0]],
+            rb = dfh[(t0_fake[k] >= dfh.tr) & (t0_fake[k] <= dfh.tp)]
+            if rb.empty==False:
+                rb = rb.iloc[0]
+                h['rec_fake'][k] = 1
+                h['ed_rec'][k], h['ed_rec_err'][k], _ = help.ED(rb.ir, rb.ip,
                                                       lc.time, lc.flux_model,
                                                       new_flux, lc.error)
-                istart_rec[k], istop_rec[k] = istart[rec[0]],istop[rec[0]]
-                istart = np.delete(istart,rec[0])
-                istop = np.delete(istop,rec[0])
-    cols=[]
-    for name in header:
-        cols.append(vars()[name])
-    df = pd.DataFrame(dict(zip(header,cols)))
+                h['istart_rec'][k], h['istop_rec'][k] = rb.ir, rb.ip
+                istart = np.delete(istart,rb.ir)
+                istop = np.delete(istop,rb.ip)
+
+    df = pd.DataFrame(h)
+    del h
     fakeres = fakeres.append(df, ignore_index=True)
 
     if display == True:
+        print('Display fake flare injection')
         fig, ax = plt.subplots(figsize=(10,4))
         ax = help.Plot(new_lc, ax, istart=istart, istop=istop, onlybit=20.)
         plt.show()
-        plt.savefig('{}_fakes_injected.png'.format(outfile), dpi=300)
+        #plt.savefig('{}_fakes_injected.png'.format(outfile), dpi=300)
+        plt.close()
 
     if savefile is True:
         header = ['min_time','max_time','std_dev','nfake','min_amplitude',
@@ -391,25 +403,17 @@ def FakeFlares(df1, lc, dl, dr, mode, gapwindow=0.1, nfake=10, debug=False, npas
 def RunLC(file='', objectid='', ftype='sap', lctype='',
           display=False, readfile=False, debug=False, dofake=True,
           dbmode='fits', gapwindow=0.1, maxgap=0.125,
-          nfake=100, mode=3,iterations=10):
+          fakefreq=.25, mode=3,iterations=10):
     '''
     Main wrapper to obtain and process a light curve
     '''
-    # pick and process a totally random LC.
-    # important for reality checking!
-    if (objectid is 'random'):
-        obj, num = np.loadtxt('get_objects.out', skiprows=1, unpack=True, dtype='str')
-        rand_id = int(np.random.random() * len(obj))
-        objectid = obj[rand_id]
-        print('Random ObjectID Selected: ' + objectid)
-
     # get the data
     if debug is True:
         print(str(datetime.datetime.now()) + ' GetLC started')
         print(file, objectid)
 
-    if dbmode in ('txt','ktwo','everest','vdb','csv','kplr','k2sc'):
-        outfile, objectid, lc = Get(dbmode,file, objectid)
+    if dbmode in ('txt','ktwo','everest','vdb','csv','kplr','k2sc','random','test'):
+        outfile, objectid, lc = Get(dbmode,file=file, objectid=objectid)
     # UNUSED, UNTESTED, DELETE?
     # elif dbmode = 'mysql':
     #     outfile, objectid, lc  = GetLCdb(objectid, type='', readfile=False,
@@ -429,14 +433,15 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     lc['flux'] = detrend.GapFlat(lc.time.values, flux_qtr, maxgap=maxgap)
 
     #find continuous observing periods
-    _, dl, dr = detrend.FindGaps(lc.time.values, maxgap=maxgap)
+    _, dlr = detrend.FindGaps(lc.time.values, maxgap=maxgap)
     if debug is True:
-        print("dl: {}, dr: {}".format(dl,dr))
+        print("dl, dr: {}".format(dlr))
 
     # uQtr = np.unique(qtr)
     if debug is True:
         print(str(datetime.datetime.now()) + ' MultiFind started')
-    istart, istop, lc['flux_model'] = MultiFind(lc,dl,dr,gapwindow=gapwindow, debug=debug, mode=mode)
+    istart, istop, lc['flux_model'] = MultiFind(lc,dlr,gapwindow=gapwindow,
+                                                debug=debug, mode=mode)
 
     df1 = pd.DataFrame({'istart':istart,
                         'istop':istop,
@@ -449,15 +454,15 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
     if dofake is True:
         dffake = pd.DataFrame()
         for k in range(iterations):
-            fakeres = FakeFlares(df1, lc, dl, dr, mode, savefile=True,
+            fakeres = FakeFlares(df1, lc, dlr, mode, savefile=True,
                 gapwindow=gapwindow,
-                outfile=outfile[:outfile.find('.')]+'_fake.json',
-                display=display, nfake=nfake, debug=debug)
+                outfile='{}fake.json'.format(file),
+                display=display, fakefreq=fakefreq, debug=debug)
             dffake = dffake.append(fakeres, ignore_index=True)
 
         dffake.to_csv('{}_all_fakes.csv'.format(outfile))
 
-        df1['ed68'], df1['ed90'] = FakeCompleteness(dffake,nfake,iterations,
+        df1['ed68'], df1['ed90'] = FakeCompleteness(dffake,fakefreq,iterations,
                                                     display=display,
                                                     file=objectid)
 
@@ -469,25 +474,25 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
         fig, ax = plt.subplots(figsize=(8,4))
 
         ax = help.Plot(lc, ax, istart=istart, istop=istop, onlybit=10.)
-
+        plt.show()
         plt.savefig(file + '_lightcurve.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.show()
-    '''
-    #-- IF YOU WANT TO PLAY WITH THE WAVELET STUFF MORE, WORK HERE
-    test_model = detrend.WaveletSmooth(time, flux)
-    test_cand = DetectCandidate(time, flux, error, test_model)
-
-    print(len(cand))
-    print(len(test_cand))
-
-    if display is True:
-        plt.figure()
-        plt.plot(time, flux, 'k')
-        plt.plot(time, test_model, 'green')
-
-        plt.scatter(time[test_cand], flux[test_cand], color='orange', marker='p',s=60, alpha=0.8)
-        plt.show()
-    '''
+        plt.close()
+    # '''
+    # #-- IF YOU WANT TO PLAY WITH THE WAVELET STUFF MORE, WORK HERE
+    # test_model = detrend.WaveletSmooth(time, flux)
+    # test_cand = DetectCandidate(time, flux, error, test_model)
+    #
+    # print(len(cand))
+    # print(len(test_cand))
+    #
+    # if display is True:
+    #     plt.figure()
+    #     plt.plot(time, flux, 'k')
+    #     plt.plot(time, test_model, 'green')
+    #
+    #     plt.scatter(time[test_cand], flux[test_cand], color='orange', marker='p',s=60, alpha=0.8)
+    #     plt.show()
+    # '''
 
     # set this to silence bad fit warnings from polyfit
     warnings.simplefilter('ignore', np.RankWarning)
@@ -549,7 +554,7 @@ def RunLC(file='', objectid='', ftype='sap', lctype='',
 
 if __name__ == "__main__":
     import sys
-    RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, nfake=100)
+    RunLC(file=str(sys.argv[1]), dbmode='fits', display=True, debug=True, fakefreq=0.25)
 
 
 #UNUSED, DELETE?
@@ -633,7 +638,7 @@ if __name__ == "__main__":
 #    ftime = np.arange(0, 2, dt)
 #    modelfilter = aflare1(ftime, 1, signalfwhm, 1)
 
-#    corr = signal.correlate(flux-np.nanmedian(flux), modelfilter, mode='same')
+#    corr = correlate(flux-np.nanmedian(flux), modelfilter, mode='same')
 
 #    plt.figure()
 #    plt.plot(time, flux - np.nanmedian(flux))
