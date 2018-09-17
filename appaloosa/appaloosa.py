@@ -361,8 +361,9 @@ def FakeFlares(df1, lc, dlr, mode, gapwindow=0.1, fakefreq=.25, debug=False,
                 rb = rb.iloc[0]
                 h['rec_fake'][k] = 1
                 h['ed_rec'][k], h['ed_rec_err'][k], _ = help.ED(rb.ir, rb.ip,
-                                                      lc.time, lc.flux_model,
-                                                      new_flux, lc.error)
+                                                      lc.time, new_lc.flux_model,
+                                                      new_flux,
+                                                      lc.error/lc.flux_model)
                 h['istart_rec'][k], h['istop_rec'][k] = rb.ir, rb.ip
                 istart = np.delete(istart,rb.ir)
                 istop = np.delete(istop,rb.ip)
