@@ -2,7 +2,7 @@ from astropy.io import fits
 import pandas as pd
 import numpy as np
 from os.path import expanduser
-from random import randint
+from random import choice as choose_random_item
 import os
 from lightkurve import KeplerTargetPixelFile
 from lightkurve.mast import ArchiveError
@@ -229,7 +229,7 @@ def GetLCtxt(file=''):
 
     return lc
 
-def GetLClightkurve(file=''):
+def GetLClightkurve(file='random'):
 
     '''
     Parameters
@@ -240,25 +240,33 @@ def GetLClightkurve(file=''):
     -------
     lc: light curve DataFrame with columns [time, flux_raw, error]
     '''
+    if file == 'random':
+        print('Choose a random LC from the archives...')
+        idlist = pd.read_csv('stars_shortlist/share/helpers/GO_all_campaigns_to_date.csv',
+                              usecols=['EPIC ID'])
 
-    print('Searching for a random LC in the archives...')
-    for i in range(300):
-        ID = randint(211121743,229228998)#campaign 4 or 5 upwards for no particular reason
+        ID = choose_random_item(idlist['EPIC ID'].values)
         tpf = None
         try:
             tpf = KeplerTargetPixelFile.from_archive(ID, cadence='long')
-            print('Found one!')
-            break
         except ArchiveError:
-            pass
-    if tpf == None:
-        print('Did not find any unique LC by searching random IDs in archive.')
-        print('Fall back to EPIC 220183912.')
-        tpf = KeplerTargetPixelFile.from_archive(220183912, cadence='long')
+            print('EPIC {} was observed during several campaigns.'
+                  '\nChoose the earliest available.'.format(ID))
+            C = 0
+            while C < 20:
+                print(C)
+                try:
+                    tpf = KeplerTargetPixelFile.from_archive(ID, cadence='long',
+                                                             campaign=C)
+                except ArchiveError:
+                    C += 1
+                    pass
+                if tpf != None:
+                    break
+    else:
+        tpf.KeplerTargetPixelFile(file, quality_bitmask='default')
 
     lc = tpf.to_lightcurve(method='aperture')
-    lc = lc.flatten()
-    #You could de-trend with lightkurve non-SFF style here:
     lc = lc.correct(windows=20)
     LC = pd.DataFrame({'flux_raw': lc.flux,
                         'time':np.copy(lc.time).byteswap().newbyteorder(),
