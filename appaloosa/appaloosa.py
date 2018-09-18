@@ -126,10 +126,18 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
             bin_out[istart_i[k]:istop_i[k]+1] = 1
         return bin_out
 
-def ModelLC(time, flux, error, flags, mode='davenport', **kwargs):
+def ModelLC(time, flux, error, mode='davenport', **kwargs):
 
     '''
     Construct a model light curve.
+
+    Parameters:
+    ------------
+    time : numpy array
+    flux : numpy array
+    errors : numpy array
+    mode : 'davenport' or str
+        Defines the method used to construct model light curve
     '''
 
 
@@ -209,18 +217,27 @@ def MultiFind(lc, dlr,mode='davenport',
 
     Parameters:
     ------------
-    lc  -  light curve DataFrame
-    dlr  -  list of tuples containing boundaries of continuous observation periods
-    mode -
-    gapwindow  -  =0.1
-    minsep  -  =3
-    debug  -  =False
+    lc : pandas DataFrame
+        light curve
+    dlr : list of tuples
+        contains boundaries of continuous observation periods
+    mode : 'davenport' or str
+        method for model light curve construction
+    gapwindow : 0.1 or float
+
+    minsep : 3 or int
+
+    debug : False or bool
+
 
     Return:
     ------------
-    istart  -  start indices of flares
-    istop  -  stop indices of flares
-    flux_model  -  model light curve
+    istart : numpy array
+        start indices of flares
+    istop : numpy array
+        stop indices of flares
+    flux_model : numpy array
+        model light curve
     '''
 
     lc['flux_model'] = 0.
@@ -232,13 +249,14 @@ def MultiFind(lc, dlr,mode='davenport',
         lct = lc.iloc[le:ri].copy()
         time, flux  = lct.time.values, lct.flux.values,
         error, flags = lct.error.values, lct.flags.values
+
         # the bad data points (search where bad < 1)
         bad = help.FlagCuts(flags, returngood=False)
-        #flux_i = np.copy(flux)
 
-        flux_model_i, flux_diff = ModelLC(time, flux, error, flags,
-                                          gapwindow=0.1, minsep=3,
-                                          mode='davenport', debug=False)
+
+        flux_model_i, flux_diff = ModelLC(time, flux, error,
+                                          gapwindow=gapwindow, minsep=minsep,
+                                          mode=mode, debug=debug)
 
         # run final flare-find on DATA - MODEL
         isflare = FINDflare(flux_diff, error, N1=3, N2=4, N3=3,
@@ -280,11 +298,7 @@ def MultiFind(lc, dlr,mode='davenport',
 
     return istart, istop, flux_model
 
-
-
-
-
-def FakeFlares(df1, lc, dlr, mode, gapwindow=0.1, fakefreq=.25, debug=False,
+def FakeFlares(df1, lc, dlr, mode='davenport', gapwindow=0.1, fakefreq=.25, debug=False,
                 savefile=False, outfile='', display=False, verboseout = False):
 
     '''
@@ -382,7 +396,7 @@ def FakeFlares(df1, lc, dlr, mode, gapwindow=0.1, fakefreq=.25, debug=False,
     #                        'error':max(1e-10,np.nanmedian(pd.Series(new_flux*medflux).rolling(3, center=True).std())),
     #                        'flags':lc.flags})
     # out_lc.to_csv('test_suite/test/testlc.csv')
-    istart, istop, new_lc['flux_model'] = MultiFind(new_lc, dlr, mode,
+    istart, istop, new_lc['flux_model'] = MultiFind(new_lc, dlr, mode=mode,
                                           gapwindow=gapwindow, debug=debug)
 
     h = {'ed_fake':ed_fake,
@@ -400,10 +414,8 @@ def FakeFlares(df1, lc, dlr, mode, gapwindow=0.1, fakefreq=.25, debug=False,
             if rb.empty==False:
                 rb = rb.iloc[0]
                 h['rec_fake'][k] = 1
-                h['ed_rec'][k], h['ed_rec_err'][k], _ = help.ED(rb.ir, rb.ip,
-                                                      lc.time, new_lc.flux_model,
-                                                      new_flux,
-                                                      lc.error/lc.flux_model)
+                h['ed_rec'][k], h['ed_rec_err'][k] = help.ED(rb.ir, rb.ip,
+                                                             new_lc, err=True)
                 h['istart_rec'][k], h['istop_rec'][k] = rb.ir, rb.ip
                 istart = np.delete(istart,rb.ir)
                 istop = np.delete(istop,rb.ip)
@@ -441,10 +453,10 @@ def FakeFlares(df1, lc, dlr, mode, gapwindow=0.1, fakefreq=.25, debug=False,
 
 
 # objectid = '9726699'  # GJ 1243
-def RunLC(file='', objectid='', ftype='sap', lctype='',
+def RunLC(file='', objectid='', lctype='',
           display=False, readfile=False, debug=False, dofake=True,
           dbmode='fits', gapwindow=0.1, maxgap=0.125,
-          fakefreq=.25, mode=3,iterations=10):
+          fakefreq=.25, mode='davenport', iterations=10):
     '''
     Main wrapper to obtain and process a light curve
     '''

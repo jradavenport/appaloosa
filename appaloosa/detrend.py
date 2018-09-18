@@ -163,19 +163,20 @@ def FitSin(time, flux, error, maxnum=5, nper=20000,
 
     Parameters
     ----------
-    time:
-    flux:
-    error:
-    maxnum:
-    nper: int, optional
+    time : numpy array
+    flux : numpy array
+    error : numpy array
+    maxnum : 5 or int
+    nper : 20000 or int
         number of periods to search over with Lomb Scargle
-    minper:
-    maxper:
-    plim:
-    debug:
+    minper : 0.1 or float
+    maxper: 30.0 or float
+    plim: 0.25 or float
+    debug: False or bool
 
     Returns
     -------
+    
     '''
     # periods = np.linspace(minper, maxper, nper)
 

@@ -51,41 +51,46 @@ def EquivDur(time, flux):
     p = np.trapz(flux, x=(time * 60.0 * 60.0 * 24.0))
     return p
 
-def ED(start,stop,time,flux_model,flux, error):
+def ED(start, stop, lc, err=False, residual_given=False):
 
     '''
     Returns the equivalend duratio of a flare event,
     found within indices [start, stop],
     calculated as the area under the residual (flux-flux_model)
-    Returns also the error on ED following (Davenport 2016)
+    Returns also the uncertainty on ED following Davenport (2016)
 
     Parameters:
     --------------
-    start - start time index of a flare event
-    stop - end time index of a flare event
-    time - time array
-    flux_model - model quiescent flux
-    flux - long-term trend removed raw light curve
-    error - rolling std error to raw flux
+    start : int
+        start time index of a flare event
+    stop : int
+        end time index of a flare event
+    lc : pandas DataFrame
+        light curve with columns ['time','flux_model','flux','error']
+    err: False or bool
+        If True will compute uncertainty on ED
+    residual_given: False or bool
+        If True will take 'residual' column from LC directly
 
     Returns:
     --------------
-    ed - equivalent duration in seconds
-    ederr - uncertainty in seconds
+    ed : float
+        equivalent duration in seconds
+    ederr : float
+        uncertainty in seconds
     '''
 
-    start, stop = int(start),int(stop)
-    time = np.asarray(time)[start:stop+1]
-    model = np.asarray(flux_model)[start:stop+1]
-    flux = np.asarray(flux)[start:stop+1]
-    error = np.asarray(error)[start:stop+1]
-    residual = (flux - model)
-    ed = np.trapz(residual,time*60.*60.*24.)
-    #measure error on ED
+    start, stop = int(start),int(stop)+1
+    lct = lc.iloc[start:stop]
+    residual = (lct.flux - lct.flux_model).values
+    ed = np.trapz(residual,lct.time.values * 60. * 60. * 24.)
 
-    flare_chisq = chisq(flux, error, model)
-    ederr = np.sqrt(ed**2 / (stop-start) / flare_chisq)
-    return ed, ederr, flare_chisq
+    if err == True:
+        flare_chisq = chisq(lct.flux.values, lct.error.values, lct.model.values)
+        ederr = np.sqrt(ed**2 / (stop-start) / flare_chisq)
+        return ed, ederr
+    else:
+        return ed
 
 def Plot(lc, ax, istart=None,istop=None,onlybit=None):
 

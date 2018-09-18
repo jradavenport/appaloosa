@@ -24,14 +24,18 @@ def Get(mode, file='', objectid='', win_size=3):
 
     Parameters:
     ------------
-    file: lightcurve file location
-    mode: type of light curve, e.g. EVEREST LC,
-          Vanderburg LC, raw MAST .fits file etc.
-    win_size: window size for scatter generator
+    mode: str
+        type of light curve, e.g. EVEREST LC, Vanderburg LC,
+        raw MAST .fits file, random K2
+    file: '' or str
+        lightcurve file location
+    win_size: 3 or int
+        window size for scatter generator
 
     Returns:
     ------------
-    lc: light curve DataFrame
+    lc: pandas DataFrame
+        light curve
 
     '''
 
@@ -128,7 +132,6 @@ def GetLCfits(file=''):
     -------
     lc: light curve DataFrame with columns [time, quality, flux_raw, error]
     '''
-
     hdu = fits.open(file)
     data_rec = hdu[1].data
     lc = pd.DataFrame({'time':data_rec['TIME'].byteswap().newbyteorder(),
@@ -213,13 +216,13 @@ def GetLCtxt(file=''):
     '''
     Parameters
     ----------
-    file : light curve file location for a basic .txt file
+    file : '' or
+    light curve file location for a basic .txt file
 
     Returns
     -------
     lc: light curve DataFrame with columns [time, flux_raw, error]
     '''
-
     lc = pd.read_csv(file,
                      index_col=False,
                      usecols=(0,1,2),
@@ -229,18 +232,28 @@ def GetLCtxt(file=''):
 
     return lc
 
-def GetLClightkurve(file='random'):
+def GetLClightkurve(file='',**kwargs):
 
     '''
+    Construct a light curve from either
+    - a local KeplerTargetPixelFile, or
+    - a random K2 KeplerTargetPixelFile from the archive
+    using the lightkurve built-in correct function.
+
     Parameters
     ----------
-    file : light curve file location for a basic .txt file
+    file : '' or str
+        light curve file path. Default will download random file from archive.
+    **kwargs : dict
+        Keyword arguments to that will be passed to the KeplerTargetPixelFile
+        constructor.
 
     Returns
     -------
-    lc: light curve DataFrame with columns [time, flux_raw, error]
+    lc: pandas DataFrame
+        light curve with columns ['time', 'flux_raw', 'error']
     '''
-    if file == 'random':
+    if file == '':
         print('Choose a random LC from the archives...')
         idlist = pd.read_csv('stars_shortlist/share/helpers/GO_all_campaigns_to_date.csv',
                               usecols=['EPIC ID'])
