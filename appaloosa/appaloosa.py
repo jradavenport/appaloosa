@@ -126,15 +126,101 @@ def FINDflare(flux, error, N1=3, N2=1, N3=3,
             bin_out[istart_i[k]:istop_i[k]+1] = 1
         return bin_out
 
+def ModelLC(time, flux, error, flags, mode='davenport', **kwargs):
+
+    '''
+    Construct a model light curve.
+    '''
 
 
-def MultiFind(lc, dlr,mode,
+    if (mode == 'median'):
+        # only for fully preprocessed LCs like K2SC
+        flux_model_i = np.nanmedian(flux) * np.ones_like(flux)
+        flux_diff = flux - flux_model_i
+
+    if (mode == 'boxcar'):
+        # just use the multi-pass boxcar and average. Simple. Too simple...
+        flux_model1 = detrend.MultiBoxcar(time, flux, error, kernel=0.1)
+        flux_model2 = detrend.MultiBoxcar(time, flux, error, kernel=1.0)
+        flux_model3 = detrend.MultiBoxcar(time, flux, error, kernel=10.0)
+
+        flux_model_i = (flux_model1 + flux_model2 + flux_model3) / 3.
+        flux_diff = flux - flux_model_i
+
+    if (mode == 'fitsin'):
+        # first do a pass thru w/ largebox to get obvious flares
+        box1 = detrend.MultiBoxcar(time, flux, error,
+                                   kernel=2.0, numpass=2)
+        sin1 = detrend.FitSin(time, box1, error, maxnum=2,
+                              maxper=(max(time)-min(time)))
+
+        box2 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.25)
+        flux_model_i = (box2 + sin1)
+        flux_diff = flux - flux_model_i
+
+
+    if (mode == 'davenport'):
+        # do iterative rejection and spline fit - like FBEYE did
+        # also like DFM & Hogg suggest w/ BART
+        box1 = detrend.MultiBoxcar(time, flux, error,
+                                   kernel=2.0, numpass=2)
+
+        sin1 = detrend.FitSin(time, box1, error, maxnum=5,
+                              maxper=(max(time)-min(time)),
+                              per2=False, debug=kwargs['debug'])
+        box3 = detrend.MultiBoxcar(time, flux - sin1, error, kernel=0.3)
+        t = np.array(time)
+        dt = np.nanmedian(t[1:] - t[0:-1])
+        exptime_m = (np.nanmax(time) - np.nanmin(time)) / len(time)
+        # ksep used to = 0.07...
+        flux_model_i = detrend.IRLSSpline(time, box3, error, numpass=20,
+                                          ksep=exptime_m*10.,
+                                          debug=kwargs['debug'])
+        flux_model_i += sin1
+        signalfwhm = dt * 2
+        ftime = np.arange(0, 2, dt)
+        modelfilter = aflare1(ftime, 1, signalfwhm, 1)
+        #Cross-correlate model filter to enhance flare signals
+        flux_diff = correlate(flux - flux_model_i,
+                              modelfilter, mode='same')
+
+    if (mode == 'savgol'):
+        # fit data with a SAVGOL filter
+        dt = np.nanmedian(time[1:] - time[0:-1])
+        Nsmo = np.floor(0.2 / dt)
+        if Nsmo % 2 == 0:
+            Nsmo = Nsmo + 1
+        flux_model_i = savgol_filter(flux, Nsmo, 2, mode='nearest')
+        flux_diff = flux - flux_model_i
+
+    return flux_model_i, flux_diff
+
+def MultiFind(lc, dlr,mode='davenport',
               gapwindow=0.1, minsep=3, debug=False):
     '''
-    this needs to be either
+    NOTE:
+    This needs to be either
     1. made in to simple multi-pass cleaner,
     2. made in to "run till no signif change" cleaner, or
     3. folded back in to main code
+
+    Search for flares in the continuous observation periods
+    of light curves.
+
+    Parameters:
+    ------------
+    lc  -  light curve DataFrame
+    dlr  -  list of tuples containing boundaries of continuous observation periods
+    mode -
+    gapwindow  -  =0.1
+    minsep  -  =3
+    debug  -  =False
+
+    Return:
+    ------------
+    istart  -  start indices of flares
+    istop  -  stop indices of flares
+    flux_model  -  model light curve
     '''
 
     lc['flux_model'] = 0.
@@ -144,62 +230,15 @@ def MultiFind(lc, dlr,mode,
 
     for (le,ri) in dlr:
         lct = lc.iloc[le:ri].copy()
-        time, flux, error, flags = lct.time.values, lct.flux.values, lct.error.values, lct.flags.values
+        time, flux  = lct.time.values, lct.flux.values,
+        error, flags = lct.error.values, lct.flags.values
         # the bad data points (search where bad < 1)
         bad = help.FlagCuts(flags, returngood=False)
-        flux_i = np.copy(flux)
+        #flux_i = np.copy(flux)
 
-        if (mode == 0):
-            # only for fully preprocessed LCs like K2SC
-            flux_model_i = np.nanmedian(flux) * np.ones_like(flux)
-            flux_diff = flux - flux_model_i
-
-        if (mode == 1):
-            # just use the multi-pass boxcar and average. Simple. Too simple...
-            flux_model1 = detrend.MultiBoxcar(time, flux, error, kernel=0.1)
-            flux_model2 = detrend.MultiBoxcar(time, flux, error, kernel=1.0)
-            flux_model3 = detrend.MultiBoxcar(time, flux, error, kernel=10.0)
-
-            flux_model_i = (flux_model1 + flux_model2 + flux_model3) / 3.
-            flux_diff = flux - flux_model_i
-
-        if (mode == 2):
-            # first do a pass thru w/ largebox to get obvious flares
-            box1 = detrend.MultiBoxcar(time, flux_i, error, kernel=2.0, numpass=2)
-            sin1 = detrend.FitSin(time, box1, error, maxnum=2, maxper=(max(time)-min(time)))
-
-            box2 = detrend.MultiBoxcar(time, flux_i - sin1, error, kernel=0.25)
-            flux_model_i = (box2 + sin1)
-            flux_diff = flux - flux_model_i
-
-
-        if (mode == 3):
-            # do iterative rejection and spline fit - like FBEYE did
-            # also like DFM & Hogg suggest w/ BART
-            box1 = detrend.MultiBoxcar(time, flux_i, error, kernel=2.0, numpass=2)
-
-            sin1 = detrend.FitSin(time, box1, error, maxnum=5, maxper=(max(time)-min(time)),
-                                  per2=False, debug=debug)
-            box3 = detrend.MultiBoxcar(time, flux_i - sin1, error, kernel=0.3)
-            t = np.array(time)
-            dt = np.nanmedian(t[1:] - t[0:-1])
-            exptime_m = (np.nanmax(time) - np.nanmin(time)) / len(time)
-            # ksep used to = 0.07...
-            flux_model_i = detrend.IRLSSpline(time, box3, error, numpass=20, debug=debug, ksep=exptime_m*10.) + sin1
-            signalfwhm = dt * 2
-            ftime = np.arange(0, 2, dt)
-            modelfilter = aflare1(ftime, 1, signalfwhm, 1)
-            flux_diff = correlate(flux_i - flux_model_i, modelfilter, mode='same')
-
-        if (mode == 4):
-            # fit data with a SAVGOL filter
-            dt = np.nanmedian(time[1:] - time[0:-1])
-            Nsmo = np.floor(0.2 / dt)
-            if Nsmo % 2 == 0:
-                Nsmo = Nsmo + 1
-            flux_model_i = savgol_filter(flux, Nsmo, 2, mode='nearest')
-            flux_diff = flux - flux_model_i
-
+        flux_model_i, flux_diff = ModelLC(time, flux, error, flags,
+                                          gapwindow=0.1, minsep=3,
+                                          mode='davenport', debug=False)
 
         # run final flare-find on DATA - MODEL
         isflare = FINDflare(flux_diff, error, N1=3, N2=4, N3=3,
@@ -238,6 +277,7 @@ def MultiFind(lc, dlr,mode,
         istart = np.array(np.append(istart, istart_i + le), dtype='int')
         istop = np.array(np.append(istop, istop_i + le), dtype='int')
         flux_model[le:ri] = flux_model_i
+
     return istart, istop, flux_model
 
 

@@ -264,7 +264,7 @@ def GetLClightkurve(file='random'):
                 if tpf != None:
                     break
     else:
-        tpf.KeplerTargetPixelFile(file, quality_bitmask='default')
+        tpf = KeplerTargetPixelFile(file, quality_bitmask='default')
 
     lc = tpf.to_lightcurve(method='aperture')
     lc = lc.correct(windows=20)
