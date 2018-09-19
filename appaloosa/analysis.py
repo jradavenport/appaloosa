@@ -300,6 +300,7 @@ def FlareEqn(X, a1, a2, a3, b1, b2, b3):
     '''
     The big FFD fitting equation, fititng both powerlaw slope and intercept as functions of mass and age
 
+    THIS is the original version from Paper2 draft v1
 
     Parameters
     ----------
@@ -321,7 +322,7 @@ def FlareEqn(X, a1, a2, a3, b1, b2, b3):
 
     return logR
 
-def FlareEqnFixed(X, a1, a2, a3, b1, b2, b3):
+def FlareEqnNew(X, a1, a2, a3, b1, b2, b3):
     '''
     The big FFD fitting equation, fititng ONLY the powerlaw intercept as functions of mass and age
     The powerlaw slope is fixed to a=-1
