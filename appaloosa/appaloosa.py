@@ -330,6 +330,27 @@ def FakeFlares(df1, lc, dlr, mode='davenport', gapwindow=0.1, fakefreq=.25, debu
     istart_rec, istop_rec (locations of recovered fake flares)
 
     '''
+
+    def EquivDur(time, flux):
+        '''
+        Compute the Equivalent Duration of a fake flare.
+        This is the area under the flare, in relative flux units.
+
+        Parameters:
+        -------------
+        time : numpy array
+            units of DAYS
+        flux : numpy array
+            relative flux units
+        Return:
+        ------------
+        p : float
+            equivalent duration of a single event in units of seconds
+        '''
+
+        p = np.trapz(flux, x=(time * 60.0 * 60.0 * 24.0))
+        return p
+
     if debug is True:
         print(str(datetime.datetime.now()) + ' FakeFlares started')
     fakeres = pd.DataFrame()
@@ -377,6 +398,7 @@ def FakeFlares(df1, lc, dlr, mode='davenport', gapwindow=0.1, fakefreq=.25, debu
     	    t0_fake[k] = t0
     	    # generate the fake flare
     	    fl_flux = aflare1(time, t0, dur_fake[k], ampl_fake[k])
+            lc
     	    ed_fake[k] = help.EquivDur(time, fl_flux)
     	    # inject flare in to light curve
     	    new_flux[le:ri] = new_flux[le:ri] + fl_flux

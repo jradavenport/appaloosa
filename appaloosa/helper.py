@@ -36,20 +36,7 @@ def FlagCuts(flags, bad_flags = (16, 128, 2048), returngood=True):
     else:
         return bad
 
-def EquivDur(time, flux):
-    '''
-    Compute the Equivalent Duration of an event. This is simply the area
-    under the flare, in relative flux units.
 
-    Flux must be array in units of zero-centered RELATIVE FLUX
-
-    Time must be array in units of DAYS
-
-    Output has units of SECONDS
-    '''
-
-    p = np.trapz(flux, x=(time * 60.0 * 60.0 * 24.0))
-    return p
 
 def ED(start, stop, lc, err=False, residual_given=False):
 
@@ -83,7 +70,7 @@ def ED(start, stop, lc, err=False, residual_given=False):
     start, stop = int(start),int(stop)+1
     lct = lc.iloc[start:stop]
     residual = (lct.flux - lct.flux_model).values
-    ed = np.trapz(residual,lct.time.values * 60. * 60. * 24.)
+    ed = np.trapz(residual, lct.time.values * 60. * 60. * 24.)
 
     if err == True:
         flare_chisq = chisq(lct.flux.values, lct.error.values, lct.model.values)
