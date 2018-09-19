@@ -15,7 +15,7 @@ test_suite = {'kplr':('{}kplr009726699-2009350155506_llc.fits'.format(path),'dav
               'everest':('{}hlsp_everest_k2_llc_246199087-c12_kepler_v2.0_lc.fits'.format(path),'davenport'),
               'k2sc':('{}hlsp_k2sc_k2_llc_211099743-c04_kepler_v2_lc.fits'.format(path),'median'),
               'vdb':('{}hlsp_k2sff_k2_lightcurve_220132548-c08_kepler_v1_llc-default-aper.txt'.format(path),'davenport'),
-              'random':('random','median'),
+              'random':('','median'),
               'test':('{}testLC'.format(path),'median')
               }
 

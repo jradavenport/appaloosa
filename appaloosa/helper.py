@@ -73,7 +73,7 @@ def ED(start, stop, lc, err=False, residual_given=False):
     ed = np.trapz(residual, lct.time.values * 60. * 60. * 24.)
 
     if err == True:
-        flare_chisq = chisq(lct.flux.values, lct.error.values, lct.model.values)
+        flare_chisq = chisq(lct.flux.values, lct.error.values, lct.flux_model.values)
         ederr = np.sqrt(ed**2 / (stop-start) / flare_chisq)
         return ed, ederr
     else:

@@ -5,7 +5,7 @@ from scipy.signal import wiener
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from aflare import aflare1
-from helper import EquivDur, chisq
+from helper import chisq, ED
 
 
 
@@ -132,7 +132,8 @@ def FlareStats(lc, istart=-1, istop=-1,
     # rel_error = error / np.median(flux_model)
 
     # measure flare ED
-    ed = EquivDur(np.array(flaretime), (flareflux-contline)/medflux)
+    #ed = EquivDur(np.array(flaretime), (flareflux-contline)/medflux)
+    ed = ED(0,lct.shape[0],lct)
 
     # output a dict or array?
     params = np.array((tstart, tstop, tpeak, ampl, fwhm, dur0,

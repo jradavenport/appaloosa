@@ -398,8 +398,8 @@ def FakeFlares(df1, lc, dlr, mode='davenport', gapwindow=0.1, fakefreq=.25, debu
     	    t0_fake[k] = t0
     	    # generate the fake flare
     	    fl_flux = aflare1(time, t0, dur_fake[k], ampl_fake[k])
-            lc
-    	    ed_fake[k] = help.EquivDur(time, fl_flux)
+
+    	    ed_fake[k] = EquivDur(time, fl_flux)
     	    # inject flare in to light curve
     	    new_flux[le:ri] = new_flux[le:ri] + fl_flux
         checksum +=nfake
@@ -427,7 +427,7 @@ def FakeFlares(df1, lc, dlr, mode='davenport', gapwindow=0.1, fakefreq=.25, debu
               'istop_rec':np.zeros(nfakesum)}
 
     if len(istart)>0: # in case no flares are recovered, even after injection
-        #print(lc.time[istart].index.values,)
+
         dfh = pd.DataFrame({'tr':lc.time[istart].values,'ir':lc.time[istart].index.values,
                             'tp':lc.time[istop].values,'ip':lc.time[istop].index.values})
         for k in range(nfake): # go thru all recovered flares
