@@ -15,6 +15,8 @@ import datetime
 import warnings
 from scipy.optimize import curve_fit, minimize
 from astropy.stats import funcs
+import emcee
+import corner
 # from scipy.stats import binned_statistic_2d
 # from os.path import expanduser
 
@@ -267,33 +269,28 @@ def getBV(mass, isochrone='1.0gyr.dat'):
     return BV
 
 
-def FlareEqn2(X, a1, a2, a3, a4, b1, b2, b3, c):
+def FlareEqn0(X, a1, a2, b1, b2):
     '''
-    
+    this is the simple FFD evolution for bins of mass,
+    i.e. only produce FFD model as a function of energy and age (drop mass dependence)
+
+    run on each of the (g-i) sample bins shown in paper
+
     Parameters
     ----------
-    X = (logE, logt, m)
+    X = (logE, logt)
         age in log Myr
-        mass in log Solar
         E in log erg
-    a1
-    a2
-    a3
-    a4
-    b1
-    b2
-    b3
-    c
 
     Returns
     -------
     log Rate of flares
 
     '''
-    logE, logt, m = X
+    logE, logt = X
 
-    a = a1 * logt + a2 * m + a3 * logt * m + a4
-    b = b1 * logt + b2 * m + b3 * logt * m + c
+    a = a1 * logt + a2
+    b = b1 * logt + b2
     logR = logE * a + b
 
     return logR
@@ -301,19 +298,16 @@ def FlareEqn2(X, a1, a2, a3, a4, b1, b2, b3, c):
 
 def FlareEqn(X, a1, a2, a3, b1, b2, b3):
     '''
+    The big FFD fitting equation, fititng both powerlaw slope and intercept as functions of mass and age
+
+    THIS is the original version from Paper2 draft v1
 
     Parameters
     ----------
     X = (logE, logt, m)
         age in log Myr
-        mass in log Solar
+        mass in Solar
         E in log erg
-    a1
-    a2
-    a2
-    b1
-    b2
-    b3
 
     Returns
     -------
@@ -328,21 +322,133 @@ def FlareEqn(X, a1, a2, a3, b1, b2, b3):
 
     return logR
 
+def FlareEqnNew(X, a1, a2, a3, b1, b2, b3):
+    '''
+    The big FFD fitting equation, fititng ONLY the powerlaw intercept as functions of mass and age
+    The powerlaw slope is fixed to a=-1
 
-def FlareEqn3(X,
-              a1, a2, a3, b1, b2, b3,
-              c1, c2, c3, d1, d2, d3):
-    ''' a broken powerlaw FFD evolution'''
+    warning: currently requires a1,a2,a3 for backwards compatibility with the "FlareEqn" function above...
+    Parameters
+    ----------
+    X = (logE, logt, m)
+        age in log Myr
+        mass in Solar
+        E in log erg
+
+    Returns
+    -------
+    log Rate of flares
+
+    '''
+    logE, logt, m = X
+
+    a = -1.
+    b = b1 * logt + b2 * m + b3
+    logR = logE * a + b
+
+    return logR
+
+
+def flare_lnprob(p, x, y, yerr):
+    N = np.size(x)
+    model = FlareEqn(x, *p)
+    return -0.5 * appaloosa.chisq(y, yerr, model)
+
+
+def FlareEqn_nolog(X, a1, a2, a3, b1, b2, b3):
+    '''
+
+    Parameters
+    ----------
+    X = (logE, logt, m)
+        age in log Myr
+        mass in Solar
+        E in log erg
+
+    Returns
+    -------
+    Rate of flares (NOTE: not the log rate)
+
+    '''
     logE, logt, m = X
 
     a = a1 * logt + a2 * m + a3
     b = b1 * logt + b2 * m + b3
-    c = c1 * logt + c2 * m + c3
-    d = d1 * logt + d2 * m + d3
+    logR = logE * a + b
 
-    logR = np.log10(a * ((10**logE)**b) +
-                    c * ((10**logE)**d))
+    return 10.0 ** logR
+
+
+def FlareEqn2(X, a1, a2, a3, a4, a5, a6, b1, b2):
+    '''
+
+    Parameters
+    ----------
+    X = (logE, logt, m)
+        age in log Myr
+        mass in Solar
+        E in log erg
+
+    Returns
+    -------
+    log Rate of flares
+
+    '''
+    logE, logt, m = X
+
+    a = (a1 * logt) + (a2 * m) + (a3 * logt * m) + (a4 * logt**2) + (a5 * m**2) + a6
+    b = b1 * m + b2
+    logR = logE * a + b
+
     return logR
+
+
+def FlareEqn2_nolog(X, a1, a2, a3, a4, a5, a6, b1, b2):
+    '''
+
+    Parameters
+    ----------
+    X = (logE, logt, m)
+        age in log Myr
+        mass in Solar
+        E in log erg
+
+    Returns
+    -------
+    log Rate of flares
+
+    '''
+    logE, logt, m = X
+
+    a = (a1 * logt) + (a2 * m) + (a3 * logt * m) + (a4 * logt**2) + (a5 * m**2) + a6
+    b = b1 * m + b2
+    logR = logE * a + b
+
+    return 10.0 ** logR
+
+
+
+def Chi_fl(giclr):
+    '''
+    Compute the Chi_fl parameter, defined as Flux(Kepler band) / Flux (Bol)
+
+    Used to convert L_fl/L_kp to L_fl/L_bol
+
+    NOTE: only defined between 0 <= g-i <= 5,
+    or approximately 1.5 >= M_sun >= 0.15
+
+    Parameters
+    ----------
+    giclr: float or numpy float array of the g-i stellar color
+
+    Returns
+    -------
+    Chi_fl values
+
+    '''
+    fit = np.array([-0.00129193,  0.02105752, -0.14589187,  0.10493256,  0.00440871])
+
+    return 10.0**np.polyval(fit, giclr)
 
 
 def massL(m1=0.2, m2=1.3, dm=0.01, isochrone='1.0gyr.dat'):
@@ -377,1156 +483,7 @@ def massL(m1=0.2, m2=1.3, dm=0.01, isochrone='1.0gyr.dat'):
 
 
 
-def paper1_plots(condorfile='condorout.dat.gz',
-                 kicfile='kic.txt.gz', statsfile='stats.txt',
-                 rerun=False,
-                 figdir='figures/', figtype='.pdf'):
-    '''
-    Make plots for the first paper, which describes the Kepler flare sample.
 
-    The Condor results are aggregated from PostCondor()
-
-    Run on WWU workstation in dir: ~/research/kepler-flares/
-
-    set rerun=True to go through all the flare files again, takes about 40min to run
-    use rerun=False for quicker results using save file
-
-    '''
-
-    # read in KIC file
-    # http://archive.stsci.edu/pub/kepler/catalogs/ <- data source
-    # http://archive.stsci.edu/kepler/kic10/help/quickcol.html <- info
-
-    print(datetime.datetime.now())
-    kicdata = pd.read_csv(kicfile, delimiter='|')
-    # need KICnumber, gmag, imag, logg (for cutting out crap only)
-    # kicnum_k = kicdata['kic_kepler_id']
-
-
-    fdata = pd.read_table(condorfile, delimiter=',', skiprows=1, header=None)
-    ''' KICnumber, lsflag (0=llc,1=slc), dur [days], log(ed68), tot Nflares, sum ED, sum ED err, [ Flares/Day (logEDbin) ] '''
-
-    # need KICnumber, Flare Freq data in units of ED
-    kicnum_c = fdata.iloc[:,0].unique()
-
-    print(datetime.datetime.now())
-    # total # flares in dataset!
-    print('total # flare candidates found: ', fdata.loc[:,4].sum())
-
-
-    num_fl_tot = fdata.groupby([0])[4].sum()
-
-    plt.figure()
-    plt.hist(num_fl_tot.values, bins=100, range=(0,1000), histtype='step', color='k')
-    plt.yscale('log')
-    plt.xlabel('# Flares per Star')
-    plt.ylabel('# Stars')
-    plt.savefig(figdir + 'Nflares_hist' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.show()
-    plt.close()
-
-
-    ff = open(statsfile, 'w')
-    ff.write('This is the stats file for appaloosa.analysis.paper1_plots() \n')
-    ff.write('Total # flares found in entire sample: ' + str(fdata.loc[:,4].sum()) + '\n')
-    ff.write('N stars with 25 or more flares: ' + str(len(np.where((num_fl_tot.values >= 25))[0])) + '\n')
-    ff.write('Total num flares on stars with 25 or more flares: ' +
-             str(np.sum((num_fl_tot.values)[np.where((num_fl_tot.values >= 25))])) + '\n')
-
-    # match two dataframes on KIC number
-    # bigdata = pd.merge(kicdata, kicnum_c, how='outer',
-    #                    left_on='kic_kepler_id', right_on=0)
-
-    bigdata = kicdata[kicdata['kic_kepler_id'].isin(kicnum_c)]
-
-
-    # compute the distances and luminosities of all stars
-    Lkp_uniq, dist_uniq, mass_uniq = energies(bigdata['kic_gmag'],
-                                              bigdata['kic_kmag'],
-                                              return_all=True)
-    # plt.figure()
-    # plt.scatter(bigdata['kic_gmag'] - bigdata['kic_kmag'], mass_uniq, alpha=0.2)
-    # plt.show()
-
-
-    # ingest Amy McQuillans rotation period catalog
-    rotfile = 'comparison_datasets/Table_Periodic.txt'
-
-    rotdata = pd.read_table(rotfile, delimiter=',', comment='#', header=None)
-    # KID,Teff,logg,Mass,Prot,Prot_err,Rper,LPH,w,DC,Flag
-
-    Prot_all = np.zeros(len(kicnum_c)) - 99.
-
-
-    #########################################
-    #      Explanatory Figures
-    # including detrending examples, sample LC portions, etc
-    # put early in script so can remamke quickly
-    print(datetime.datetime.now())
-
-
-    edbins = np.arange(-5, 5, 0.2)
-    edbins = np.append(-10, edbins)
-    edbins = np.append(edbins, 10)
-
-
-    # make FFD plot for specific stars:
-    #        GJ 1243, [ R. Clarke     ], J. Cornet,[  A. Boeck     ],  "Pearl"
-    s_num = [9726699, 10387822, 10452709, 6224062, 4171937, 12314646, 11551430,
-             9349698, 6928206, 5516671, 3222610] # random stars from Walkowicz (2011)
-
-    s_num_all = np.loadtxt('kic4041.txt', skiprows=1)
-
-    # For every star: compute flare rate at some arbitrary energy
-    Epoint = 35
-    EpointS = str(Epoint)
-
-    # set the limit on numbers of flares per star required
-    Nflare_limit = 100
-    Nflare68_cut = 10
-
-    ##########      THIS IS THE BIG BAD LOOP      ##########
-
-    ap_loop_file = 'ap_analysis_loop.npz'
-    print(datetime.datetime.now())
-
-    if rerun is True:
-        # silence some fit errors
-        warnings.simplefilter('ignore', np.RankWarning)
-
-        Nflare = np.zeros(len(kicnum_c)) # total num flares per star, same as before but slower...
-        Nflare68 = np.zeros(len(kicnum_c))
-
-        rate_E = np.zeros(len(kicnum_c)) - 99.
-        fit_E = np.zeros(len(kicnum_c)) - 99.
-        fit_Eerr = np.zeros(len(kicnum_c)) - 99.
-
-        # vars for L_fl/L_kp (e.g. Lurie 2015)
-        dur_all = np.zeros(len(kicnum_c)) - 99. # total duration of the star's LC
-        ED_all = np.zeros(len(kicnum_c)) - 99. # sum of all Equiv Dur's for the star
-        ED_all_err = np.zeros(len(kicnum_c)) - 99.
-
-        # Also, compute FFD for every star
-        ffd_ab = np.zeros((2,len(kicnum_c)))
-
-        gr_all = np.zeros(len(kicnum_c)) - 99. # color used in prev work
-        gi_all = np.zeros(len(kicnum_c)) - 99. # my preferred color
-
-        logg_all = np.zeros(len(kicnum_c)) - 99. # use log g from KIC, with some level of trust
-
-        maxE = np.zeros(len(kicnum_c)) - 99
-
-        ra = np.zeros_like(kicnum_c) - 99.
-        dec = np.zeros_like(kicnum_c) - 99.
-        mass = np.zeros_like(kicnum_c) - 99.
-        Lkp_all = np.zeros_like(kicnum_c) - 99.
-
-        meanE = []
-
-        for k in range(len(kicnum_c)):
-        # for k in range(199836,199938):
-
-            # find the k'th star in the KIC list in the Flare outputs
-            star = np.where((fdata[0].values == kicnum_c[k]))[0]
-
-            Nflare[k] = np.sum(fdata.loc[star,4].values) # total Num of flares
-            dur_all[k] = np.sum(fdata.loc[star,2].values) # total duration (units: days)
-            ED_all[k] = np.sum(fdata.loc[star,5].values) # total flare energy in Equiv Dur (units: seconds)
-            ED_all_err[k] = np.sqrt(np.sum((fdata.loc[star,6].values)**2.))
-
-            # arrays for FFD
-            fnorm = np.zeros_like(edbins[1:])
-            fsum = np.zeros_like(edbins[1:])
-
-            # find this star in the KIC data
-            mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[k]))
-            if len(mtch[0])>0:
-                gr_all[k] = bigdata['kic_gmag'].values[mtch][0] - \
-                            bigdata['kic_rmag'].values[mtch][0]
-
-                gi_all[k] = bigdata['kic_gmag'].values[mtch][0] - \
-                            bigdata['kic_imag'].values[mtch][0]
-
-                logg_all[k] = bigdata['kic_logg'].values[mtch][0]
-
-                ra[k] = bigdata['kic_degree_ra'].values[mtch][0]
-                dec[k] = bigdata['kic_dec'].values[mtch][0]
-
-                mass[k] = mass_uniq[mtch][0]
-                Lkp_all[k] = Lkp_uniq[mtch][0]
-                Lkp_i = Lkp_uniq[mtch][0]
-
-                # for stars listed in the "to plot list", make a FFD figure
-                if kicnum_c[k] in s_num:
-                    doplot = True
-                    plt.figure()
-                else:
-                    doplot = False
-
-                if kicnum_c[k] in s_num_all:
-                    doplot = True
-                    ffig = plt.figure()
-                    ax = ffig.add_subplot(111)
-
-                # tmp array to hold the total number of flares in each FFD bin
-                flare_tot = np.zeros_like(fnorm)
-
-                Nflare68tmp = 0 # count number of flares above threshold
-
-                for i in range(0,len(star)):
-                    # Find the portion of the FFD that is above the 68% cutoff
-                    ok = np.where((edbins[1:] >= fdata.loc[star[i],3]))[0]
-
-                    if len(ok) > 0:
-                        # add the rates together for a straight mean
-                        fsum[ok] = fsum[ok] + fdata.loc[star[i],7:].values[ok]
-
-                        # count the number for the straight mean
-                        fnorm[ok] = fnorm[ok] + 1
-
-                        # add the actual number of flares for this data portion: rate * duration
-                        flare_tot = flare_tot + (fdata.loc[star[i],7:].values * fdata.loc[star[i],2])
-
-                        # save the number of flares above E68 for this portion
-                        Nflare68tmp = Nflare68tmp + sum((fdata.loc[star[i], 7:].values[ok] * fdata.loc[star[i], 2]))
-
-                        if fdata.loc[star[i],1] == 1:
-                            pclr = 'red' # long cadence data
-                        else:
-                            pclr = 'blue' # short cadence data
-
-                        if doplot is True:
-                            plt.plot(edbins[1:][ok][::-1] + Lkp_i,
-                                     np.cumsum(fdata.loc[star[i],7:].values[ok][::-1]),
-                                     alpha=0.35, color=pclr)
-
-                Nflare68[k] = Nflare68tmp
-
-                # the important arrays for the averaged FFD
-                ffd_x = edbins[1:][::-1] + Lkp_i
-                ffd_y = np.cumsum(fsum[::-1]/fnorm[::-1])
-
-                # the "error" is the Poisson err from the total # flares per bin
-                ffd_yerr = _Perror(flare_tot[::-1], down=True) / dur_all[k]
-
-                # Fit the FFD w/ a line, save the coefficeints
-                ffd_ok = np.where((ffd_y > 0) & np.isfinite(ffd_y) &
-                                  np.isfinite(ffd_x) & np.isfinite(ffd_yerr))
-
-                # if there are any valid bins, find the max energy (bin)
-                if len(ffd_ok[0])>0:
-                    maxE[k] = np.nanmax(ffd_x[ffd_ok])
-
-                # if there are at least 2 energy bins w/ valid flares...
-                if len(ffd_ok[0])>1:
-                    # compute the mean flare energy (bin) for this star
-                    meanE = np.append(meanE, np.nanmedian(ffd_x[ffd_ok]))
-
-                    '''
-                    # the weights, in log rate units
-                    ffd_weights = 1. / np.abs(ffd_yerr[ffd_ok]/(ffd_y[ffd_ok] * np.log(10)))
-
-                    # fit the FFD w/ a line
-                    fit, cov = np.polyfit(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), 1, cov=True, w=ffd_weights) # fit using weights
-
-                    # evaluate the FFD fit at the Energy point
-                    fit_E[k] = 10.**(np.polyval(fit, Epoint))
-                    '''
-
-                    p0 = [-0.5, np.log10(np.nanmax(ffd_y[ffd_ok]))]
-                    # fit, cov = curve_fit(_plaw, ffd_x[ffd_ok], ffd_y[ffd_ok], sigma=ffd_yerr[ffd_ok],
-                    #                      absolute_sigma=False, p0=p0)
-                    # fit_E[k] = _plaw(Epoint, *fit)
-
-
-                    fit, cov = curve_fit(_linfunc, ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), p0=p0,
-                                         sigma=np.abs(ffd_yerr[ffd_ok]/(ffd_y[ffd_ok] * np.log(10))) )
-
-                    fit_E[k] = 10.0**_linfunc(Epoint, *fit)
-
-                    ffd_ab[:,k] = fit
-
-
-                    # determine uncertainty on the fit evaluation point, with help from:
-                    # http://stackoverflow.com/questions/28505008/numpy-polyfit-how-to-get-1-sigma-uncertainty-around-the-estimated-curve
-                    TT = np.vstack([Epoint**(1-i) for i in range(2)]).T
-                    # yi = np.dot(TT, fit)  # matrix multiplication calculates the polynomial values
-                    C_yi = np.dot(TT, np.dot(cov, TT.T)) # C_y = TT*C_z*TT.T
-                    fit_Eerr[k] = np.sqrt(np.diag(C_yi))  # Standard deviations are sqrt of diagonal
-
-
-                # determine the actual value of the FFD at the Energy point using the fit
-                # if (sum(ffd_x >= Epoint) > 0):
-                #     rate_E[k] = max(ffd_y[ffd_x >= Epoint])
-
-                if doplot is True:
-                    # print(kicnum_c[k])
-                    # print('ffd_ok:', ffd_ok)
-                    # print('ffd_x:', ffd_x)
-                    # print('ffd_y:', ffd_y)
-                    # print('ffd_yerr:', ffd_yerr)
-                    # print('meanE:', meanE)
-
-                    plt.plot(ffd_x, ffd_y, linewidth=2, color='black', alpha=0.7)
-                    plt.errorbar(ffd_x, ffd_y, ffd_yerr, fmt='k,')
-                    if len(ffd_ok[0])>1:
-                        # print('FIT: ', fit)
-
-                        # plt.plot(ffd_x[ffd_ok], 10.0**(np.polyval(fit, ffd_x[ffd_ok])),
-                        #          color='orange', linewidth=4, alpha=0.5)
-
-                        # plt.plot(ffd_x[ffd_ok], _plaw(ffd_x[ffd_ok], *fit),
-                        #          color='orange', linewidth=4, alpha=0.5)
-
-                        plt.plot(ffd_x[ffd_ok], 10.0**_linfunc(ffd_x[ffd_ok], *fit),
-                                 color='navy', linewidth=4, alpha=0.75)
-
-
-                        plt.yscale('log')
-                        plt.xlim(np.nanmin(ffd_x[ffd_ok])-0.5, np.nanmax(ffd_x[ffd_ok])+0.5)
-                        # plt.ylim(1e-3, 3e0)
-
-                    # plt.title('KIC' + str(kicnum_c[k]) + ': ' +
-                    #           'log R$_{'+EpointS+'}$ = ' + str(np.log10(fit_E[k])))
-                    plt.xlabel('log Flare Energy (erg)')
-                    plt.ylabel('Cumulative Flare Freq (#/day)')
-
-                    if kicnum_c[k] in s_num_all:
-                        plt.title('KIC ' + str(kicnum_c[k]))
-                        plt.text(0.025, 0.025,
-                                 r'$\alpha$=' + format(fit[0], '.2F') + r', $\beta$=' + format(fit[1], '.2F'),
-                                 fontsize=10, transform=ax.transAxes)
-                        plt.savefig('allFFDs/' + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-                    else:
-                        plt.savefig(figdir + str(kicnum_c[k]) + '_ffd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-                    plt.close()
-
-
-
-            # now match this star to the rotation period data
-            rotmtch = np.where(rotdata.iloc[:,0].values == kicnum_c[k])
-            if len(rotmtch[0])>0:
-                Prot_all[k] = rotdata.iloc[:,4].values[rotmtch]
-
-        # save results for faster reuse
-        np.savez(ap_loop_file,
-                 Nflare=Nflare, Nflare68=Nflare68, rate_E=rate_E, fit_E=fit_E, fit_Eerr=fit_Eerr,
-                 ffd_ab=ffd_ab, gr_all=gr_all, gi_all=gi_all, meanE=meanE, maxE=maxE,
-                 Prot_all=Prot_all, ED_all=ED_all, ED_all_err=ED_all_err, dur_all=dur_all, logg_all=logg_all,
-                 ra=ra, dec=dec, mass=mass, Lkp_all=Lkp_all)
-
-        ##### END OF THE BIG BAD LOOP #####
-
-    else:
-        # pull arrays back in via load!
-        npz = np.load(ap_loop_file)
-        Nflare = npz['Nflare']
-        rate_E = npz['rate_E']
-        fit_E = npz['fit_E']
-        fit_Eerr = npz['fit_Eerr']
-        ffd_ab = npz['ffd_ab']
-        gr_all = npz['gr_all']
-        gi_all = npz['gi_all']
-        meanE = npz['meanE']
-        maxE = npz['maxE']
-        Prot_all = npz['Prot_all']
-        dur_all = npz['dur_all']
-        ED_all = npz['ED_all']
-        ED_all_err = npz['ED_all_err']
-        logg_all = npz['logg_all']
-        Nflare68 = npz['Nflare68']
-        ra = npz['ra']
-        dec = npz['dec']
-        mass = npz['mass']
-        Lkp_all = npz['Lkp_all']
-    print(datetime.datetime.now())
-
-
-    #### a histogram of the average flare energy per star
-    # plt.figure()
-    # _htmp = plt.hist(meanE[np.where(np.isfinite(meanE))], bins=50)
-    # plt.xlabel('mean energy (log E)')
-    # plt.ylabel('# stars')
-    # plt.savefig(figdir + 'mean_energy' + figtype,dpi=100)
-    # plt.close()
-
-    ff.write('total # of stars ' + str(len(kicnum_c)) + '\n')
-
-    ff.write('mean flare energy: ' + str(np.nanmean(meanE[np.where(np.isfinite(meanE))])) + '\n')
-
-    ### plot of maxE vs color
-    Eok = np.where((maxE > 0))
-
-    plt.figure()
-    plt.scatter(gi_all[Eok], maxE[Eok], alpha=0.5, linewidths=0)
-    plt.xlabel('g-i (mag)')
-    plt.ylabel('Max log Flare Energy (erg)')
-    plt.xlim(-1,3)
-    plt.ylim(28,40)
-    plt.savefig(figdir + 'maxE_vs_gi' + figtype, dpi=100)
-    plt.close()
-
-    ### histogram of maxE
-    plt.figure()
-    _ = plt.hist(maxE[Eok], bins=50)
-    plt.xlabel('Max log Flare Energy (erg)')
-    plt.ylabel('# stars')
-    plt.savefig(figdir + 'logE_hist' + figtype, dpi=100)
-    plt.close()
-
-
-    ############################
-    # TURN THESE R35 PLOTS OFF FOR NOW
-    if False:
-        # the big master plot, style taken from the K2 meeting plot...
-        # plots vs R35
-        clr = np.log10(fit_E)
-        clr_raw = clr
-
-        clr_raw_err = np.abs(fit_Eerr / (fit_E * np.log(10)))
-
-        ff.write(str(len((np.where(np.isfinite(clr)))[0])) + ' stars have valid R_' + EpointS + ' values \n')
-
-        isF = np.where(np.isfinite(clr))
-
-        clr_rng = np.array([-2., 2.] )* np.nanstd(clr) + np.nanmedian(clr)
-
-
-        ff.write('Nflare_limit = ' + str(Nflare_limit) + '\n')
-        ff.write('# flares on stars that pass this limit: ' +
-                 str(np.sum(Nflare[np.where((Nflare >= Nflare_limit))])) + '\n')
-        ff.write('# stars that pass this limit: ' +
-                 str(len(np.where((Nflare >= Nflare_limit))[0])) + '\n')
-
-        ff.write('Nflare68_limit = ' + str(Nflare68_cut) + '\n')
-        ff.write('# flares on stars that pass this limit: ' +
-                 str(np.sum(Nflare[np.where((Nflare68 >= Nflare68_cut))])) + '\n')
-        ff.write('# stars that pass this limit: ' +
-                 str(len(np.where((Nflare68 >= Nflare68_cut))[0])) + '\n')
-
-
-        # stars that have enough flares and have valid rates
-        okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.8) &
-                         np.isfinite(clr) & (Nflare >= Nflare_limit))
-
-        # stars that just have valid rates
-        okclr0 = np.where(  # (clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
-            np.isfinite(clr) & (Nflare >= 0))
-
-
-
-        plt.figure()
-        hh = plt.hist(clr[isF], bins=100, histtype='step', color='k')
-        plt.xlabel('log R$_{'+EpointS+'}$ (#/day)')
-        plt.ylabel('# Stars')
-        plt.yscale('log')
-        plt.savefig(figdir + 'R_' + EpointS + '_hist' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.close()
-
-
-
-        # lets breifly revisit Nflares, look at where to pick a limit
-        plt.figure()
-        _ = plt.hist(np.log10(Nflare + 0.01), bins=100, cumulative=True, normed=True,
-                     histtype='step', color='k')
-        plt.xlim(-1,3)
-
-        plt.axvline(x=np.log10(Nflare_limit), linewidth=3, color='red', alpha=0.5)
-        plt.xlabel('log # Flares per Star')
-        plt.ylabel('Cumulative Fraction of Stars')
-        plt.savefig(figdir + 'cumulative_hist' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.close()
-
-
-
-        ff.write('okclr len is ' + str(len(okclr[0])) + '\n')
-        ff.write('okclr0 len is ' + str(len(okclr0[0])) + '\n')
-
-        # ff.write('# stars that pass Nflare_limit and have valid rotation periods: '+
-        #          str( len(np.where((Nflare >= Nflare_limit) & (Prot_all > 0.1))[0]) ) + '\n')
-        print(datetime.datetime.now())
-
-
-
-        # first, a basic plot of flare rate versus color
-
-        rate_range = [[0,3], [10.**clr_rng[0], 10.**clr_rng[1]]]
-
-        plt.figure()
-        plt.hist2d(gi_all[okclr], fit_E[okclr], bins=100, range=rate_range,
-                   alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
-        plt.xlabel('g-i (mag)')
-        plt.yscale('log')
-        plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
-        plt.savefig(figdir + 'flarerate_okclr' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.close()
-
-        plt.figure()
-        plt.hist2d(gi_all[okclr0], fit_E[okclr0], bins=100, range=rate_range,
-                   alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
-        plt.xlabel('g-i (mag)')
-        plt.yscale('log')
-        plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
-        plt.savefig(figdir + 'flarerate_okclr0' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.close()
-
-
-        ##### The science plot! #####
-        ##### try it as a scatter plot
-
-
-        ####    do it again, but now with (g-i) color   ###
-        plt.figure()
-        plt.scatter(gi_all[okclr], Prot_all[okclr], c=clr[okclr],
-                    alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=50)
-        plt.xlabel('g-i (mag)')
-        plt.ylabel('P$_{rot}$ (days)')
-        plt.yscale('log')
-        plt.xlim((0,3))
-        plt.ylim((0.1,100))
-        cb = plt.colorbar()
-        cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-        plt.savefig(figdir + 'masterplot_okclr_gi' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.close()
-
-        ####
-        plt.figure()
-        plt.scatter(gi_all[okclr0], Prot_all[okclr0], c=clr[okclr0],
-                    alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=50)
-        plt.xlabel('g-i (mag)')
-        plt.ylabel('P$_{rot}$ (days)')
-        plt.yscale('log')
-        plt.xlim((0,3))
-        plt.ylim((0.1,100))
-        cb = plt.colorbar()
-        cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-        plt.savefig(figdir + 'masterplot_okclr0_gi' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.close()
-
-
-        ################
-        # pick target star color range, look at evolution of Rate vs Rotation
-
-        crng = np.array([[0.5, 0.75],[0.75, 1.],[1.50, 2.],[2.25, 2.75]])
-
-        for k in range(crng.shape[0]):
-            ts = np.where((gi_all[okclr]  >= crng[k,0]) &
-                          (gi_all[okclr] <= crng[k,1]) &
-                          (Prot_all[okclr] > 0.1))
-
-            ff.write('# that pass TS color cut: '+str(len(ts[0])) + '\n')
-
-            plt.figure()
-            # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
-            plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
-            # plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_raw_err[okclr][ts], fmt='k,')
-            plt.xlabel('P$_{rot}$ (days)')
-            plt.ylabel('log R$_{'+EpointS+'}$ (#/day)')
-            plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
-            plt.xscale('log')
-            plt.ylim(-4,0)
-            plt.xlim(0.1,100)
-            plt.savefig(figdir + 'rot_rate'+str(k) + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-            plt.close()
-
-
-    ##### make master (color,rot,rate) figure as a pixelated plot
-    '''
-    bin2d, xx, yy, _ = binned_statistic_2d(gr_all[okclr], np.log10(Prot_all[okclr]), clr[okclr],
-                                           statistic='median', range=[[-1,4],[-1,2]], bins=75)
-
-    plt.figure()
-
-    plt.imshow(bin2d.T, interpolation='nearest', aspect='auto', origin='lower',
-               extent=(xx.min(),xx.max(),yy.min(),yy.max()),
-               cmap=plt.cm.afmhot_r)
-
-    plt.xlabel('g-r (mag)')
-    plt.ylabel('log P$_{rot}$ (days)')
-    plt.xlim((0,1.7))
-    plt.ylim(-1,2)
-    cb = plt.colorbar()
-    cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('masterplot_pixel.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-    '''
-
-
-    #########################################
-    #########################################
-    #    plots as a function of Lfl_Lbol
-
-    # total fractional energy (in seconds) / total duration (in seconds)
-    Lfl_Lbol = ED_all / (dur_all * 60. * 60. * 24.)
-    Lfl_Lbol_err = ED_all_err / (dur_all * 60. * 60. * 24.)
-
-    Lfl_Lbol_label = 'log ($L_{fl}$ $L_{Kp}^{-1}$)'
-
-
-
-    clr = np.log10(Lfl_Lbol)
-    clr_err = np.abs(Lfl_Lbol_err/ (Lfl_Lbol * np.log(10.)))
-    clr_raw = clr
-    isF = np.where(np.isfinite(clr))
-
-    #### THIS IS WHERE I MAKE MY PRIMARY GOOD SAMPLE CUT
-    #      down to ~4k stars
-    okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.5) &
-                     np.isfinite(clr) & (Nflare >= Nflare_limit))
-
-    # print('eee:', np.shape(mass[okclr]), np.shape(ffd_ab[1,okclr]), np.shape(rate_E[okclr]))
-
-
-    # investigatory figure of N flares vs Lfl_Lkp. Are we missing "good" stars w/ too few flares?
-    plt.figure()
-    plt.scatter(Nflare68, clr, alpha=0.3, s=5, lw=0, color='k')
-    plt.scatter(Nflare68[okclr], clr[okclr], lw=0, alpha=0.2, s=20)
-    plt.xlabel('Nflare68')
-    plt.xscale('log')
-    plt.ylim(-10,0)
-    plt.xlim(0.8,1e4)
-    plt.ylabel(Lfl_Lbol_label)
-    plt.savefig(figdir + 'Nfl68_vs_LflLkp.png', dpi=300)
-    plt.close()
-
-
-
-    # spit out table of KID, color (g-i), Lfl/Lbol
-    dfout = pd.DataFrame(data={'kicnum': kicnum_c[okclr],
-                               'giclr': gi_all[okclr],
-                               'mass': mass[okclr],
-                               'Prot':Prot_all[okclr],
-                               'LflLkep': Lfl_Lbol[okclr],
-                               'LflLkep_err': Lfl_Lbol_err[okclr],
-                               'Nflares':Nflare[okclr],
-                               'Nflare68':Nflare68[okclr],
-                               'R35':rate_E[okclr],
-                               'alpha':np.squeeze(ffd_ab[1, okclr]),
-                               'beta':np.squeeze(ffd_ab[0, okclr])
-                               })
-
-    # dfout.to_csv('kic_lflare.csv')
-    dfout.to_csv('kepler_flare_output.csv')
-
-    tau_all = _tau(mass)
-    Rossby = Prot_all / tau_all
-
-    # lets check to make sure the Rossby number calculations are put together right
-    plt.figure()
-    plt.scatter(gi_all[okclr], tau_all[okclr])
-    plt.xlabel('g-i')
-    plt.ylabel(r'$\tau$')
-    plt.savefig(figdir + 'gi_vs_tau' + figtype)
-    plt.close()
-
-    plt.figure()
-    plt.scatter(Rossby[okclr], tau_all[okclr])
-    plt.xlabel('Ro')
-    plt.ylabel(r'$\tau$')
-    plt.savefig(figdir + 'Ro_vs_tau' + figtype)
-    plt.close()
-
-
-
-    ff.write('OKCLR rules: Lfl/Lkp>0, Nflare>'+str(Nflare_limit)+', Nflare68>'+str(Nflare68_cut)+'\n')
-    ff.write('# stars that pass final "OKCLR" cuts: ' + str(len(okclr[0])) + '\n')
-    ff.write('# flares on stars that pass final OKCLR cut: ' + str(np.sum(Nflare[okclr])) + '\n')
-    ff.write('# flares over E68 on stars that pass final OKCLR cut: ' + str(np.sum(Nflare68[okclr])) + '\n')
-    ff.write('# stars that pass OKCLR cut, and have Prot>0.1: ' +
-             str(len(np.where((Prot_all[okclr] > 0.1))[0]))+'\n')
-
-    plt.figure()
-    plt.scatter(gi_all, Prot_all, c=clr_raw,
-                alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=25)
-    plt.xlabel('g-i (mag)')
-    plt.ylabel('P$_{rot}$ (days)')
-    plt.yscale('log')
-    plt.xlim((0,3))
-    plt.ylim((0.1,100))
-    cb = plt.colorbar()
-    cb.set_label(Lfl_Lbol_label)
-    plt.savefig(figdir + 'masterplot_lfl_lkep_raw' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    # get isochrone data to convert g-i to mass for second axis label
-    try:
-        __file__
-    except NameError:
-        __file__ = os.getenv("HOME") +  '/python/appaloosa/analysis.py'
-
-    isodir = os.path.dirname(os.path.realpath(__file__)) + '/../misc/'
-    isochrone = '1.0gyr.dat'
-    massi, Mkp, Mg, Mi, Mk = np.loadtxt(isodir + isochrone, comments='#', unpack=True, usecols=(2,8,9,11,18))
-    Mgi  = (Mg - Mi)
-    ss = np.argsort(Mgi)  # needs to be sorted for interpolation
-    mass_o = np.interp(np.arange(0.5,3.5,0.5), Mgi[ss], massi[ss])
-    mass_s = map(lambda x: format(x, '.2F'), mass_o)
-
-    fig1 = plt.figure()
-    ax1 = fig1.add_subplot(111)
-    ax2 = ax1.twiny()
-    plt.scatter(gi_all[okclr], Prot_all[okclr], c=clr[okclr],
-                alpha=0.7, lw=0.5, cmap=cm.afmhot_r, s=50)
-    ax1.set_xlabel('g-i (mag)')
-    ax1.set_ylabel('P$_{rot}$ (days)')
-    plt.yscale('log')
-    ax1.set_xlim((0,3))
-    plt.ylim((0.1,100))
-
-    ax2.set_xlim(ax1.get_xlim())
-    ax2.set_xticks(np.arange(0.5, 3.5, 0.5))
-    ax2.set_xticklabels(mass_s)
-    ax2.set_xlabel(r'Mass ($M_\odot$)')
-
-    cb = plt.colorbar()
-    cb.set_label(Lfl_Lbol_label)
-
-    plt.savefig(figdir + 'masterplot_lfl_lkep' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-
-    # a diagnostic plot
-    plt.figure()
-    plt.scatter(Nflare+1, Nflare68+1, alpha=0.25, linewidths=0, c='k')
-    plt.scatter(Nflare[okclr]+1, Nflare68[okclr]+1, alpha=0.5, linewidths=0)
-    plt.xlabel('Nflare')
-    plt.ylabel('Nflare68')
-    plt.yscale('log')
-    plt.xscale('log')
-    plt.savefig(figdir + 'Nflare_vs_Nflare68' + figtype, dpi=100)
-    plt.close()
-
-    # Eok = np.where((maxE > 0))
-    fig1 = plt.figure()
-    ax1 = fig1.add_subplot(111)
-    ax2 = ax1.twiny()
-    ax1.scatter(gi_all[okclr], maxE[okclr], alpha=0.5, linewidths=0, c='k')
-    ax1.set_xlabel('g-i (mag)')
-    ax1.set_ylabel('Max log Flare Energy (erg)')
-    ax1.set_xlim(-1, 3)
-    ax1.set_ylim(32, 40)
-
-    ax2.set_xlim(ax1.get_xlim())
-    mass_o = np.interp(np.arange(0., 3.5, 0.5), Mgi[ss], massi[ss])
-    mass_s = map(lambda x: format(x, '.2F'), mass_o)
-    ax2.set_xticks(np.arange(0., 3.5, 0.5))
-    ax2.set_xticklabels(mass_s)
-    ax2.set_xlabel(r'Mass ($M_\odot$)')
-
-    plt.savefig(figdir + 'maxE_vs_gi_okclr' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    ### plot of Nflares vs color
-    plt.figure()
-    plt.scatter(gi_all[okclr], Nflare[okclr], alpha=0.5, linewidths=0, c='k')
-    plt.xlabel('g-i (mag)')
-    plt.ylabel('Number of Flares')
-    plt.yscale('log')
-    plt.ylim(0.8e2,1e4)
-    plt.xlim(-1,3)
-    plt.savefig(figdir + 'Nflare_vs_gi' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    plt.figure()
-    plt.scatter(gi_all[okclr], Nflare68[okclr], alpha=0.5, linewidths=0, c='k')
-    plt.xlabel('g-i (mag)')
-    plt.ylabel('Number of Flares (E > E$_{68}$)')
-    plt.yscale('log')
-    plt.ylim(0.8e2,1e4)
-    plt.xlim(-1,3)
-    plt.savefig(figdir + 'Nflare68_vs_gi' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-
-    plt.figure()
-    plt.scatter(gi_all[isF], Nflare[isF], alpha=0.5, linewidths=0, c='k')
-    plt.xlabel('g-i (mag)')
-    plt.ylabel('Number of Flares')
-    plt.yscale('log')
-    plt.ylim(0.9e2,1e5)
-    plt.xlim(-1,3)
-    plt.savefig(figdir + 'Nflare_vs_gi_raw' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    plt.figure()
-    _ = plt.hist(Nflare68, bins=np.arange(0, 1000, 25), histtype='step', color='g', alpha=0.6)
-    _ = plt.hist(Nflare68[okclr], bins=np.arange(0,1000,25), histtype='step', color='k')
-    plt.xlabel('Number of Flares per Star (E > E$_{68}$)')
-    plt.ylabel('Number of Stars')
-    plt.yscale('log')
-    plt.xlim(0,1000)
-    plt.savefig(figdir + 'Nflare68' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    crng = np.array([[0.5, 0.75],
-                     [0.75, 1.0],
-                     [1., 1.5],
-                     [1.5, 2.],
-                     [2., 2.5],
-                     [2.5, 3.]])
-                     # [0.0, 0.5]]) # a bin I don't expect to understand. Should be F stars
-
-    frac_flaring = np.zeros(crng.shape[0])
-    frac_flaring_err = np.zeros_like(crng)
-    # frac_flaring_perr = np.zeros _like(crng)
-
-    Ro_peakL = np.zeros(crng.shape[0])
-    Ro_slope = np.zeros(crng.shape[0])
-    Ro_break = np.zeros(crng.shape[0])
-
-    fparam = 0.
-
-    for k in range(crng.shape[0]):
-        ts = np.where((gi_all[okclr]  > crng[k,0]) &
-                      (gi_all[okclr] <= crng[k,1]) &
-                      (Prot_all[okclr] > 0.1))
-
-        ff.write('# that pass color cut: '+str(len(ts[0])) + '\n')
-
-        plt.figure()
-        # plt.scatter(Prot_all[okclr0][ts0], clr_raw[okclr0][ts0], s=20, alpha=0.7,lw=0.5,c='red')
-        plt.scatter(Prot_all[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1,lw=0.5, c='k')
-        plt.errorbar(Prot_all[okclr][ts], clr_raw[okclr][ts], yerr=clr_err[okclr][ts], fmt='none', ecolor='k', capsize=0)
-        plt.xlabel('P$_{rot}$ (days)')
-        plt.ylabel(Lfl_Lbol_label)
-        plt.title(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]) + ', N='+str(len(ts[0])))
-        plt.xscale('log')
-        plt.ylim(-6,-1)
-        plt.xlim(0.1,100)
-        plt.savefig(figdir + 'rot_lfllkp'+str(k) + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.close()
-
-        print(str(crng[k,0])+' < (g-i) < '+str(crng[k,1]))
-
-        p0 = (-3., -0.2, -1.)  # saturation level, Prot break, slope
-        popt1, pcov = curve_fit(RoFlare, np.log10(Prot_all[okclr][ts]),
-                                clr_raw[okclr][ts], p0=p0)
-        lfit_k = np.polyfit(np.log10(Prot_all[okclr][ts]), clr[okclr][ts], 1)
-        bic_l = appaloosa.chisq(clr[okclr][ts], clr_err[okclr][ts] + fparam, np.polyval(lfit_k, np.log10(Prot_all[okclr][ts]))) + 2. * np.log(len(ts[0]))
-        bic_k = appaloosa.chisq(clr[okclr][ts], clr_err[okclr][ts] + fparam, RoFlare(np.log10(Prot_all[okclr][ts]), *popt1)) + 3. * np.log(len(ts[0]))
-        print('> BIC_k rotation ', bic_k, bic_l)
-
-        # compute the fraction of stars within each color bin that pass our flare cuts
-        doflare = np.where((gi_all[okclr]  > crng[k,0]) & (gi_all[okclr] <= crng[k,1]))
-        allstars = np.where((gi_all > crng[k,0]) & (gi_all <= crng[k,1]))
-
-        frac_flaring[k] = np.float(len(doflare[0])) / np.float(len(allstars[0]))
-        frac_flaring_err[k,:] = funcs.binom_conf_interval(np.float(len(doflare[0])), np.float(len(allstars[0])), interval='wald')
-        # frac_flaring_perr[k, :] = _Perror(len(doflare[0]), full=True)
-
-        # print(len(doflare[0]), len(allstars[0]), frac_flaring[k], frac_flaring_err[k,:])
-
-
-        # the rossby number figure (incl fit)
-        p0 = (-3., -1.2, -1.) # saturation level, Ro break, slope
-        popt1, pcov = curve_fit(RoFlare, np.log10(Rossby[okclr][ts]),
-                                clr_raw[okclr][ts], p0=p0)
-        perr1 = np.sqrt(np.diag(pcov))
-        ff.write('Rossby Parameters ' + str(k) + ': ' + str(popt1) + str(perr1) + '\n')
-
-        lfit_k = np.polyfit(np.log10(Rossby[okclr][ts]), clr[okclr][ts], 1)
-        bic_l = appaloosa.chisq(clr[okclr][ts], clr_err[okclr][ts] + fparam, np.polyval(lfit_k, np.log10(Rossby[okclr][ts]))) + 2. * np.log(len(ts[0]))
-        bic_k = appaloosa.chisq(clr[okclr][ts], clr_err[okclr][ts] + fparam, RoFlare(np.log10(Rossby[okclr][ts]), *popt1)) + 3. * np.log(len(ts[0]))
-        print('> BIC_k rossby ', bic_k, bic_l)
-
-        Ro_peakL[k], Ro_break[k], Ro_slope[k] = popt1
-
-        plt.figure()
-        plt.scatter(Rossby[okclr][ts], clr_raw[okclr][ts], s=50, alpha=1, lw=0.5, c='k')
-        plt.plot(10.**np.arange(-3, 1, .01), RoFlare(np.arange(-3, 1, .01), *popt1), c='red', lw=3, alpha=0.75)
-
-        # lfit, lcov = np.polyfit(np.log10(Rossby[okclr][ts]), clr_raw[okclr][ts], 1, cov=True)
-        # plt.plot(10.**np.arange(-3, 1, .01), np.polyval(lfit, np.arange(-3, 1, .01)), c='blue')
-
-        plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
-        plt.ylabel(Lfl_Lbol_label)
-        plt.title(str(crng[k, 0]) + ' < (g-i) < ' + str(crng[k, 1]) + ', N=' + str(len(ts[0])))
-        plt.xscale('log')
-        plt.xlim(0.8e-2, 4e0)
-        plt.ylim(-5, -1.5)
-        plt.savefig(figdir + 'Rossby_lfllkp' + str(k) + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-        plt.close()
-
-
-    pok = np.where((Prot_all[okclr] > 0.1) &
-                   (gi_all[okclr] > 0.75)) # manually throw out the bluest stars
-
-    pokF = np.where((Prot_all[isF] > 0.1) &
-                    (gi_all[isF] > 0.75))
-
-    pok_e = np.where((Prot_all[okclr] > 0.1) &
-                     (gi_all[okclr] > 0.75) &
-                     (gi_all[okclr] <= 1.5))
-
-    pok_l = np.where((Prot_all[okclr] > 0.1) &
-                     (gi_all[okclr] >= 1.5) &
-                     (gi_all[okclr] <= 3.))
-
-    print('typical error in Lfl_Lkp: ', np.median(clr_err[okclr][pok]))
-
-    p0 = (-3., -0.8, -1.)
-    popt1, pcov = curve_fit(RoFlare, np.log10(Rossby[okclr][pok]),
-                            clr[okclr][pok], p0=p0)
-    perr1 = np.sqrt(np.diag(pcov))
-    print('Rossby numbers:', popt1, perr1)
-    ff.write('Rossby Parameters: ' + str(popt1) + str(perr1) + '\n')
-
-    # the referee wants us to compute just a straight line too
-    lfit, lcov = np.polyfit(np.log10(Rossby[okclr][pok]), clr[okclr][pok], 1, cov=True)
-    lerr = np.sqrt(np.diag(lcov))
-    print('Powerlaw numbers:', lfit, lerr)
-    ff.write('Powerlaw Parameters: ' + str(lfit) +  str(lerr) + '\n')
-
-    bic_fit = appaloosa.chisq(clr[okclr][pok], clr_err[okclr][pok] + fparam,
-                              RoFlare(np.log10(Rossby[okclr][pok]), *popt1)) + \
-              3. * np.log(len(pok[0]))
-    bic_flat = appaloosa.chisq(clr[okclr][pok], clr_err[okclr][pok] + fparam,
-                               np.polyval(lfit, np.log10(Rossby[okclr][pok]))) + \
-               2. * np.log(len(pok[0]))
-
-    print('> BIC_fit: ', bic_fit)
-    print('> BIC_flat: ', bic_flat)
-
-    print('Chisqs: ',
-          appaloosa.chisq(clr[okclr][pok], clr_err[okclr][pok], RoFlare(np.log10(Rossby[okclr][pok]), *popt1)),
-          appaloosa.chisq(clr[okclr][pok], clr_err[okclr][pok], np.polyval(lfit, np.log10(Rossby[okclr][pok]))) )
-
-    fig1 = plt.figure()
-    ax1 = fig1.add_subplot(111)
-    plt.scatter(Rossby[okclr][pok], clr[okclr][pok], s=50, lw=0, c='k', alpha=0.5)
-    # plt.errorbar(Rossby[okclr], clr[okclr], yerr=clr_err[okclr], fmt='none', ecolor='k', capsize=0)
-
-    plt.plot(10.**np.arange(-3, 1,.01), RoFlare(np.arange(-3, 1,.01), *popt1),
-             c='red', lw=3, alpha=0.75)
-
-    plt.plot(10.**np.arange(-3, 1,.01), np.polyval(lfit, np.arange(-3,1,.01)),
-             c='blue', lw=2, alpha=0.6, linestyle='--')
-
-    plt.ylabel(Lfl_Lbol_label)
-    ax1.set_xlabel(r'Ro = P$_{rot}$ / $\tau$')
-    ax1.set_xscale('log')
-    ax1.set_xlim(0.8e-2, 4e0)
-    ax1.set_xticks((0.01, 0.1, 1))
-    ax1.set_xticklabels(('0.01', '0.1', '1.0'))
-    plt.ylim(-5, -1.5)
-    plt.savefig(figdir + 'Rossby_lfllkp' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    # try the rossby figure colored by mass
-    plt.figure()
-    plt.scatter(Rossby[okclr][pok], clr[okclr][pok],
-                s=50, lw=0, alpha=0.75, c=mass[okclr][pok])
-    cbar = plt.colorbar()
-    cbar.set_label('Mass')
-    plt.ylabel(Lfl_Lbol_label)
-    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
-    plt.xscale('log')
-    plt.xlim(0.8e-2, 4e0)
-    plt.ylim(-5, -1.5)
-    plt.savefig(figdir + 'Rossby_lfllkp_color' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    plt.figure()
-    plt.scatter(Rossby[isF][pokF], clr[isF][pokF],
-                lw=0, alpha=0.35, c=mass[isF][pokF], s=5)
-    cbar = plt.colorbar()
-    cbar.set_label('Mass')
-    plt.ylabel(Lfl_Lbol_label)
-    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
-    plt.xscale('log')
-    plt.xlim(1e-3, 1e1)
-    plt.ylim(-8, -1.5)
-    plt.savefig(figdir + 'Rossby_lfllkp_color_all' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    # now 2 more versions of the Rossby figure using 2 bigger mass bins
-    plt.figure()
-    plt.scatter(Rossby[okclr][pok_e], clr[okclr][pok_e],
-                s=50, lw=0, alpha=0.5, c='k')
-    plt.ylabel(Lfl_Lbol_label)
-    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
-    plt.xscale('log')
-    plt.xlim(0.8e-2, 4e0)
-    plt.ylim(-5, -1.5)
-    plt.savefig(figdir + 'Rossby_lfllkp_e' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    plt.figure()
-    plt.scatter(Rossby[okclr][pok_l], clr[okclr][pok_l],
-                s=50, lw=0, alpha=0.5, c='k')
-    plt.ylabel(Lfl_Lbol_label)
-    plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
-    plt.xscale('log')
-    plt.xlim(0.8e-2, 4e0)
-    plt.ylim(-5, -1.5)
-    plt.savefig(figdir + 'Rossby_lfllkp_l' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-
-    ### fraction of flaring stars
-    fig1 = plt.figure()
-    ax1 = fig1.add_subplot(111)
-    ax2 = ax1.twiny()
-    ax1.errorbar((crng[:,0] + crng[:,1])/2., frac_flaring, xerr=(crng[:,1] - crng[:,0])/2.,
-                 ecolor='k', capsize=0, fmt='none', yerr=frac_flaring_err.T)
-    ax1.set_xlabel('g-i (mag)')
-    ax1.set_xlim([0,3])
-    ax1.set_ylabel('Fraction of Flaring Stars')
-    ax1.set_ylim([0, 0.1])
-
-    ax2.set_xlim(ax1.get_xlim())
-    mass_o = np.interp(np.arange(0.5, 3.5, 0.5), Mgi[ss], massi[ss])
-    mass_s = map(lambda x: format(x, '.2F'), mass_o)
-    ax2.set_xticks(np.arange(0.5,3.5,0.5))
-    ax2.set_xticklabels(mass_s)
-    ax2.set_xlabel(r'Mass ($M_\odot$)')
-    # add second axis label of Mass for the referee
-    # based on example here: http://stackoverflow.com/a/10517481
-
-    plt.savefig(figdir + 'frac_flaring' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-
-    ### plot of Rossby parameters vs color
-    plt.figure()
-    plt.scatter((crng[:,0] + crng[:,1])/2., Ro_break)
-    plt.xlim(0,3)
-    plt.savefig(figdir + 'Ro_break' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    plt.figure()
-    plt.scatter((crng[:, 0] + crng[:, 1]) / 2., Ro_peakL)
-    plt.xlim(0, 3)
-    plt.savefig(figdir + 'Ro_peakL' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    plt.figure()
-    plt.scatter((crng[:, 0] + crng[:, 1]) / 2., Ro_slope)
-    plt.xlim(0, 3)
-    plt.savefig(figdir + 'Ro_slope' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    #    / plots as a function of Lfl_Lbol
-    #########################################
-
-    plt.figure()
-    plt.scatter(gi_all[okclr], ffd_ab[0,okclr], alpha=0.5, lw=0)
-    plt.xlabel('g-i (mag)')
-    plt.xlim(0, 3)
-    plt.ylabel(r'$\beta$ (log rate per energy)')
-    plt.ylim(-2, 0.1)
-    plt.savefig(figdir + 'ffd_a' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-    plt.figure()
-    plt.scatter(gi_all[okclr], ffd_ab[1, okclr], alpha=0.5, lw=0)
-    plt.xlabel('g-i (mag)')
-    plt.xlim(0, 3)
-    plt.ylabel(r'$\alpha$ (log # flares per day)')
-    plt.savefig(figdir + 'ffd_b' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-
-    #########################################
-    #      NGC 6811 plots
-
-
-
-    ocfile='comparison_datasets/meibom2011_tbl1.txt'
-
-    # Remake the gyrochronology plot from Meibom et al (2011) for NGC 6811 (color vs Prot),
-    #  and add another panel of (color vs flare rate) or something similar
-
-    ocdata = pd.read_table(ocfile, header=None, comment='#', delim_whitespace=True)
-    # col's I care about:
-    # KIC=0, g=7, r=8, Per=9
-
-
-    ##### simple rotation period plot remake from paper
-    plt.figure()
-    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9])
-    plt.xlabel('g-r (mag)')
-    plt.ylabel(r'P$_{rot}$ (days)')
-    plt.savefig(figdir + 'ngc6811_gyro.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
-    # plt.show()
-    plt.close()
-
-    rate_oc = np.zeros(ocdata.shape[0]) - 99.
-    fit_oc = np.zeros(ocdata.shape[0]) - 99.
-    Lfl_Lbol_oc = np.zeros(ocdata.shape[0]) - 99.
-
-    for k in range(ocdata.shape[0]):
-        mtch = np.where((kicnum_c == ocdata.iloc[:,0].values[k]))
-        if len(mtch[0])>0:
-            rate_oc[k] = rate_E[mtch]
-            fit_oc[k] = np.polyval(ffd_ab[:,mtch], Epoint)
-            Lfl_Lbol_oc[k] = clr_raw[mtch]
-
-
-    '''
-    #####
-    plt.figure()
-     # add contours for the entire field
-    # plt.hist2d(gr_all[okclr], fit_E[okclr], bins=100, range=rate_range,
-    #            alpha=1.0, norm=LogNorm(), cmap=cm.Greys)
-    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), fit_oc)
-    plt.xlabel('g-r (mag)')
-    plt.xlim(0.2, 0.9)
-    plt.ylim(-3.5, -2)
-    plt.ylabel('R$_{'+EpointS+'}$ (#/day)')
-    plt.savefig('ngc6811_flare_all.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-
-
-    #####
-
-    plt.figure()
-    plt.scatter(gr_all[okclr], Prot_all[okclr], c=clr[okclr], alpha=0.7, lw=0, cmap=cm.afmhot_r, s=50)
-    cb = plt.colorbar()
-    cb.set_label('log R$_{'+EpointS+'}$ (#/day)')
-    plt.scatter((ocdata.iloc[:,7]-ocdata.iloc[:,8]), ocdata.iloc[:,9], c=np.log10(fit_oc), cmap=cm.YlGnBu_r, s=50)
-    plt.xlabel('g-r (mag)')
-    plt.ylabel('P$_{rot}$ (days)')
-    plt.yscale('log')
-    plt.xlim((0,1.7))
-    plt.ylim((0.1,100))
-    cb2 = plt.colorbar()
-    plt.savefig('masterplot_cluster.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-    # plt.show()
-    '''
-
-    ####
-    plt.figure()
-    plt.scatter((ocdata.iloc[:, 7] - ocdata.iloc[:, 8]), Lfl_Lbol_oc, s=50)
-    plt.xlabel('g-r (mag)')
-    plt.ylabel(Lfl_Lbol_label)
-    plt.ylim(-7, 1)
-    # plt.xlim(0, 1.7)
-    plt.savefig(figdir + 'ngc6811_Lfl.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
-    plt.close()
-
-
-    #      /NGC 6811 plots
-    #########################################
-
-
-
-
-    ### stars with 50 largest E flares
-    Esort = np.argsort(maxE)[::-1]
-
-    Efair = np.where((maxE[Esort] < 40))
-
-    ff.write('__ top 50 energy flare stars __' + '\n')
-    for k in range(0, 50):
-        ff.write(str(kicnum_c[Esort][Efair][k]) +
-                 ', ' + str(maxE[Esort][Efair][k]) + '\n')
-
-
-    ff.close() # close the output stats file
-    return
 
 
 def energies(gmag, kmag, isochrone='1.0gyr.dat', return_all=False):
@@ -1626,9 +583,9 @@ def energies(gmag, kmag, isochrone='1.0gyr.dat', return_all=False):
         return np.log10(L_kp)
 
 
-def paper2_plots(condorfile='condorout.dat.gz',
+def paper2_plots(condorfile='condorout.dat.gz', debug=False,
                  kicfile='kic.txt.gz', statsfile='stats.txt',
-                 figdir='figures2/', figtype='.pdf', rerun=False, oldplot=False):
+                 figdir='figures2/', figtype='.pdf', rerun=False, oldplot=True):
     '''
     Paper 2: flares vs ages
 
@@ -1673,7 +630,7 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
     # set the limit on numbers of flares per star required
     Nflare_limit = 100 # 100 total candidates
-    Nflare68_cut = 10 # 10 above 60% cut
+    Nflare68_cut = 10 # 10 above 68% cut
 
 
     ##########      READ DATA FROM THE BIG BAD LOOP      ##########
@@ -1716,21 +673,22 @@ def paper2_plots(condorfile='condorout.dat.gz',
             dist_all[l] = dist_uniq[mtch][0]
 
     # for Riley outputfile including masses
-    dfout = pd.DataFrame(data={'kicnum': kicnum_c,
-                               'giclr': gi_all,
-                               'mass': mass,
-                               'Prot': Prot_all,
-                               'tau':tau_all,
-                               'Rossby':Rossby,
-                               'LflLkep': Lfl_Lbol,
-                               'LflLkep_err': Lfl_Lbol_err,
-                               'Nflares': Nflare,
-                               'Nflare68': Nflare68,
-                               'R35': rate_E,
-                               'dist':dist_all
-                               })
+    if False:
+        dfout = pd.DataFrame(data={'kicnum': kicnum_c,
+                                   'giclr': gi_all,
+                                   'mass': mass,
+                                   'Prot': Prot_all,
+                                   'tau':tau_all,
+                                   'Rossby':Rossby,
+                                   'LflLkep': Lfl_Lbol,
+                                   'LflLkep_err': Lfl_Lbol_err,
+                                   'Nflares': Nflare,
+                                   'Nflare68': Nflare68,
+                                   'R35': rate_E,
+                                   'dist':dist_all
+                                   })
 
-    # dfout.to_csv('kic_lflare_mass_dist.csv')
+        dfout.to_csv('kic_lflare_mass_dist.csv')
 
 
     # plots vs R35
@@ -1738,19 +696,19 @@ def paper2_plots(condorfile='condorout.dat.gz',
     clr_raw = clr
 
     # stars that have enough flares and have valid rates
-    okclr = np.where((Nflare68 >= Nflare68_cut) & #(logg_all >= 3.8) &
-                     np.isfinite(clr) &
+    okclr = np.where((Nflare68 >= Nflare68_cut) &
+                     np.isfinite(np.log10(fit_E)) &
                      (Nflare >= Nflare_limit))
 
     # stars that just have valid rates
-    okclr0 = np.where(  # (clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
-        np.isfinite(clr) & (Nflare >= 0))
+    # okclr0 = np.where(  # (clr >= clr_rng[0]) & (clr <= clr_rng[1]) &
+    #     np.isfinite(clr) & (Nflare >= 0))
 
 
     # first, a basic plot of flare rate versus color
 
-    clr_rng = [np.nanmin(clr), np.nanmax(clr)]
-    rate_range = [[-1, 3], [-20,4]]
+    # clr_rng = [np.nanmin(clr), np.nanmax(clr)]
+    # rate_range = [[-1, 3], [-20,4]]
 
 
 
@@ -1762,6 +720,9 @@ def paper2_plots(condorfile='condorout.dat.gz',
                      [2., 2.5],
                      [2.5, 3.]])
                      # [0.0, 0.5]]) # a bin I don't expect to understand. Should be F stars
+
+    crng_clrs = np.array(['#253494', '#2c7fb8', '#7fcdbb',
+                          '#fd8d3c', '#f03b20', '#bd0026'])
 
     # the same ED bins used in paper1_plots
     edbins = np.arange(-5, 5, 0.2)
@@ -1825,44 +786,63 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
             ts = ts[0][np.argsort(Prot_all[okclr][ts])]
 
+            B_V_ts = getBV(mass[okclr][ts])
+            age_ts = MH2008_age(B_V_ts, Prot_all[okclr][ts])
+
+            logE_tsstack = np.array([])
+            logt_tsstack = np.array([])
+            logR_tsstack = np.array([])
+            logRerr_tsstack = np.array([])
+
+            offset68 = 0. # defined way below when I do this again....
+
             for l in range(np.size(ts)):
                 colornext = next(color)
 
                 # find all entires for this star (LLC and SLC data)
                 star = np.where((fdata[0].values == kicnum_c[okclr][ts][l]))[0]
                 # arrays for FFD
-                fnorm = np.zeros_like(edbins[1:])
-                fsum = np.zeros_like(edbins[1:])
+                fnorm = np.zeros_like(edbins[1:], dtype='float')
+                fsum = np.zeros_like(edbins[1:], dtype='float')
 
                 # find this star in the KIC data
                 mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[okclr][ts][l]))
                 Lkp_i = Lkp_uniq[mtch][0]
                 # tmp array to hold the total number of flares in each FFD bin
-                flare_tot = np.zeros_like(fnorm)
+                flare_tot = np.zeros_like(fnorm, dtype='float')
 
                 for i in range(0, len(star)):
                     # Find the portion of the FFD that is above the 68% cutoff
-                    ok = np.where((edbins[1:] >= fdata.loc[star[i], 3]))[0]
+                    ok = np.where((edbins[1:] >= (fdata.loc[star[i], 3]-offset68)))[0]
                     if len(ok) > 0:
                         # add the rates together for a straight mean
-                        fsum[ok] = fsum[ok] + fdata.loc[star[i], 7:].values[ok]
+                        fsum[ok] = fsum[ok] + np.array(fdata.loc[star[i], 7:].values[ok])
 
                         # count the number for the straight mean
-                        fnorm[ok] = fnorm[ok] + 1
+                        fnorm[ok] = fnorm[ok] + 1.0
 
                         # add the actual number of flares for this data portion: rate * duration
-                        flare_tot = flare_tot + (fdata.loc[star[i], 7:].values * fdata.loc[star[i], 2])
+                        flare_tot[ok] = flare_tot[ok] + (fdata.loc[star[i], 7:].values[ok] * np.float(fdata.loc[star[i], 2]))
+                        # flare_tot = flare_tot + (fdata.loc[star[i], 7:].values * np.float(fdata.loc[star[i], 2]))
+
+                        # print('')
+                        # print('inner loop ',i,ok)
+                        # print(fsum)
+                        # print(fnorm)
+
                 # the important arrays for the averaged FFD
                 ffd_x = edbins[1:][::-1] + Lkp_i
                 ffd_y = np.cumsum(fsum[::-1] / fnorm[::-1])
 
+                # print('ffd params:', ffd_x, ffd_y)
+
                 # the "error" is the Poisson err from the total # flares per bin
                 ffd_yerr = _Perror(flare_tot[::-1], down=True) / dur_all[okclr][ts][l]
 
-                # Fit the FFD w/ a line, save the coefficeints
-                ffd_ok = np.where((ffd_y > 0) & np.isfinite(ffd_y) &
+                # find where in the FFD there are at least 1 valid flares
+                ffd_ok = np.where((ffd_y > 0) & np.isfinite(ffd_y) & (fsum[::-1] > 0) &
                                   np.isfinite(ffd_x) & np.isfinite(ffd_yerr) &
-                                  (ffd_x < 39)) # fix one of the outlier problems
+                                  (ffd_x < 38.5)) # fix one of the outlier problems
 
                 # if there are any valid bins, find the max energy (bin)
                 if len(ffd_ok[0]) > 0:
@@ -1873,15 +853,25 @@ def paper2_plots(condorfile='condorout.dat.gz',
                     # compute the mean flare energy (bin) for this star
                     meanE = np.append(meanE, np.nanmedian(ffd_x[ffd_ok]))
 
-                    p0 = [-0.5, np.log10(np.nanmax(ffd_y[ffd_ok]))]
+                    # p0 = [-0.5, np.log10(np.nanmax(ffd_y[ffd_ok]))]
                     # fit, cov = curve_fit(_linfunc, ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), p0=p0,
                     #                      sigma=np.abs(ffd_yerr[ffd_ok] / (ffd_y[ffd_ok] * np.log(10))))
 
-                    plt.plot(ffd_x[ffd_ok], ffd_y[ffd_ok], linewidth=2.5, alpha=0.7, c=colornext)
+                    plt.plot(ffd_x[ffd_ok], ffd_y[ffd_ok], linewidth=1.5, alpha=0.7, c=colornext)
+
 
                     # -- turn off these annotations
                     # plt.annotate(str(Prot_all[okclr][ts][l]), (ffd_x[ffd_ok][0], ffd_y[ffd_ok][0]),
                     #              textcoords='data', size=10, color=colornext)
+
+                    ## stack the FFD propeties, to do a joint FFD evolution fit for this (g-i) bin
+                    logE_tsstack = np.append(logE_tsstack, ffd_x[ffd_ok])
+                    logt_tsstack = np.append(logt_tsstack, np.ones_like(ffd_x[ffd_ok]) * np.log10(age_ts[l]))
+                    logR_tsstack = np.append(logR_tsstack, np.log10(ffd_y[ffd_ok]))
+                    yerr_temp = np.abs(ffd_yerr[ffd_ok] / (ffd_y[ffd_ok] * np.log(10.)))
+                    yerr_temp = np.sqrt(yerr_temp**2. + np.nanmedian(yerr_temp)**2.)
+                    logRerr_tsstack = np.append(logRerr_tsstack, yerr_temp)
+
 
             plt.yscale('log')
             plt.xlabel('log Flare Energy (erg)')
@@ -1891,6 +881,37 @@ def paper2_plots(condorfile='condorout.dat.gz',
             plt.title(str(crng[k, 0]) + ' < (g-i) < ' + str(crng[k, 1]) + ', N=' + str(len(ts)))
             plt.savefig(figdir + 'mean_ffd' + str(k) + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
             plt.close()
+
+
+            p0ts = (0., 0., -1., 10.)
+            stackOKts = np.where(np.isfinite(logE_tsstack) & np.isfinite(logR_tsstack) &
+                               np.isfinite(logt_tsstack) & np.isfinite(logRerr_tsstack))
+            Xts = (logE_tsstack[stackOKts], logt_tsstack[stackOKts])
+
+            fitts, covts = curve_fit(FlareEqn0, Xts, logR_tsstack[stackOKts], p0ts,
+                                     sigma=logRerr_tsstack[stackOKts])
+
+            print(str(crng[k, 0]) + " <g-i< " + str(crng[k, 1]))
+            print('FFD model: ')
+            print(fitts)
+
+            plt.figure()
+            y1 = FlareEqn0((np.arange(33, 37), np.array([1, 1, 1, 1])), *fitts)
+            y2 = FlareEqn0((np.arange(33, 37), np.array([2, 2, 2, 2])), *fitts)
+            y3 = FlareEqn0((np.arange(33, 37), np.array([3, 3, 3, 3])), *fitts)
+            y4 = FlareEqn0((np.arange(33, 37), np.array([4, 4, 4, 4])), *fitts)
+
+            plt.plot(np.arange(33, 37), 10. ** y1, c='CornflowerBlue')
+            plt.plot(np.arange(33, 37), 10. ** y2, c='DarkViolet')
+            plt.plot(np.arange(33, 37), 10. ** y3, c='FireBrick')
+            plt.plot(np.arange(33, 37), 10. ** y4, c='Red')
+            plt.yscale('log')
+            plt.xlabel('log Flare Energy (erg)')
+            plt.ylabel('Cumulative Flare Freq (#/day)')
+            plt.title(str(crng[k, 0]) + ' < (g-i) < ' + str(crng[k, 1]))
+            plt.savefig(figdir + 'eqnFFD_' + str(k) + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+            plt.close()
+
 
         # Rossby figure w/ points colored by mass
         pok = np.where((Prot_all[okclr] > 0.1) &
@@ -1928,6 +949,22 @@ def paper2_plots(condorfile='condorout.dat.gz',
         plt.ylim(-5, -1.5)
         plt.savefig(figdir + 'Rossby_lfllkp_color' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.close()
+
+
+        plt.figure()
+        plt.scatter(Rossby[okclr][pok], np.log10(Lfl_Lbol[okclr][pok] * Chi_fl(gi_all[okclr][pok])),
+                    s=50, linewidths=0.5, edgecolors='k', alpha=0.85, c=mass[okclr][pok], cmap=cm.Spectral)
+        cbar = plt.colorbar()
+        cbar.set_label(r'Mass (M$_{\odot}$)')
+        plt.ylabel('log ($L_{fl}$ $L_{bol}^{-1}$)')
+        plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
+        plt.xscale('log')
+        plt.xlim(0.8e-2, 4e0)
+        # plt.ylim(-5, -1.5)
+        plt.savefig(figdir + 'Rossby_lfllbol_color' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+
 
 
         B_V_pok = getBV(mass[okclr][pok])
@@ -1987,26 +1024,53 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
 
 
+        plt.figure()
+        plt.scatter(gi_all[okclr][pok], Prot_all[okclr][pok], c=np.log10(Lfl_Lbol[okclr][pok] * Chi_fl(gi_all[okclr][pok])),
+                    s=50, linewidths=0.5, edgecolors='k', alpha=0.85, cmap=cm.magma_r)
+        cbar = plt.colorbar()
+        cbar.set_label('log ($L_{fl}$ $L_{bol}^{-1}$)')
+        plt.xlabel('g-i (mag)')
+        plt.xlim(0.4,3)
+        plt.ylabel(r'P$_{rot}$ (days)')
+        plt.yscale('log')
+        plt.savefig(figdir + 'color_rot_lflbol' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+
     '''
     >>>>>>>>>>>>>>>>>>>>>>>
     
-    Loop over all stars again, stack data up into big arrays to fit w/ age-dependent evolution
+    Loop over all flare stars, stack data up into big arrays to fit w/ age-dependent evolution
+    
+    Version 1: ONLY FOR FLARE STARS (okclr)
     
     >>>>>>>>>>>>>>>>>>>>>>>
     '''
 
 
-    ts = np.where((Prot_all[okclr] >= 0.1) &
-                  (gi_all[okclr] > 0.5) & # manually throw out the bluest stars)
-                  (kicnum_c[okclr] != 10924462) & # manually throw out weird FFDs
+    ts = np.where((Prot_all[okclr] >= 0.1) &  # need valid rotation periods
+                  (Prot_all[okclr] <= 30.0) & # need valid rotation periods
+                  (Rossby[okclr] > 0.01) &  # need valid Rossby number
+                  (Rossby[okclr] < 10) &    # need valid Rossby number
+                  (gi_all[okclr] >= 0.5) & # manually throw out the bluest stars
+                  (kicnum_c[okclr] != 10924462) & # manually throw out a few weird FFDs
                   (kicnum_c[okclr] != 3864443) &
                   (kicnum_c[okclr] != 5559631) &
                   (kicnum_c[okclr] != 7988343) &
                   (kicnum_c[okclr] != 9591503) &
-                  (kicnum_c[okclr] != 3240305) #&
-                  # (Rossby[okclr] >= 0.04) # cut out young, saturated activity stars
+                  (kicnum_c[okclr] != 3240305)
                   )
     ts = ts[0][np.argsort(Rossby[okclr][ts])]
+
+    print('>> TS: number of stars to analyze that pass Prot >=0.1 and g-i>0.5 is ', np.size(ts))
+
+    #######
+    # output a simple text file with these KIC ID's
+    # (for M. Scoggins' work)
+
+    kicout = pd.DataFrame(data={'kic':kicnum_c[okclr][ts]})
+    kicout.to_csv('kics_to_study.txt')
+
 
 
     logE_stack = np.array([])
@@ -2015,11 +1079,13 @@ def paper2_plots(condorfile='condorout.dat.gz',
     logR_stack = np.array([])
     logRerr_stack = np.array([])
 
+    R_stack = np.array([]) # non-log versions
+    Rerr_stack = np.array([])
+
     B_V_ts = getBV(mass[okclr][ts])
     age_ts = MH2008_age(B_V_ts, Prot_all[okclr][ts])
 
     for l in range(np.size(ts)):
-
         # find all entires for this star (LLC and SLC data)
         star = np.where((fdata[0].values == kicnum_c[okclr][ts][l]))[0]
         # arrays for FFD
@@ -2047,7 +1113,8 @@ def paper2_plots(condorfile='condorout.dat.gz',
                 fnorm[ok] = fnorm[ok] + 1
 
                 # add the actual number of flares for this data portion: rate * duration
-                flare_tot = flare_tot + (fdata.loc[star[i], 7:].values * fdata.loc[star[i], 2])
+                flare_tot[ok] = flare_tot[ok] + (fdata.loc[star[i], 7:].values[ok] * fdata.loc[star[i], 2])
+
         # the important arrays for the averaged FFD
         ffd_x = edbins[1:][::-1] + Lkp_i
         ffd_y = np.cumsum(fsum[::-1] / fnorm[::-1])
@@ -2056,9 +1123,9 @@ def paper2_plots(condorfile='condorout.dat.gz',
         ffd_yerr = _Perror(flare_tot[::-1], down=True) / dur_all[okclr][ts][l]
 
         # Fit the FFD w/ a line, save the coefficeints
-        ffd_ok = np.where((ffd_y > 0) & np.isfinite(ffd_y) &
+        ffd_ok = np.where((ffd_y > 0) & np.isfinite(ffd_y) & (fsum[::-1] > 0) &
                           np.isfinite(ffd_x) & np.isfinite(ffd_yerr) &
-                          (ffd_x < 39))  # fix one of the outlier problems
+                          (ffd_x < 38.5))  # fix one of the outlier problems
 
 
         # if there are at least 2 energy bins w/ valid flares...
@@ -2074,13 +1141,15 @@ def paper2_plots(condorfile='condorout.dat.gz',
             yerr_temp = np.sqrt(yerr_temp**2. + np.nanmedian(yerr_temp)**2.)
             logRerr_stack = np.append(logRerr_stack, yerr_temp)
 
+            R_stack = np.append(R_stack, ffd_y[ffd_ok])
+            Rerr_stack = np.append(Rerr_stack, ffd_yerr[ffd_ok])
+
 
 
 
     # # # # # # # # # # # # # # # # # #
     # fit with model
-    # note: currently using LeastSq to do all stars together
-    # Want to move to MCMC to get errors, etc
+    #
     # # # # # # # # # # # # # # # # # #
 
     # stack data for curve_fit
@@ -2090,7 +1159,7 @@ def paper2_plots(condorfile='condorout.dat.gz',
     X = (logE_stack[stackOK], logt_stack[stackOK], mass_stack[stackOK])
 
 
-    # version 2 of model: just mass and time terms
+    # version 2 of model: just mass and age terms, no cross terms
     p0 = (0., 0., -0.5,
           -1., 1., 10.)
     fit, cov = curve_fit(FlareEqn, X, logR_stack[stackOK], p0,
@@ -2100,12 +1169,61 @@ def paper2_plots(condorfile='condorout.dat.gz',
     ChiSq1 = appaloosa.chisq(logR_stack[stackOK], logRerr_stack[stackOK], modelStack)
     BIC1 = ChiSq1 + np.size(p0) * np.log(np.size(X))
 
-    print('FlareEqn coefficients:')
+    print('>>> FlareEqn coefficients:')
     print(fit)
-    print('Chi, BIC')
-    print(ChiSq1, BIC1)
+    # print('Chi, BIC')
+    # print(ChiSq1, BIC1)
 
-    # sys.exit('DONE FOR NOW, turn this off in future')
+
+    #############
+    #
+    # Use MCMC to refine Least-Sq model fit, get errors
+    # %% HERE
+    #
+    #############
+
+    ndim = 6
+    nwalkers = 100
+    nsteps0 = 500
+    nsteps1 = 1000
+    pos = [fit + 1e-3 * np.random.randn(ndim) for i in range(nwalkers)]
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, flare_lnprob, args=(X, logR_stack[stackOK], logRerr_stack[stackOK]),
+                                    a=3)
+
+    print('> MCMC burn-in: ' + str(nsteps0))
+    pos1, prob1, state1 = sampler.run_mcmc(pos, nsteps0)
+    sampler.reset()
+
+    print('> MCMC run: ' + str(nsteps1))
+    pos2, prob2, state2 = sampler.run_mcmc(pos1, nsteps1, rstate0=state1)
+
+    # from this Gist: https://gist.github.com/banados/2254240
+    af = sampler.acceptance_fraction
+    af_msg = '''As a rule of thumb, the acceptance fraction (af) should be 
+                                    between 0.2 and 0.5
+                    If af < 0.2 decrease the a parameter
+                    If af > 0.5 increase the a parameter
+                    '''
+    print(af_msg)
+    print(">> Mean acceptance fraction:", np.mean(af))
+
+    samples = sampler.chain.reshape((-1, ndim))
+    # print('>> SAMPLER SHAPE', np.shape(samples))
+
+    fig = corner.corner(samples, labels=["$a_1$", "$a_2$", "$a_3$", "$b_1$", "$b_2$", "$b_3$"])
+    plt.savefig(figdir + "triangle" + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+
+
+    print(">>> median sample parameters (FIT PARAMS!): ", np.nanmedian(samples, axis=0))
+    print(">>> stddev sample parameters (ERR PARAMS!): ", np.nanstd(samples, axis=0))
+
+    try:
+        print(">> Autocorrelation time:", sampler.acor)
+    except:
+        print('chain too short for ACOR')
+
+    fit_orig = fit
+    fit = np.nanmedian(samples, axis=0)
 
 
     # now some plots exploring this fit
@@ -2262,7 +1380,9 @@ def paper2_plots(condorfile='condorout.dat.gz',
     # then make figure of ChiSq vs (color, Prot) to see where we're winning/losing
     
     ### =>> takes a few min to run, so turn off (if False) when not needed
-    if False:
+    if True:
+        print('making updated FFD for every star in TS')
+
         chisq_ts = np.zeros(np.size(ts))-1
 
         for l in range(np.size(ts)):
@@ -2306,8 +1426,8 @@ def paper2_plots(condorfile='condorout.dat.gz',
 
             # Fit the FFD w/ a line, save the coefficeints
             ffd_ok = np.where((ffd_y > 0) &
-                              np.isfinite(ffd_y) & np.isfinite(ffd_x) & np.isfinite(ffd_yerr) &
-                              (ffd_x < 39))  # fix one of the outlier problems
+                              np.isfinite(ffd_y) & np.isfinite(ffd_x) & np.isfinite(ffd_yerr) & (fsum[::-1] > 0) &
+                              (ffd_x < 38.5))  # fix one of the outlier problems
 
 
             # if there are at least 2 energy bins w/ valid flares...
@@ -2351,6 +1471,8 @@ def paper2_plots(condorfile='condorout.dat.gz',
         plt.close()
 
 
+
+
     '''
     To support Riley's work: 
     Make evolution tracks of flare activity over time for a wide binary. 
@@ -2364,54 +1486,587 @@ def paper2_plots(condorfile='condorout.dat.gz',
     
     Make primary star = 0.85Msun, secondary take many tracks: 0.8, 0.7, 0.5Msun, etc
     '''
+    if False: # set to True to run for Riley
+        print('doing Lfl_Lkp tracks for Riley')
 
-    print('doing Lfl_Lkp tracks for Riley')
+        # mass_wb = np.array([0.5,0.7,0.9,1.0])
+        mass_wb = np.arange(0.45, 0.9, 0.05)
 
-    # mass_wb = np.array([0.5,0.7,0.9,1.0])
-    mass_wb = np.arange(0.45, 0.9, 0.05)
+        # figure out the quiescent lum for these targets to make Energy -> ED
+        msort = np.argsort(mass[okclr][ts])
+        Lkp_wb = np.interp(mass_wb, mass[okclr][ts][msort], Lkp_all[okclr][ts][msort])
 
-    # figure out the quiescent lum for these targets to make Energy -> ED
-    msort = np.argsort(mass[okclr][ts])
-    Lkp_wb = np.interp(mass_wb, mass[okclr][ts][msort], Lkp_all[okclr][ts][msort])
+        age_range = np.arange(1.5, 5, 0.1)
 
-    age_range = np.arange(1.5, 5, 0.1)
+        ed_wb = np.linspace(-6, 5, 20)
 
-    ed_wb = np.linspace(-6, 5, 20)
+        # the array to fill w/ integrated model values!
+        Lfl_Lkp_wb = np.zeros((mass_wb.size, age_range.size))
 
-    # the array to fill w/ integrated model values!
-    Lfl_Lkp_wb = np.zeros((mass_wb.size, age_range.size))
+        for k in range(mass_wb.size):
+            for l in range(age_range.size):
+                # make the FFD for this (mass,age)
+                # X = (logE, logT, M)
+                ffd_kl = (10.**FlareEqn((ed_wb+Lkp_wb[k], age_range[l]*np.ones(20), mass_wb[k]*np.ones(20)), *fit)) / (60.*60.*24.)
 
-    for k in range(mass_wb.size):
-        for l in range(age_range.size):
-            # make the FFD for this (mass,age)
-            # X = (logE, logT, M)
-            ffd_kl = (10.**FlareEqn((ed_wb+Lkp_wb[k], age_range[l]*np.ones(20), mass_wb[k]*np.ones(20)), *fit)) / (60.*60.*24.)
+                # undo the cumulative nature of the FFD
+                for j in range(ffd_kl.size-1):
+                    ffd_kl[0: -(1+j)] = ffd_kl[0: -(1+j)] - ffd_kl[-(1+j)]
 
-            # undo the cumulative nature of the FFD
-            for j in range(ffd_kl.size-1):
-                ffd_kl[0: -(1+j)] = ffd_kl[0: -(1+j)] - ffd_kl[-(1+j)]
+                if k==0 and l==0:
+                    print(k, l, 10.**(ed_wb), ffd_kl)
 
-            if k==0 and l==0:
-                print(k, l, 10.**(ed_wb), ffd_kl)
-
-            # Integrate the FFD to estimate Lfl/Lkep
-            # ffd_yi in units of cumulative #/day -> convert to #/sec. Assume duration of 1 sec for data
-            Lfl_Lkp_wb[k,l] = np.log10(np.trapz(ffd_kl,
-                                                x=10.**(ed_wb)))
+                # Integrate the FFD to estimate Lfl/Lkep
+                # ffd_yi in units of cumulative #/day -> convert to #/sec. Assume duration of 1 sec for data
+                Lfl_Lkp_wb[k,l] = np.log10(np.trapz(ffd_kl,
+                                                    x=10.**(ed_wb)))
 
 
-    plt.figure(figsize=(8.1,8))
-    for k in range(mass_wb.size):
-        plt.plot(Lfl_Lkp_wb[-1, :], Lfl_Lkp_wb[k, :], lw=1, c='Navy', alpha=0.7)
-        plt.annotate(format(mass_wb[k] / mass_wb[-1], "4.2"), (Lfl_Lkp_wb[-1, -1], Lfl_Lkp_wb[k, -1]),
-                     textcoords='data', size=10)
-    # plt.plot(Lfl_Lkp_wb[-1, :], Lfl_Lkp_wb[-1, :], alpha=0.75, c='k', lw=1.5)
-    plt.xlabel('log Lfl_Lkp A (0.85 Msun)')
-    plt.ylabel('log Lfl_Lkp B (0.85-0.25 Msun)')
-    plt.savefig(figdir + 'wb_model' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.figure(figsize=(8.1,8))
+        for k in range(mass_wb.size):
+            plt.plot(Lfl_Lkp_wb[-1, :], Lfl_Lkp_wb[k, :], lw=1, c='Navy', alpha=0.7)
+            plt.annotate(format(mass_wb[k] / mass_wb[-1], "4.2"), (Lfl_Lkp_wb[-1, -1], Lfl_Lkp_wb[k, -1]),
+                         textcoords='data', size=10)
+        # plt.plot(Lfl_Lkp_wb[-1, :], Lfl_Lkp_wb[-1, :], alpha=0.75, c='k', lw=1.5)
+        plt.xlabel('log Lfl_Lkp A (0.85 Msun)')
+        plt.ylabel('log Lfl_Lkp B (0.85-0.25 Msun)')
+        plt.savefig(figdir + 'wb_model' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+        np.savez('ABtracks.npz', ABarray=Lfl_Lkp_wb, mass=mass_wb, age=age_range)
+
+
+    '''
+    >>>>>>>>>>>>>>>>>>>>>>>
+    
+    Loop over all stars AGAIN, stack data up into big arrays to fit w/ age-dependent evolution
+    
+    Version 2: FOR ALL STARS WITH GOOD ROTATION/COLOR/ETC (i.e. no requirement for Nflares or Nflares68, etc)
+    
+    This is for the Null Detection (nd) correction, brought up at the Kepler/K2 Science Meeting 2017
+    
+    >>>>>>>>>>>>>>>>>>>>>>>
+    '''
+
+    oknd = np.where((Prot_all >= 0.1) &  # need valid rotation periods
+                     (Prot_all <= 30.0) & # need valid rotation periods
+                     (Rossby > 0.01) &  # need valid Rossby number
+                     (Rossby < 10) &    # need valid Rossby number
+                     (gi_all >= 0.5) & # manually throw out the bluest stars
+                     (kicnum_c != 10924462) &  # manually throw out a few weird FFDs
+                     (kicnum_c != 3864443) &
+                     (kicnum_c != 5559631) &
+                     (kicnum_c != 7988343) &
+                     (kicnum_c != 9591503) &
+                     (kicnum_c != 3240305)
+                     )
+
+
+    # sort all stars in order of Rossby number
+    oknd = oknd[0][np.argsort(Rossby[oknd])]
+
+    # oknd_y = np.where(np.isfinite(np.log10(fit_E[oknd])) & # have semi-valid FFD fit
+    #                    (Nflare68[oknd] >= Nflare68_cut)) # have at least 10 flares above the 68% limit
+
+    B_V_nd = getBV(mass[oknd])
+    age_nd = MH2008_age(B_V_nd, Prot_all[oknd])
+
+
+    #_______________________________
+    # figures based on the convo w/ Covey:
+    # what is the fraction of null detections as a function of age?
+    # i.e. over what domain is the fit going to be valid?
+
+    # plt.figure()
+    # plt.scatter(np.log10(age_nd), Nflare68[oknd] + 1, s=2, alpha=0.5)
+    # plt.yscale('log')
+    # plt.xlabel('log Age (Myr)')
+    # plt.ylabel('Nflare68+1')
+    # plt.savefig(figdir + 'age_Nflare68.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
+    # plt.close()
+
+    Ncutoff = 3
+    Dage = 0.2
+    age_bins = np.arange(-0.1, 4.1, Dage)
+    frac_flare = np.zeros_like(age_bins)-1
+
+    print('>>> total number of stars that pass EASIER cuts:',
+          len(np.where((np.log10(age_nd) >= age_bins[0]) & (np.log10(age_nd) < (age_bins[-1]+Dage)))[0]))
+
+    plt.figure()
+    for k in range(len(age_bins)):
+        xa = np.where((np.log10(age_nd) >= age_bins[k]) & (np.log10(age_nd) < (age_bins[k]+Dage)))[0]
+        if len(xa) > 0:
+            # count fraction of stars in this age bin with at least N flares above 68% cutoff
+            frac_flare[k] = np.float(sum(Nflare68[oknd][xa] >= Ncutoff)) / np.float(len(xa))
+
+    plt.plot(age_bins[frac_flare > -1], frac_flare[frac_flare > -1], lw=2, color='k')
+    # plt.hist(age_bins[frac_flare > -1], weights=frac_flare[frac_flare > -1], histtype='step', lw=2, color='k')
+    plt.xlabel('log Age (Myr)')
+    plt.ylabel('Fraction Flaring')
+    plt.ylim(0,1)
+    plt.savefig(figdir + 'age_frac_flare' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
     plt.close()
 
-    np.savez('ABtracks.npz', ABarray=Lfl_Lkp_wb, mass=mass_wb, age=age_range)
+    # do another quick version of this fraction flaring plot, for stars w/i each color range...
+    Ncutoff = 3
+    Dage = 0.3
+    age_bins = np.arange(-0.1, 4.1, Dage)
+    plt.figure()
+    for i in range(crng.shape[0]):
+        frac_flare_C = np.zeros_like(age_bins)-1
+        for k in range(len(age_bins)):
+            xa = np.where((np.log10(age_nd) >= age_bins[k]) & (np.log10(age_nd) < (age_bins[k] + Dage)) &
+                          (gi_all[oknd] >= crng[i, 0]) & (gi_all[oknd] < crng[i, 1]))[0]
+            if len(xa) > 0:
+                # count fraction of stars in this age bin with at least N flares above 68% cutoff
+                frac_flare_C[k] = np.float(sum(Nflare68[oknd][xa] >= Ncutoff)) / np.float(len(xa))
+
+
+        Nlbl = len(np.where((np.log10(age_nd) >= age_bins[0]) & (np.log10(age_nd) < (age_bins[-1] + Dage)) &
+                            (gi_all[oknd] >= crng[i, 0]) & (gi_all[oknd] < crng[i, 1]))[0])
+
+        plt.plot(age_bins[frac_flare_C > -1], frac_flare_C[frac_flare_C > -1],
+                 lw=2, alpha=0.7, color=crng_clrs[i],
+                 label=str(crng[i, 0])+'<g-i<'+str(crng[i, 1]) + ', N=' + str(Nlbl))
+    plt.xlabel('log Age (Myr)')
+    plt.ylabel('Fraction Flaring')
+    plt.legend(fontsize=11)
+    # plt.ylim(0, 1)
+    plt.savefig(figdir + 'age_frac_flare_C' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+    plt.close()
+
+
+    # actually do the stacking & analysis for the "nd" run
+    if False:
+        # SO, what is needed for the fit in the end? That should drive what we store/loop over.
+        # For each star (flare or non), we need:
+        # age (into an array, same size as E)
+        # mass (into an array, same size as E)
+        # energy bins to evaluate over (E)
+        # flare rates (same size as E)
+
+        logE_ndstack = np.array([])
+        logt_ndstack = np.array([])
+        mass_ndstack = np.array([])
+
+        prot_ndstack = np.array([])
+        clr_ndstack = np.array([])
+
+        logR_ndstack = np.array([])
+        logRerr_ndstack = np.array([])
+
+        R_ndstack = np.array([])
+        Rerr_ndstack = np.array([])
+
+        # dex below the 68% cutoff to go, FYI: factor of 2 is 0.3.
+        # use this param to account for fact that my injection tests aren't perfect...
+        offset68 = 0
+
+        if debug:
+            print('>> ')
+            print('reality check: ', np.size(oknd))
+
+        print('now doing the big loop for ALL stars, including non-flaring...')
+        print(datetime.datetime.now())
+
+        for l in range(np.size(oknd)):
+            # find all entires for this star (LLC and SLC data)
+            star = np.where((fdata[0].values == kicnum_c[oknd][l]))[0]
+            # arrays for FFD
+            fnorm = np.zeros_like(edbins[1:])
+            fsum = np.zeros_like(edbins[1:])
+
+            # tmp array to hold the total number of flares in each FFD bin
+            flare_tot = np.zeros_like(fnorm)
+
+            # find this star in the KIC data
+            mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[oknd][l]))
+            Lkp_i = Lkp_uniq[mtch][0]
+
+            if debug:
+                print('l, len(star) = ', l, len(star))
+
+            for i in range(0, len(star)):
+                # Find the portion of the FFD that is above the 68% cutoff, but below some global max to catch some outliers
+                # (note: in ED units)
+                ok = np.where(( edbins[1:] >= (fdata.loc[star[i], 3]-offset68) ))[0]
+
+                if len(ok) > 0: # if there is flare energies that were measurable...
+                    # add the rates together from all quarters/months for a straight mean
+                    fsum[ok] = fsum[ok] + fdata.loc[star[i], 7:].values[ok]
+
+                    # count the number for the straight mean
+                    fnorm[ok] = fnorm[ok] + 1
+
+                    # add the actual number of flares for this data portion: rate * duration
+                    flare_tot[ok] = flare_tot[ok] + (fdata.loc[star[i], 7:].values[ok] * fdata.loc[star[i], 2])
+
+
+            # the important arrays for the averaged FFD
+            ffd_x = edbins[1:][::-1] + Lkp_i
+            ffd_y = np.cumsum(fsum[::-1] / fnorm[::-1])
+
+            # the "error" is the Poisson err from the total # flares per bin
+            ffd_yerr = _Perror(flare_tot[::-1], down=True) / dur_all[oknd][l]
+
+            ffd_ok = np.where(np.isfinite(ffd_y) & #(fsum[::-1] > 0) &
+                              np.isfinite(ffd_x) &
+                              np.isfinite(ffd_yerr) &
+                              (ffd_x < 38.5))  # fix one of the outlier problems (global max)
+
+            if (len(ffd_ok[0]) > 0) & (np.isfinite(np.log10(age_nd[l]))) & (np.isfinite(mass[oknd][l])):
+                # combine all dimensions of data into 1 set of arrays
+                logE_ndstack = np.append(logE_ndstack, ffd_x[ffd_ok])
+                logt_ndstack = np.append(logt_ndstack, np.ones_like(ffd_x[ffd_ok]) * np.log10(age_nd[l]))
+                mass_ndstack = np.append(mass_ndstack, np.ones_like(ffd_x[ffd_ok]) * mass[oknd][l])
+                logR_ndstack = np.append(logR_ndstack, np.log10(ffd_y[ffd_ok]))
+
+                # propogate the log of the error in the FFD
+                yerr_temp = np.abs(ffd_yerr[ffd_ok] / (ffd_y[ffd_ok] * np.log(10.)))
+                yerr_temp = np.sqrt(yerr_temp**2. + np.nanmedian(yerr_temp)**2.)
+                logRerr_ndstack = np.append(logRerr_ndstack, yerr_temp)
+
+                R_ndstack = np.append(R_ndstack, ffd_y[ffd_ok])
+                Rerr_ndstack = np.append(Rerr_ndstack, ffd_yerr[ffd_ok])
+
+                clr_ndstack = np.append(clr_ndstack, np.ones_like(ffd_x[ffd_ok]) * gi_all[oknd][l])
+                prot_ndstack = np.append(prot_ndstack, np.ones_like(ffd_x[ffd_ok]) * Prot_all[oknd][l])
+
+                if debug:
+                    print('worked once')
+                    print('l, ffd_x, ffd_y, ffd_yerr', l, ffd_x[ffd_ok], ffd_y[ffd_ok], ffd_yerr[ffd_ok])
+                    print('logE_ndstack', logE_ndstack)
+                    print('logt_ndstack', logt_ndstack)
+                    print('mass_ndstack', mass_ndstack)
+                    print('R_ndstack', R_ndstack)
+                    print('Rerr_ndstack', Rerr_ndstack)
+
+                    print(5/0)
+
+
+
+        print('loop done')
+        print(datetime.datetime.now())
+
+
+        # # # # # # # # # # # # # # # # # #
+        # fit with model
+        # # # # # # # # # # # # # # # # # #
+        stackOK_nd = np.where(np.isfinite(logE_ndstack) & np.isfinite(R_ndstack) &
+                              np.isfinite(logt_ndstack) & np.isfinite(mass_ndstack) &
+                              np.isfinite(Rerr_ndstack))
+        X_nd = (logE_ndstack[stackOK_nd], logt_ndstack[stackOK_nd], mass_ndstack[stackOK_nd])
+
+
+        # write output table to read in later, or to fit w/ heirarchical model, etc
+        dfffd = pd.DataFrame(data={'logE':logE_ndstack[stackOK_nd],
+                                   'logAge':logt_ndstack[stackOK_nd],
+                                   'mass':mass_ndstack[stackOK_nd],
+                                   'giclr':clr_ndstack[stackOK_nd],
+                                   'Prot':prot_ndstack[stackOK_nd],
+                                   'FF':R_ndstack[stackOK_nd],
+                                   'FFerr':Rerr_ndstack[stackOK_nd],
+                                   'logFF':logR_ndstack[stackOK_nd],
+                                   'logFFerr':logRerr_ndstack[stackOK_nd]})
+        dfffd.to_csv('ensemble_FFD.csv', index=False)
+
+        p0 = fit # use the previous results as the prior for the fit
+
+        # print('reality check: ')
+        # print()
+        # print(np.shape(X_nd))
+        # print(np.shape(stackOK_nd[0]))
+        # print(len(Rerr_ndstack), len(logE_ndstack))
+
+        fit_nd, cov_nd = curve_fit(FlareEqn_nolog, X_nd, R_ndstack[stackOK_nd], p0,
+                                   sigma=Rerr_ndstack[stackOK_nd])
+
+        # res = minimize(FlareEqn, p0, method='BFGS', args=(X_nd, logR_ndstack[stackOK_nd]))
+
+        modelStack_nd = FlareEqn_nolog(X_nd, *fit_nd)
+        ChiSq1_nd = appaloosa.chisq(R_ndstack[stackOK_nd], Rerr_ndstack[stackOK_nd], modelStack_nd)
+        BIC1_nd = ChiSq1_nd + np.size(p0) * np.log(np.size(X_nd))
+
+        print('FlareEqn coefficients _nd:')
+        print(fit_nd)
+        print('Chi, BIC')
+        print(ChiSq1_nd, BIC1_nd)
+
+
+        ##### make some plots ....
+
+        plt.figure(figsize=(6, 5))
+        y1 = FlareEqn_nolog((np.arange(28, 37), np.log10(4600. * np.ones(9)), np.ones(9)), *fit_nd)
+        plt.plot(np.arange(28, 37), (y1) * 365.25 / (10.**np.arange(28, 37)), c='k')
+        plt.yscale('log')
+        plt.xlabel('log Flare Energy (erg)')
+        plt.ylabel('Cumulative Flare Freq (#/year/erg)')
+
+        plt.title('Sun (4.6Gyr)')
+        plt.savefig(figdir + 'eqnFFD_Sun_nd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+
+        # R35 grid plot, moving towards what was on my original proposal!
+        age_y = np.arange(0.1, 3.8, 0.1)
+        mass_x = np.arange(0.25, 1.1, 0.05)
+
+        # xx,yy = np.meshgrid(mass_x, age_y, indexing='ij')
+        # rate_grid = np.zeros((mass_x.size, age_y.size))
+        # for i in range(mass_x.size):
+        #     for j in range(age_y.size):
+        #         rate_grid[i,j] = np.log10(FlareEqn_nolog((35., age_y[j], mass_x[i]), *fit_nd))
+
+        R1s_fit_nd = np.log10(FlareEqn_nolog((Lkp_all[oknd], np.log10(age_nd), mass[oknd]), *fit_nd))
+
+        plt.figure()
+        plt.scatter(mass[oknd], age_nd, c=(R1s_fit_nd),
+                    s=np.sqrt(10**R1s_fit_nd)*15., linewidths=0, edgecolors='k', alpha=0.5, cmap=cm.magma_r)
+        cbar = plt.colorbar()
+        cbar.set_label('log R$_{1s}$ (#/day)')
+        plt.xlabel(r'Mass (M$_{\odot}$)')
+        plt.xlim(1.15, 0.35)
+        plt.ylabel('Age (Myr)')
+        plt.yscale('log')
+        plt.savefig(figdir + 'mass_age_R1s_nd.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+        plt.figure()
+        plt.scatter(gi_all[oknd], Prot_all[oknd], c=(R1s_fit_nd),
+                    s=np.sqrt(10**R1s_fit_nd)*15., linewidths=0, edgecolors='k', alpha=0.5, cmap=cm.magma_r)
+        cbar = plt.colorbar()
+        cbar.set_label('log R$_{1s}$ (#/day)')
+        plt.xlabel('g-i (mag)')
+        plt.xlim(0.4, 3)
+        plt.ylabel(r'P$_{rot}$ (days)')
+        plt.yscale('log')
+        plt.savefig(figdir + 'color_rot_R1s_nd.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+
+        mx, ly = massL()
+        age_y = np.arange(1.0, 3.8, 0.05)
+        xx, yy = np.meshgrid(mx, age_y, indexing='ij')
+
+        R1s_grid_nd = np.zeros((mx.size, age_y.size))
+        for i in range(mx.size):
+            for j in range(age_y.size):
+                R1s_grid_nd[i, j] = np.log10(FlareEqn_nolog((ly[i], age_y[j], mx[i]), *fit_nd))
+
+        plt.figure()
+        plt.contourf(xx,yy, R1s_grid_nd, cmap=cm.magma_r)
+        plt.xlabel(r'Mass (M$_{\odot}$)')
+        plt.xlim(1.1, 0.25)
+        plt.ylabel('log Age (Myr)')
+        cbar = plt.colorbar()
+        cbar.set_label('log R$_{1s}$ (#/day)')
+        plt.savefig(figdir + 'eqnFFD_grid_R1s_nd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+        matplotlib.rcParams['contour.negative_linestyle'] = 'solid'
+
+        # lvls = np.append(0, np.logspace(-2,np.log10(20),10))
+        plt.figure()
+        plt.contourf(xx, yy + 6, R1s_grid_nd, cmap=cm.Blues)
+        plt.xlabel(r'Mass (M$_{\odot}$)')
+        plt.xlim(0.2, 1.1)
+        plt.ylabel('log Age (years)')
+        plt.ylim(7., 9.7)
+        cbar = plt.colorbar()
+        cbar.set_label('R$_{1s}$ (#/day)')
+        CS = plt.contour(xx, yy + 6, R1s_grid_nd, colors='white', linestyle='solid')
+        plt.clabel(CS, fontsize=8, inline=1, color='white')
+        plt.savefig(figdir + 'proposal_remake_nd' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+
+        ### =>> make per-star FFD results again, but this time with the new model applied,
+        if False:
+            chisq_nd = np.zeros(np.size(ts))-1
+
+            for l in range(np.size(ts)):
+
+                # find all entires for this star (LLC and SLC data)
+                star = np.where((fdata[0].values == kicnum_c[okclr][ts][l]))[0]
+                # arrays for FFD
+                fnorm = np.zeros_like(edbins[1:])
+                fsum = np.zeros_like(edbins[1:])
+
+                # find this star in the KIC data
+                mtch = np.where((bigdata['kic_kepler_id'].values == kicnum_c[okclr][ts][l]))
+                Lkp_i = Lkp_uniq[mtch][0]
+                # tmp array to hold the total number of flares in each FFD bin
+                flare_tot = np.zeros_like(fnorm)
+
+                ffig = plt.figure()
+                ax = ffig.add_subplot(111)
+                for i in range(0, len(star)):
+                    # Find the portion of the FFD that is above the 68% cutoff
+                    ok = np.where((edbins[1:] >= (fdata.loc[star[i], 3] - offset68)))[0]
+                    if len(ok) > 0:
+                        # add the rates together for a straight mean
+                        fsum[ok] = fsum[ok] + fdata.loc[star[i], 7:].values[ok]
+
+                        # count the number for the straight mean
+                        fnorm[ok] = fnorm[ok] + 1
+
+                        # add the actual number of flares for this data portion: rate * duration
+                        flare_tot = flare_tot + (fdata.loc[star[i], 7:].values * fdata.loc[star[i], 2])
+
+                        plt.plot(edbins[1:][ok][::-1] + Lkp_i,
+                                 np.log10(np.cumsum(fdata.loc[star[i], 7:].values[ok][::-1]) + 1e-10), # put 1e-10 buffer in for plot
+                                 alpha=0.35, color='k', linewidth=0.5)
+                # the important arrays for the averaged FFD
+                ffd_x = edbins[1:][::-1] + Lkp_i
+                ffd_y = np.cumsum(fsum[::-1] / fnorm[::-1])
+
+                # the "error" is the Poisson err from the total # flares per bin
+                ffd_yerr = _Perror(flare_tot[::-1], down=True) / dur_all[okclr][ts][l]
+
+                # Fit the FFD w/ a line, save the coefficeints
+                ffd_ok = np.where((ffd_y > 0) & (fsum[::-1] > 0) &
+                                  np.isfinite(ffd_y) & np.isfinite(ffd_x) & np.isfinite(ffd_yerr) &
+                                  (ffd_x < 38.5))  # fix one of the outlier problems
+
+
+                # if there are at least 2 energy bins w/ valid flares...
+                if len(ffd_ok[0]) > 1:
+                    yerr_temp = np.abs(ffd_yerr[ffd_ok] / (ffd_y[ffd_ok] * np.log(10.)))
+                    yerr_temp = np.sqrt(yerr_temp ** 2. + np.nanmedian(yerr_temp) ** 2.)
+
+                    # make model FFD at same   ffd_x values
+                    model_y = FlareEqn_nolog((ffd_x[ffd_ok], np.log10(age_ts[l]), mass[okclr][ts][l]), *fit_nd)
+
+                    # compute chisq!
+                    chisq_nd[l] = np.sum( ((np.log10(ffd_y[ffd_ok]) - np.log10(model_y)) / yerr_temp)**2.0 ) / np.float(model_y.size)
+
+                    plt.plot(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), linewidth=2, alpha=0.7, c='k')
+                    plt.errorbar(ffd_x[ffd_ok], np.log10(ffd_y[ffd_ok]), yerr_temp, fmt='k,')
+                    plt.plot(ffd_x[ffd_ok], np.log10(model_y), linewidth=1, alpha=0.7, c='r')
+
+                    plt.text(0.025, 0.025,
+                             'g-i='+format(gi_all[okclr][ts][l],'.2F') + ', Prot='+format(Prot_all[okclr][ts][l]),
+                             fontsize=10, transform=ax.transAxes)
+                    plt.xlim(np.nanmin(ffd_x[ffd_ok])-0.1, np.nanmax(ffd_x[ffd_ok])+0.1)
+                    plt.ylim(np.nanmin(np.log10(ffd_y[ffd_ok]))-np.nanmax(yerr_temp),
+                             np.nanmax(np.log10(ffd_y[ffd_ok]))+2.*np.nanmin(yerr_temp))
+                plt.xlabel('log Flare Energy (erg)')
+                plt.ylabel('log Cumulative Flare Freq (#/day)')
+                plt.savefig(figdir + 'ffd_models/' + str(kicnum_c[okclr][ts][l]) + '_ffd_fit_nd' + figtype,
+                            dpi=300, bbox_inches='tight', pad_inches=0.5)
+                plt.close()
+
+
+            plt.figure()
+            plt.scatter(gi_all[okclr][ts], Prot_all[okclr][ts], c=np.log10(chisq_nd),
+                        s=50, linewidths=0, edgecolors='k', alpha=0.85, cmap=cm.magma_r)
+            cbar = plt.colorbar()
+            cbar.set_label(r'log $\chi^2$')
+            plt.xlabel('g-i (mag)')
+            plt.xlim(0.4, 3)
+            plt.ylabel(r'P$_{rot}$ (days)')
+            plt.yscale('log')
+            plt.savefig(figdir + 'color_rot_chisq_nd.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
+            plt.close()
+
+
+
+
+    #### MODEL COMPARISON RABBIT HOLE
+    if False:
+        ### MODEL COMPARISON
+        # we can actually just try out lots of models here, now that we have the X and X_nd datasets
+
+        # p0 = (0., 0., -0.5,
+        #       -1., 1., 10.)
+
+        fit3, cov3 = curve_fit(FlareEqn_nolog, X, R_stack[stackOK],p0=fit,
+                               sigma=Rerr_stack[stackOK])
+
+        print('fit3: ', fit3)
+
+        R1s_grid_3 = np.zeros((mx.size, age_y.size))
+        for i in range(mx.size):
+            for j in range(age_y.size):
+                R1s_grid_3[i, j] = np.log10(FlareEqn_nolog((ly[i], age_y[j], mx[i]), *fit3))
+
+
+
+        p4 = (-1, -1, 0, 0, 0, 0, 1, 10)
+        fit4, cov4 = curve_fit(FlareEqn2, X, logR_stack[stackOK], p0=p4,
+                               sigma=logRerr_stack[stackOK])
+        p5 = (-1, -1, 0, 0, 0, 0, 1, 10)
+        fit5, cov5 = curve_fit(FlareEqn2_nolog, X, R_stack[stackOK], p0=p5,
+                               sigma=Rerr_stack[stackOK])
+
+        print('fit4: ', fit4)
+        print('fit5: ', fit5)
+
+
+        R1s_grid_4 = np.zeros((mx.size, age_y.size))
+        for i in range(mx.size):
+            for j in range(age_y.size):
+                R1s_grid_4[i, j] = (FlareEqn2((ly[i], age_y[j], mx[i]), *fit4))
+
+        R1s_grid_5 = np.zeros((mx.size, age_y.size))
+        for i in range(mx.size):
+            for j in range(age_y.size):
+                R1s_grid_5[i, j] = np.log10(FlareEqn2_nolog((ly[i], age_y[j], mx[i]), *fit5))
+
+        # fit_nd, cov_nd = curve_fit(FlareEqn_nolog, X_nd, R_ndstack[stackOK_nd], p0=fit,
+        #            sigma=Rerr_ndstack[stackOK_nd])
+
+        plt.figure()
+        plt.contourf(xx, yy, R1s_grid_3, cmap=cm.magma_r)
+        plt.xlabel(r'Mass (M$_{\odot}$)')
+        plt.xlim(1.1, 0.25)
+        plt.ylabel('log Age (Myr)')
+        cbar = plt.colorbar()
+        cbar.set_label('log R$_{1s}$ (#/day)')
+        plt.savefig(figdir + 'eqnFFD_grid_R1s_3' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+        plt.figure()
+        plt.contourf(xx, yy, R1s_grid_4, cmap=cm.magma_r)
+        plt.xlabel(r'Mass (M$_{\odot}$)')
+        plt.xlim(1.1, 0.25)
+        plt.ylabel('log Age (Myr)')
+        cbar = plt.colorbar()
+        cbar.set_label('log R$_{1s}$ (#/day)')
+        plt.savefig(figdir + 'eqnFFD_grid_R1s_4' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+        plt.figure()
+        plt.contourf(xx, yy, R1s_grid_5, cmap=cm.magma_r)
+        plt.xlabel(r'Mass (M$_{\odot}$)')
+        plt.xlim(1.1, 0.25)
+        plt.ylabel('log Age (Myr)')
+        cbar = plt.colorbar()
+        cbar.set_label('log R$_{1s}$ (#/day)')
+        plt.savefig(figdir + 'eqnFFD_grid_R1s_5' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+
+        # compare the models directly
+        # show the "R1s" flare rate as a function of Age for 3 different Masses (on 1 plot)
+        plt.figure()
+        plt.plot(age_y, R1s_grid[0, :], c='red')
+        plt.plot(age_y, R1s_grid_3[0, :], c='red', linestyle=':')
+        plt.plot(age_y, R1s_grid_nd[0, :], c='red', linestyle='--')
+
+        plt.plot(age_y, R1s_grid[50, :], c='orange')
+        plt.plot(age_y, R1s_grid_3[50, :], c='orange', linestyle=':')
+        plt.plot(age_y, R1s_grid_nd[50, :], c='orange', linestyle='--')
+
+        plt.plot(age_y, R1s_grid[100, :], c='blue')
+        plt.plot(age_y, R1s_grid_3[100, :], c='blue', linestyle=':')
+        plt.plot(age_y, R1s_grid_nd[100, :], c='blue', linestyle='--')
+
+        plt.ylabel('log R1s')
+        plt.xlabel('log Age (Myr)')
+        plt.savefig(figdir + 'flare_model_compare.png', dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
 
 
 if __name__ == "__main__":

@@ -16,7 +16,9 @@ import matplotlib.pyplot as plt
 
 def rolling_poly(time, flux, error, order=3, window=0.5):
     '''
-    Fit polynomials in a sliding window
+    Fit polynomials in a sliding window. Not very efficient, likely ignoring much
+    better functions on how to smooth.
+
     Name convention meant to match the pandas rolling_ stats
 
     Parameters
@@ -29,11 +31,12 @@ def rolling_poly(time, flux, error, order=3, window=0.5):
 
     Returns
     -------
+    smo: smoothed version of the input flux array
     '''
 
     # This is SUPER slow... maybe useful in some places (LLC only?).
     # Can't be sped up much w/ indexing, because needs to move fixed
-    # windows of time...
+    # windows of time... thumbs down. Keeping code only because maybe useful someday
 
     smo = np.zeros_like(flux)
 
@@ -54,13 +57,22 @@ def rolling_poly(time, flux, error, order=3, window=0.5):
 
 def GapFlat(time, flux, order=3, maxgap=0.125):
     '''
+    Find gaps in data and then flatten within each continuous portion. Flatten
+    done using polynomials
 
     Parameters
     ----------
+    time : 1-d numpy array
+    flux : 1-d numpy array
+    order : int, optional
+        the polynomial order to flatten each continuous region with (Default=3)
+    maxgap : float, optional
+        the maximum amount of time allowed between datapoints before a "gap" is
+        found. (Default=0.125, units=days)
 
     Returns
     -------
-    Data with polymonials removed
+    Flux array with polymonials removed
     '''
     _, dlr = FindGaps(time, maxgap=maxgap) # finds right edge of time windows
 
@@ -82,14 +94,23 @@ def GapFlat(time, flux, order=3, maxgap=0.125):
 
 def QtrFlat(time, flux, qtr, order=3):
     '''
-    step thru each unique qtr
-    fit 2nd order poly to smoothed version of qtr
+    Step thru each unique quarter of data, subtract polynomial fit to each quarter.
+    Removes simple quarter-to-quarter variations.
+
+    Note: ignores long/short cadence. Deal with on user end if needed
+
+    Parameters
+    ----------
+    time : 1-d numpy array
+    flux : 1-d numpy array
+    qtr :  1-d numpy array
+        the Kepler Quarter ID's to be iterated over.
+    order : int, optional
+        the polynomial order to flatten each continuous region with (Default=3)
 
     Returns
     -------
-    Data with polymonials removed
-
-    ignore long/short cadence, deal with on front end
+    Flux array polymonials removed from each quarter
     '''
 
     uQtr = np.unique(qtr)
@@ -116,17 +137,31 @@ def QtrFlat(time, flux, qtr, order=3):
     return np.array(flux_flat)
 
 
-def FindGaps(time, maxgap=0.125, minspan=2.0):
+def FindGaps(time, maxgap=0.125, return_LR=True, minspan=2.0):
     '''
+    Find gaps in the time array of a light curve, return locations of the gaps.
+
+    Note: assumes data is already sorted in time
 
     Parameters
     ----------
+    time : 1-d numpy array
+    maxgap : float, optional
+        the maximum amount of time allowed between datapoints before a "gap" is
+        found. (Default=0.125, units=days)
+    return_LR : bool, optional
+        decide if the Left and Right edges should be returned as separate
+        arrays (default=True)
 
     Returns
     -------
-    outer edges of gap, left edges, right edges
-    (all are indicies)
+    gap_out : array of gap edge indicies, including:
+        [0, left edges, N], where N is len(time)
+
+    if return_LR == True, then also return the Left and Right edges as separate arrays:
+    gap_out, left, right
     '''
+
     # assumes data is already sorted!
     dt = time[1:] - time[:-1]
     gap = np.where((dt >= maxgap))[0]
@@ -143,13 +178,71 @@ def FindGaps(time, maxgap=0.125, minspan=2.0):
     # bad = np.where((time[right]-time[left] < minspan))[0]
     # for k in range(1,len(bad)-1):
         # for each bad span of data, figure out if it can be tacked on
-    return gap_out, list(zip(left, right))
+
+    if return_LR:
+        return gap_out, left, right
+    else:
+        return gap_out
 
 
 def _sinfunc(t, per, amp, t0, yoff):
+    '''
+    Simple function defining a single Sine curve for use in curve_fit applications
+    Defined as:
+        F = sin( (t - t0) * 2 pi / period ) * amplitude + offset
+
+    Parameters
+    ----------
+    t : 1-d numpy array
+        array of times
+    per : float
+        sin period
+    amp : float
+        amplitude
+    t0 : float
+        phase zero-point
+    yoff : float
+        linear offset
+
+    Returns
+    -------
+    F, array of fluxes defined by sine function
+    '''
+
     return np.sin((t - t0) * 2.0 * np.pi / per) * amp  + yoff
 
+
 def _sinfunc2(t, per1, amp1, t01, per2, amp2, t02, yoff):
+    '''
+    Simple function defining two Sine curves for use in curve_fit applications
+    Defined as:
+        F = sin( (t - t0_1) * 2 pi / period_1 ) * amplitude_1 + \
+            sin( (t - t0_2) * 2 pi / period_2 ) * amplitude_2 + offset
+
+    Parameters
+    ----------
+    t : 1-d numpy array
+        array of times
+    per1 : float
+        sin period 1
+    amp1 : float
+        amplitude 1
+    t01 : float
+        phase zero-point 1
+    per2 : float
+        sin period 2
+    amp2 : float
+        amplitude 2
+    t02 : float
+        phase zero-point 2
+    yoff : float
+        linear offset
+
+    Returns
+    -------
+    F, array of fluxes defined by sine function
+    '''
+
     output = np.sin((t - t01) * 2.0 * np.pi / per1) * amp1 + \
              np.sin((t - t02) * 2.0 * np.pi / per2) * amp2 + yoff
     return output
@@ -157,28 +250,54 @@ def _sinfunc2(t, per1, amp1, t01, per2, amp2, t02, yoff):
 
 def FitSin(time, flux, error, maxnum=5, nper=20000,
            minper=0.1, maxper=30.0, plim=0.25,
-           returnmodel=True, debug=False, per2=False):
+           per2=False, returnmodel=True, debug=False):
     '''
-    Use Lomb Scargle to find periods, fit sins, remove, repeat.
+    Use Lomb Scargle to find a periodic signal. If it is significant then fit
+    a sine curve and subtract. Repeat this procedure until no more periodic
+    signals are found, or until maximum number of iterations has been reached.
+
+    Note: this is where major issues were found in the light curve fitting as
+    of Davenport (2016), where the iterative fitting was not adequately
+    subtracting "pointy" features, such as RR Lyr or EBs. Upgrades to the
+    fitting step are needed! Or, don't use iterative sine fitting...
+
+    Idea for future: if L-S returns a significant P, use a median fit of the
+    phase-folded data at that P instead of a sine fit...
 
     Parameters
     ----------
-    time : numpy array
-    flux : numpy array
-    error : numpy array
-    maxnum : 5 or int
-    nper : 20000 or int
+    time : 1-d numpy array
+    flux : 1-d numpy array
+    error : 1-d numpy array
+    maxnum : int, optional
+        maximum number of iterations to try finding periods at
+        (default=5)
+    nper : int, optional
         number of periods to search over with Lomb Scargle
-    minper : 0.1 or float
-    maxper: 30.0 or float
-    plim: 0.25 or float
-    debug: False or bool
+        (defeault=20000)
+    minper : float, optional
+        minimum period (in units of time array, nominally days) to search
+        for periods over (default=0.1)
+    maxper : float, optional
+        maximum period (in units of time array, nominally days) to search
+        for periods over (default=30.0)
+    plim : float, optional
+        Lomb-Scargle power threshold needed to define a "significant" period
+        (default=0.25)
+    per2 : bool, optional
+        if True, use the 2-sine model fit at each period. if False, use normal
+        1-sine model (default=False)
+    returnmodel : bool, optional
+        if True, return the combined sine model. If False, return the
+        data - model (default=True)
+    debug : bool, optional
+        used to print out troubleshooting things (default=False)
 
     Returns
     -------
-    
+    If returnmodel=True, output = combined sine model (default=True)
+    If returnmodel=False, output = (data - model)
     '''
-    # periods = np.linspace(minper, maxper, nper)
 
     flux_out = np.array(flux, copy=True)
     sin_out = np.zeros_like(flux) # return the sin function!
@@ -303,24 +422,25 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
                 debug=False):
     '''
     Boxcar smoothing with multi-pass outlier rejection. Uses both errors
-    and local scatter for rejection
+    and local scatter for rejection Uses Pandas rolling median filter.
 
     Parameters
-    ----------
-    time : numpy array
-        assumes units are days
-    flux : numpy array
-    error : numpy array
+    time : 1-d numpy array
+    flux : 1-d numpy array
+    error : 1-d numpy array
     numpass : int, optional
-        the number of passes to make over the data. (Default is 3)
+        the number of passes to make over the data. (Default = 3)
     kernel : float, optional
         the boxcar size in hours. (Default is 2.0)
+        Note: using whole numbers is probably wise here.
     sigclip : int, optional
         Number of times the standard deviation to clip points at
         (Default is 5)
     pcentclip : int, optional
-        % to clip for outliers, i.e. 5= keep 5th-95th percentile
+        % of data to clip for outliers, i.e. 5= keep 5th-95th percentile
         (Default is 5)
+    debug : bool, optional
+        used to print out troubleshooting things (default=False)
 
     Returns
     -------
@@ -397,20 +517,36 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
 def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=False):
     '''
     IRLS = Iterative Re-weight Least Squares
+    Do a multi-pass, weighted spline fit, with iterative down-weighting of
+    outliers. This is a simple, highly flexible approach. Suspiciously good
+    at times...
+
+    Originally described by DFM: https://github.com/dfm/untrendy
+    Likley not adequately reproduced here.
+
+    uses scipy.interpolate.LSQUnivariateSpline
 
     Parameters
     ----------
-    time
-    flux
-    error
-    Q
-    ksep
-    numpass
-    order
+    time : 1-d numpy array
+    flux : 1-d numpy array
+    error : 1-d numpy array
+    Q : float, optional
+        the penalty factor to give outlier data in subsequent passes
+        (deafult is 400.0)
+    ksep : float, optional
+        the spline knot separation, in units of the light curve time
+        (default is 0.07)
+    numpass : int, optional
+        the number of passes to take over the data (default is 5)
+    order : int, optional
+        the spline order to use (default is 3)
+    debug : bool, optional
+        used to print out troubleshooting things (default=False)
 
     Returns
     -------
-
+    the final spline model
     '''
 
     weight = 1. / (error**2.0)
@@ -422,12 +558,11 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
         print('IRLSSpline: time: ', np.shape(time), np.nanmin(time), time[0], np.nanmax(time), time[-1])
         print('IRLSSpline: <weight> = ', np.mean(weight))
         print(np.where((time[1:] - time[:-1] < 0))[0])
-        #print(flux)
 
-        # plt.figure()
-        # plt.errorbar(time, flux, error)
-        # plt.scatter(knots, knots*0. + np.median(flux))
-        # plt.show()
+        plt.figure()
+        plt.errorbar(time, flux, error)
+        plt.scatter(knots, knots*0. + np.median(flux))
+        plt.show()
 
     for k in range(numpass):
         spl = LSQUnivariateSpline(time, flux, knots, k=order, check_finite=True, w=weight)
@@ -439,76 +574,3 @@ def IRLSSpline(time, flux, error, Q=400.0, ksep=0.07, numpass=5, order=3, debug=
 
     return spl(time)
 
-
-
-# def WaveletSmooth(time, flux, threshold=1, wavelet='db6', all=False):
-#     '''
-#     WORK IN PROGRESS - DO NOT USE
-#
-#     Generate a wavelet transform of the data, clip on some noise level,
-#     then do inverse wavelet to generate model.
-#
-#     Requires uniformly sampled data!
-#     If your data has gaps, watch out....
-#     '''
-#     _, dl, dr = FindGaps(time)
-#
-#     if all is True:
-#         dl = [0]
-#         dr = [len(time)]
-#
-#     model = np.zeros_like(flux)
-#     # now loop over every chunk of data and fit wavelet
-#     for i in range(0, len(dl)):
-#
-#         flux_i = flux[dl[i]:dr[i]]
-#
-#         # Do basic wavelet decontruct
-#         WC = pywt.wavedec(flux_i, wavelet)
-#
-#         # now do thresholding
-#         # got some tips here:
-#         # https://blancosilva.wordpress.com/teaching/mathematical-imaging/denoising-wavelet-thresholding/
-#         # and:
-#         # https://pywavelets.readthedocs.org/en/latest/ref/idwt-inverse-discrete-wavelet-transform.html
-#
-#         NWC = map(lambda x: pywt.thresholding.hard(x,threshold * np.sqrt(2.*np.log(len(flux_i))) * np.std(flux_i)), WC)
-#
-#         model_i = pywt.waverec(NWC, wavelet)
-#         # print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
-#         #
-#         # print(model_i[0:10])
-#         # print(model_i[-10:])
-#         if len(model_i) != len(model[dl[i]:dr[i]]):
-#             print("length error on gap ",i)
-#             print(len(flux_i), len(model_i), len(model[dl[i]:dr[i]]))
-#             model_i = model_i[1:]
-#
-#         model[dl[i]:dr[i]] = model_i
-#
-#     # WC = pywt.wavedec(flux, wavelet)
-#     # NWC = map(lambda x: pywt.thresholding.soft(x,threshold * np.sqrt(2.*np.log(len(flux))) * np.std(flux)), WC)
-#     # model = pywt.waverec(NWC, wavelet)
-#
-#     print(len(model), len(time))
-#     return model
-#
-#
-# def Wavelet_Peaks(time, flux):
-#     '''
-#     Peak detection via continuous wavelets in scipy... doesnt work very well
-#     '''
-#     _, dl, dr = FindGaps(time)
-#     indx = []
-#     for i in range(0, len(dl)):
-#         flux_i = flux[dl[i]:dr[i]]
-#         time_i = time[dl[i]:dr[i]]
-#         exptime = np.nanmedian(time_i[1:]-time_i[:-1])
-#         if (exptime*24.*60. < 5):
-#             widths = np.arange(1,100)
-#         else:
-#             widths = np.arange(1,10)
-#
-#         indx_i = signal.find_peaks_cwt(flux_i, widths)
-#         indx = np.append(indx, indx_i)
-#     return np.array(indx, dtype='int')

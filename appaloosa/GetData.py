@@ -15,8 +15,7 @@ Warning: is obscenely slow
 def CopyData(kic, outdir='./'):
     datadir = '/Users/davenpj3/research/kepler-flares/'
     fakelis = '0x56ff1094_fakes.lis'
-    home = os.getenv("HOME")
-
+    
     fakes = pd.read_table(datadir + fakelis, names=['file'], delim_whitespace=True, usecols=(0,))
 
     # find the files
