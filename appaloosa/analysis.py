@@ -589,7 +589,8 @@ def paper2_plots(condorfile='condorout.dat.gz', debug=False,
     '''
     Paper 2: flares vs ages
 
-    Run on WWU workstation in dir: ~/research/kepler-flares/
+    PREVIOUSLY: Run on WWU workstation in dir: ~/research/kepler-flares/
+    NOW: Run on UW Workstation in dir: /Volumes/Davenport WWU-1/Data/WWU_20180618/research/kepler-flares/
     '''
 
     # if doing the re-run (make FFD for all objects) then do all the old extra plots too
@@ -962,6 +963,25 @@ def paper2_plots(condorfile='condorout.dat.gz', debug=False,
         plt.xlim(0.8e-2, 4e0)
         # plt.ylim(-5, -1.5)
         plt.savefig(figdir + 'Rossby_lfllbol_color' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
+        plt.close()
+
+
+
+
+        # new fig, suggested by referee: L_flare vs Rossby number
+        # so, I need to convert Lfl/Lbol to Lfl (i.e. estimate Lbol for each star) OR
+        # Lfl/Lkep to Lfl (i.e. multiply by L_kep, which I already had to compute to estimate Flare Energies!
+        plt.figure()
+        plt.scatter(Rossby[okclr][pok], np.log10(Lfl_Lbol)[okclr][pok] + Lkp_all[okclr][pok],
+                    s=50, linewidths=0.5, edgecolors='k', alpha=0.85, c=mass[okclr][pok], cmap=cm.Spectral)
+        cbar = plt.colorbar()
+        cbar.set_label(r'Mass (M$_{\odot}$)')
+        plt.ylabel('log ($L_{fl}$) (erg s$^{-1}$)')
+        plt.xlabel(r'Ro = P$_{rot}$ / $\tau$')
+        plt.xscale('log')
+        plt.xlim(0.8e-2, 4e0)
+        plt.ylim(26.5, 31.4)
+        plt.savefig(figdir + 'Rossby_Lfl_color' + figtype, dpi=300, bbox_inches='tight', pad_inches=0.5)
         plt.close()
 
 
