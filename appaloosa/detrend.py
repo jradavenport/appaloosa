@@ -74,20 +74,20 @@ def GapFlat(time, flux, order=3, maxgap=0.125):
     -------
     Flux array with polymonials removed
     '''
-    _, dl, dr = FindGaps(time, maxgap=maxgap) # finds right edge of time windows
+    _, dlr = FindGaps(time, maxgap=maxgap) # finds right edge of time windows
 
     tot_med = np.nanmedian(flux) # the total from all quarters
 
     flux_flat = np.array(flux, copy=True)
 
-    for i in range(0, len(dl)):
-        krnl = int(float(dl[i]-dr[i]) / 100.0)
+    for (le,ri) in dlr:
+        krnl = int(float(ri-le) / 100.0)
         if (krnl < 10):
             krnl = 10
-        flux_sm = np.array(pd.Series(flux).iloc[dl[i]:dr[i]].rolling(krnl).median())
+        flux_sm = np.array(pd.Series(flux).iloc[le:ri].rolling(krnl).median())
         indx = np.isfinite(flux_sm)
-        fit = np.polyfit(time[dl[i]:dr[i]][indx], flux_sm[indx], order)
-        flux_flat[dl[i]:dr[i]] = flux[dl[i]:dr[i]] - np.polyval(fit, time[dl[i]:dr[i]]) + tot_med
+        fit = np.polyfit(time[le:ri][indx], flux_sm[indx], order)
+        flux_flat[le:ri] = flux[le:ri] - np.polyval(fit, time[le:ri]) + tot_med
 
     return flux_flat
 
@@ -130,7 +130,7 @@ def QtrFlat(time, flux, qtr, order=3):
 
         df['flux_sm'] = df.flux.rolling(krnl,center=False).median()
         df = df.dropna(how='any')
-    
+
         fit = np.polyfit(np.array(df.time), np.array(df.flux_sm), order)
         flux_flat.iloc[df.index.values] = df.flux - np.polyval(fit, df.time) + tot_med
 
@@ -178,6 +178,7 @@ def FindGaps(time, maxgap=0.125, return_LR=True, minspan=2.0):
     # bad = np.where((time[right]-time[left] < minspan))[0]
     # for k in range(1,len(bad)-1):
         # for each bad span of data, figure out if it can be tacked on
+
     if return_LR:
         return gap_out, left, right
     else:
@@ -392,7 +393,7 @@ def FitMedSin(time, flux, error, nper=20000,
     if np.nanmax(time) - np.nanmin(time) < maxper*2.:
         maxper = (np.nanmax(time) - np.nanmin(time))/2.
 
-    
+
     # Use Jake Vanderplas supersmoother version
     pgram = SuperSmoother()
     pgram.optimizer.period_range=(minper,maxper)
@@ -454,10 +455,10 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
     # indx_out = []
 
     # the data within each gap range
-    
+
     #This is annoying: https://pandas.pydata.org/pandas-docs/stable/gotchas.html#byte-ordering-issues
     #flux = flux.byteswap().newbyteorder()
-    
+
     flux_i = pd.DataFrame({'flux':flux,'error_i':error,'time_i':time})
     time_i = np.array(time)
     #flux_i = pd.Series(flux)
@@ -479,7 +480,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
         flux_i['flux_i_sm'] = flux_i.flux.rolling(nptsmooth, center=True).median()
         #indx = np.isfinite(flux_i_sm)
         flux_i = flux_i.dropna(how='any')
-        
+
         if (flux_i.shape[0] > 1):
             #diff_k = (flux_i[indx] - flux_i_sm[indx])
             flux_i['diff_k'] = flux_i.flux-flux_i.flux_i_sm
@@ -495,7 +496,7 @@ def MultiBoxcar(time, flux, error, numpass=3, kernel=2.0,
             if debug is True:
                 print('k = '+str(k))
                 print('number of accepted points: '+str(len(ok[0])))
-    
+
             #time_i = time_i[indx][ok]
             #flux_i = flux_i[indx][ok]
             #error_i = error_i[indx][ok]
